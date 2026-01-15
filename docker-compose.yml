@@ -1,0 +1,49 @@
+services:
+  my-db:
+    image: mysql:8.0
+    container_name: mysql_database
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+  keycloak:
+    container_name: baeldung-keycloak.openid-provider
+    image: keycloak/keycloak:25.0.1
+    command:
+      - start-dev
+      - --import-realm
+    ports:
+      - "8081:8080"
+    depends_on:
+      - my-db
+    volumes:
+      - ./keycloak/:/opt/keycloak/data/import/
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql_database:3306/${MYSQL_DATABASE}
+      KC_DB_USERNAME: ${MYSQL_USER}
+      KC_DB_PASSWORD: ${MYSQL_PASSWORD}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HOSTNAME_URL: http://localhost:8081
+      KC_HOSTNAME_ADMIN_URL: http://localhost:8081
+      KC_HTTP_RELATIVE_PATH: /
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  mysql_data:
