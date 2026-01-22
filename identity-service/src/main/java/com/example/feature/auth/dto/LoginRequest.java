@@ -1,4 +1,4 @@
-package com.example.initialProject.features.auth.dto;
+package com.example.feature.auth.dto;
 
 import lombok.Data;
 

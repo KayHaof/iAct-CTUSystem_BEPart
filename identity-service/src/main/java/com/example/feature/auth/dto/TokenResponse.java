@@ -1,4 +1,4 @@
-package com.example.initialProject.features.auth.dto;
+package com.example.feature.auth.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
