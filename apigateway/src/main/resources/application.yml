@@ -1,0 +1,49 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: apigateway
+  cloud:
+    gateway:
+#      default-filters:
+#        - TokenRelay
+      routes:
+        - id: profile-service
+          uri: lb://profile-serivce
+          predicates:
+            - Path=/profile/**
+          filters:
+            - RewritePath=/profile/(?<segment>.*), /$\{segment}
+
+        - id: identity-service
+          uri: lb://identity-service
+          predicates:
+            - Path=/identity/**
+          filters:
+            - RewritePath=/identity/(?<segment>.*), /$\{segment}
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+  security:
+    oauth2:
+      client:
+        provider:
+          keycloak:
+            issuer-uri: http://localhost:8088/realms/myRealm
+        registration:
+          myClient:
+            provider: keycloak
+            client-id: myclient123@
+            client-secret: FNOI5Vml17alkhtIBNFCe4IafsJtXMw2
+            authorization-grant-type: authorization_code
+            scope: openid, profile
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8088/realms/myRealm
+          jwk-set-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/certs
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

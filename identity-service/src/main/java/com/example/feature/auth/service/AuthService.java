@@ -2,6 +2,7 @@ package com.example.feature.auth.service;
 
 import com.example.feature.auth.dto.LoginRequest;
 import com.example.feature.auth.dto.RegisterRequest;
+import com.example.feature.auth.mapper.AuthMapper;
 import com.example.feature.users.model.Users;
 import com.example.feature.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,50 +29,52 @@ public class AuthService {
     private final Keycloak keycloak;
     private final String realm = "myRealm";
     private final WebClient webClient;
+    private AuthMapper userMapper;
 
     @Value("${app.keycloak.token-uri}")
     private String tokenUrl;
 
     @Transactional
     public void registerUser(RegisterRequest request) {
-        // Define User Representation
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new RuntimeException("Username đã tồn tại!");
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new RuntimeException("Email đã được sử dụng!");
+        }
+
+        if (request.getRoleType() == 1 && userRepository.existsByStudentCode(request.getStudentCode())) {
+            throw new RuntimeException("Mã số sinh viên đã tồn tại!");
+        }
+
+        // 1. Định nghĩa User Representation cho Keycloak
         UserRepresentation userRep = new UserRepresentation();
         userRep.setUsername(request.getUsername());
         userRep.setEmail(request.getEmail());
         userRep.setFirstName(request.getFirstName());
         userRep.setLastName(request.getLastName());
         userRep.setEnabled(true);
-
         userRep.setEmailVerified(false);
-        userRep.setRequiredActions(Collections.singletonList("VERIFY_EMAIL"));
-//        userRep.setRequiredActions(Collections.emptyList());
 
-        // Mapping Role and Group
+        // 2. Xác định Role và Group
         String roleName;
         String groupPath;
-        System.out.println(">> Check role = " + request.getRoleType());
         switch (request.getRoleType()) {
             case 2 -> { roleName = "department"; groupPath = "/departments"; }
             case 3 -> { roleName = "admin"; groupPath = "/admins"; }
             case 4 -> { roleName = "other"; groupPath = "/others"; }
             default -> { roleName = "student"; groupPath = "/students"; }
         }
-
-        System.out.println(">> Check role = " + roleName);
-
         userRep.setGroups(Collections.singletonList(groupPath));
 
-        // Define Password
+        // 3. Cấu hình Password
         CredentialRepresentation cred = new CredentialRepresentation();
         cred.setType(CredentialRepresentation.PASSWORD);
         cred.setValue(request.getPassword());
         cred.setTemporary(false);
         userRep.setCredentials(Collections.singletonList(cred));
 
-        try {
-            Response response = keycloak.realm(realm).users().create(userRep);
-            System.out.println(">>>Check status = " + response.getStatus());
-
+        try (Response response = keycloak.realm(realm).users().create(userRep)) {
             if (response.getStatus() == 201) {
                 String path = response.getLocation().getPath();
                 String keycloakId = path.substring(path.lastIndexOf("/") + 1);
@@ -81,21 +84,17 @@ public class AuthService {
                 keycloak.realm(realm).users().get(keycloakId)
                         .executeActionsEmail(Collections.singletonList("VERIFY_EMAIL"));
 
-                Users user = Users.builder()
-                        .keycloakId(keycloakId)
-                        .username(request.getUsername())
-                        .email(request.getEmail())
-                        .roleType(request.getRoleType())
-                        .status(1)
-                        .build();
+                Users user = userMapper.registerRequestToUser(request);
+                user.setKeycloakId(keycloakId);
+
                 userRepository.save(user);
-            } else if (response.getStatus() == 409) {
+            } else if (response.getStatus() == 409) { // Lỗi từ Keycloak nếu có
                 throw new RuntimeException("Username hoặc Email đã tồn tại trên Keycloak!");
             } else {
                 throw new RuntimeException("Lỗi Keycloak: " + response.getStatus());
             }
         } catch (Exception e) {
-            throw new RuntimeException("Quá trình đăng ký thất bại: " + e.getMessage());
+            throw new RuntimeException("Đăng ký thất bại: " + e.getMessage());
         }
     }
 
@@ -105,7 +104,11 @@ public class AuthService {
     }
 
     public Object loginUser(LoginRequest request) {
-        System.out.println(">>> Check logining = " + request.toString());
+        System.out.println(">>> Check login = " + request.toString());
+        if (userRepository.findByUsername(request.getUsername()).isEmpty()){
+            throw new RuntimeException("Người dùng này không tồn tại !");
+        }
+
         return webClient.post()
                 .uri(tokenUrl)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
