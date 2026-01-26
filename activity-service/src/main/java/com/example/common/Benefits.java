@@ -9,7 +9,6 @@ import lombok.Data;
 @Data
 public class Benefits {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

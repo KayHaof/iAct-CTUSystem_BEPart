@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 @Data
 public class Attendances {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)

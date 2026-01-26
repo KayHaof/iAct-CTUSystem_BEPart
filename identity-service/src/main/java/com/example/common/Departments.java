@@ -10,7 +10,6 @@ import java.util.List;
 @Data
 public class Departments {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
     private String description;

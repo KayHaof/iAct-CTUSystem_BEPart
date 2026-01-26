@@ -46,24 +46,24 @@ public class SecurityConfig {
     @SuppressWarnings("unchecked")
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        authoritiesConverter.setAuthorityPrefix("ROLE_");
-        authoritiesConverter.setAuthoritiesClaimName("realm_access");
-
-        System.out.println(">> Check token: " + authoritiesConverter.toString());
-
         JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
+
         jwtConverter.setJwtGrantedAuthoritiesConverter(jwt -> {
             Map<String, Object> realmAccess = jwt.getClaim("realm_access");
+
             if (realmAccess == null || realmAccess.isEmpty()) {
                 return Collections.emptyList();
             }
+
             Collection<String> roles = (Collection<String>) realmAccess.get("roles");
+
+            System.out.println(">>> Raw roles from Keycloak: " + roles);
+
             return roles.stream()
-                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
                     .collect(Collectors.toList());
         });
-        System.out.println(">>> Check token after: " + jwtConverter.toString());
+
         return jwtConverter;
     }
 

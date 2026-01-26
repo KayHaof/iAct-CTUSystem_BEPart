@@ -19,7 +19,7 @@ public class RegisterRequest {
     private String lastName;
 
     private String studentCode;
-    private Integer classId;
+    private Long classId;
 
     private String phone;
     private Integer gender;

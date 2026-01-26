@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 @Data
 public class Registrations {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

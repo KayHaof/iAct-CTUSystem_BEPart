@@ -1,9 +1,11 @@
 package com.example.feature.auth.service;
 
+import com.example.common.Clazzes;
 import com.example.feature.auth.dto.LoginRequest;
 import com.example.feature.auth.dto.RegisterRequest;
 import com.example.feature.auth.mapper.AuthMapper;
 import com.example.feature.users.model.Users;
+import com.example.feature.users.repository.ClazzRepository;
 import com.example.feature.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.keycloak.admin.client.Keycloak;
@@ -29,7 +31,8 @@ public class AuthService {
     private final Keycloak keycloak;
     private final String realm = "myRealm";
     private final WebClient webClient;
-    private AuthMapper userMapper;
+    private final AuthMapper userMapper;
+    private final ClazzRepository clazzRepository;
 
     @Value("${app.keycloak.token-uri}")
     private String tokenUrl;
@@ -42,12 +45,10 @@ public class AuthService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Email đã được sử dụng!");
         }
-
         if (request.getRoleType() == 1 && userRepository.existsByStudentCode(request.getStudentCode())) {
             throw new RuntimeException("Mã số sinh viên đã tồn tại!");
         }
 
-        // 1. Định nghĩa User Representation cho Keycloak
         UserRepresentation userRep = new UserRepresentation();
         userRep.setUsername(request.getUsername());
         userRep.setEmail(request.getEmail());
@@ -56,7 +57,6 @@ public class AuthService {
         userRep.setEnabled(true);
         userRep.setEmailVerified(false);
 
-        // 2. Xác định Role và Group
         String roleName;
         String groupPath;
         switch (request.getRoleType()) {
@@ -67,7 +67,6 @@ public class AuthService {
         }
         userRep.setGroups(Collections.singletonList(groupPath));
 
-        // 3. Cấu hình Password
         CredentialRepresentation cred = new CredentialRepresentation();
         cred.setType(CredentialRepresentation.PASSWORD);
         cred.setValue(request.getPassword());
@@ -80,15 +79,29 @@ public class AuthService {
                 String keycloakId = path.substring(path.lastIndexOf("/") + 1);
 
                 assignRoleToUser(keycloakId, roleName);
-
                 keycloak.realm(realm).users().get(keycloakId)
                         .executeActionsEmail(Collections.singletonList("VERIFY_EMAIL"));
 
                 Users user = userMapper.registerRequestToUser(request);
                 user.setKeycloakId(keycloakId);
 
+                if (request.getClassId() != null) {
+                    Long reqClassId = request.getClassId();
+
+                    Clazzes clazz = clazzRepository.findById(reqClassId)
+                            .orElseGet(() -> {
+                                Clazzes newMirror = new Clazzes();
+                                newMirror.setId(reqClassId);
+                                newMirror.setName("Unknown Class (Sync Pending)");
+                                return clazzRepository.save(newMirror);
+                            });
+
+                    user.setClazz(clazz);
+                }
+
                 userRepository.save(user);
-            } else if (response.getStatus() == 409) { // Lỗi từ Keycloak nếu có
+
+            } else if (response.getStatus() == 409) {
                 throw new RuntimeException("Username hoặc Email đã tồn tại trên Keycloak!");
             } else {
                 throw new RuntimeException("Lỗi Keycloak: " + response.getStatus());
