@@ -1,4 +1,4 @@
-package com.example.initialProject.exception;
+package com.example.exception;
 
 public class IdInvalidException extends Exception {
 

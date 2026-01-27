@@ -1,4 +1,4 @@
-package com.example.initialProject.util;
+package com.example.util;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

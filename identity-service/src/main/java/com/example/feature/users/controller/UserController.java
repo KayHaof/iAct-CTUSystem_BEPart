@@ -1,5 +1,6 @@
 package com.example.feature.users.controller;
 
+import com.example.dto.ApiResponse;
 import com.example.feature.users.dto.UserResponse;
 import com.example.feature.users.dto.UserUpdateRequest;
 import com.example.feature.users.mapper.UserProfileMapper;
@@ -11,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -20,29 +22,57 @@ public class UserController {
     private final UserService userService;
     private final UserProfileMapper userProfileMapper;
 
+    // 1. Get All Users (Admin only)
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
-    public ResponseEntity<List<Users>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
+        List<Users> users = userService.getAllUsers();
+
+        List<UserResponse> userResponses = users.stream()
+                .map(userProfileMapper::toUserResponse)
+                .collect(Collectors.toList());
+
+        ApiResponse<List<UserResponse>> apiResponse = new ApiResponse<>();
+        apiResponse.setResult(userResponses);
+
+        return ResponseEntity.ok(apiResponse);
     }
 
+    // 2. Get User By ID
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
+        // Service đã tự throw AppException nếu không tìm thấy -> GlobalHandler sẽ bắt
         Users user = userService.getUserById(id);
-        return ResponseEntity.ok(userProfileMapper.toUserResponse(user));
+
+        ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
+        apiResponse.setResult(userProfileMapper.toUserResponse(user));
+
+        return ResponseEntity.ok(apiResponse);
     }
 
+    // 3. Update Profile
     @PutMapping("/{id}")
-    public ResponseEntity<Users> updateProfile(
+    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @PathVariable Long id,
             @RequestBody UserUpdateRequest request) {
 
-        return ResponseEntity.ok(userService.updateUserInfo(id, request));
+        Users updatedUser = userService.updateUserInfo(id, request);
+
+        ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
+        apiResponse.setResult(userProfileMapper.toUserResponse(updatedUser));
+        apiResponse.setMessage("Cập nhật thông tin thành công");
+
+        return ResponseEntity.ok(apiResponse);
     }
 
+    // 4. Delete User
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteUser(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<String>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
-        return ResponseEntity.ok("User = " + id + " deleted successfully !");
+
+        ApiResponse<String> apiResponse = new ApiResponse<>();
+        apiResponse.setMessage("Xóa người dùng thành công");
+
+        return ResponseEntity.ok(apiResponse);
     }
 }

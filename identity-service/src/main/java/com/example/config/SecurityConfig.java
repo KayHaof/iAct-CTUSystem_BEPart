@@ -1,5 +1,7 @@
 package com.example.config;
 
+import com.example.exception.CustomAccessDeniedHandler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -21,6 +23,8 @@ import java.util.stream.Collectors;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+    @Autowired
+    private CustomAccessDeniedHandler customAccessDeniedHandler;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -39,6 +43,7 @@ public class SecurityConfig {
                             System.out.println("Auth Error: " + authException.getMessage());
                             response.sendError(401, authException.getMessage());
                         })
+                        .accessDeniedHandler(customAccessDeniedHandler)
                 );
         return http.build();
     }

@@ -1,5 +1,7 @@
 package com.example.feature.users.service;
 
+import com.example.exception.AppException;
+import com.example.exception.ErrorCode;
 import com.example.feature.users.dto.UserUpdateRequest;
 import com.example.feature.users.mapper.UserProfileMapper;
 import com.example.feature.users.model.Users;
@@ -21,6 +23,10 @@ public class UserService {
 
     @Transactional
     public void saveUserAfterRegistration(String keycloakId, String username, String email, Integer roleType) {
+        if (userRepository.existsByUsername(username)) {
+            throw new AppException(ErrorCode.USER_EXISTED);
+        }
+
         Users user = Users.builder()
                 .keycloakId(keycloakId)
                 .username(username)
@@ -34,7 +40,7 @@ public class UserService {
     @Transactional
     public Users updateUserInfo(Long id, UserUpdateRequest request) {
         Users user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         userMapper.updateUserFromDto(request, user);
 
@@ -45,18 +51,24 @@ public class UserService {
         return userRepository.findAll();
     }
 
-    public Users getUserById(Long id) {
+    public Users getUserById(Long id){
         return userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
+    @Transactional
     public void deleteUser(Long id) {
-        String keycloak_id = userRepository.findById(id).isPresent()
-                ? userRepository.findById(id).get().getKeycloakId()
-                : null;
-        if(keycloak_id != null) {
-            keycloak.realm(realm).users().get(keycloak_id).remove();
+        Users user = userRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        if (user.getKeycloakId() != null) {
+            try {
+                keycloak.realm(realm).users().get(user.getKeycloakId()).remove();
+            } catch (Exception e) {
+               System.err.println("Error deleting user from Keycloak: " + e.getMessage());
+            }
         }
-        userRepository.deleteById(id);
+
+        userRepository.delete(user);
     }
 }
