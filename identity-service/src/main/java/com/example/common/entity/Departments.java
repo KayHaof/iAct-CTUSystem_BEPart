@@ -1,9 +1,7 @@
-package com.example.common;
+package com.example.common.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
-
-import java.util.List;
 
 @Entity
 @Table(name = "departments")

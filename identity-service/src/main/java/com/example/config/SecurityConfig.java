@@ -1,7 +1,8 @@
 package com.example.config;
 
 import com.example.exception.CustomAccessDeniedHandler;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.example.filter.UserStatusFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -11,7 +12,7 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.util.Collection;
@@ -22,9 +23,10 @@ import java.util.stream.Collectors;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
-    @Autowired
-    private CustomAccessDeniedHandler customAccessDeniedHandler;
+    private final CustomAccessDeniedHandler customAccessDeniedHandler;
+    private final UserStatusFilter userStatusFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -43,8 +45,8 @@ public class SecurityConfig {
                             System.out.println("Auth Error: " + authException.getMessage());
                             response.sendError(401, authException.getMessage());
                         })
-                        .accessDeniedHandler(customAccessDeniedHandler)
-                );
+                        .accessDeniedHandler(customAccessDeniedHandler))
+                .addFilterAfter(userStatusFilter, BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 

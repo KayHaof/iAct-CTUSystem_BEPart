@@ -1,5 +1,6 @@
 package com.example.feature.users.controller;
 
+import com.example.config.UserSecurity;
 import com.example.dto.ApiResponse;
 import com.example.feature.users.dto.UserResponse;
 import com.example.feature.users.dto.UserUpdateRequest;
@@ -21,6 +22,7 @@ public class UserController {
 
     private final UserService userService;
     private final UserProfileMapper userProfileMapper;
+    private  final UserSecurity userSecurity;
 
     // 1. Get All Users (Admin only)
     @PreAuthorize("hasRole('ADMIN')")
@@ -41,7 +43,6 @@ public class UserController {
     // 2. Get User By ID
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
-        // Service đã tự throw AppException nếu không tìm thấy -> GlobalHandler sẽ bắt
         Users user = userService.getUserById(id);
 
         ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
@@ -52,6 +53,7 @@ public class UserController {
 
     // 3. Update Profile
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @userSecurity.hasUserId(authentication, #id)")
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @PathVariable Long id,
             @RequestBody UserUpdateRequest request) {
@@ -65,14 +67,27 @@ public class UserController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    // 4. Delete User
+    // 4. Update status user
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @userSecurity.hasUserId(authentication, #id)")
     public ResponseEntity<ApiResponse<String>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
 
         ApiResponse<String> apiResponse = new ApiResponse<>();
-        apiResponse.setMessage("Xóa người dùng thành công");
+        apiResponse.setMessage("Xóa hoặc vô hiệu người dùng thành công");
 
         return ResponseEntity.ok(apiResponse);
     }
+
+    @PutMapping("/{id}/active")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> activeUser(@PathVariable long id){
+        userService.activateUser(id);
+
+        ApiResponse<String> apiResponse = new ApiResponse<>();
+        apiResponse.setMessage("Kích hoạt tài khoản thành công");
+
+        return ResponseEntity.ok(apiResponse);
+    }
+
 }

@@ -19,6 +19,6 @@ public class UserUpdateRequest {
     private Integer gender;
 
     private String studentCode;
-    private Integer classId;
-    private Integer departmentId;
+    private Long classId;
+    private Long departmentId;
 }

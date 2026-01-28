@@ -1,9 +1,9 @@
 package com.example.feature.users.model;
 
-import com.example.common.Clazzes;
-import com.example.common.Departments;
-import com.example.common.Notifications;
-import com.example.common.Registrations;
+import com.example.common.entity.Clazzes;
+import com.example.common.entity.Departments;
+import com.example.common.entity.Notifications;
+import com.example.common.entity.Registrations;
 import jakarta.persistence.Entity;
 import jakarta.persistence.*;
 import jakarta.persistence.Table;

@@ -13,7 +13,10 @@ public enum ErrorCode {
     PASSWORD_INVALID(1004, "Password must be at least 8 characters", HttpStatus.BAD_REQUEST),
     USER_NOT_EXISTED(1005, "User not found", HttpStatus.NOT_FOUND),
     UNAUTHENTICATED(1006, "Unauthenticated", HttpStatus.UNAUTHORIZED),
-    FORBIDDEN(1007, "You do not have permission", HttpStatus.FORBIDDEN),
+    FORBIDDEN(1007, "You do not have permission to execute this action", HttpStatus.FORBIDDEN),
+    RESOURCE_NOT_EXISTED(1008, "This resource not found", HttpStatus.NOT_FOUND),
+    ACCOUNT_LOCKED(1009,"This account is blocked or inactive. Please contact admin to describe problem and resolve", HttpStatus.LOCKED ),
+    VALUE_EXISTED(1010, "This value already exists", HttpStatus.BAD_REQUEST)
     ;
 
     private final int code;

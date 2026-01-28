@@ -1,6 +1,8 @@
 package com.example.feature.auth.service;
 
-import com.example.common.Clazzes;
+import com.example.common.entity.Clazzes;
+import com.example.exception.AppException;
+import com.example.exception.ErrorCode;
 import com.example.feature.auth.dto.LoginRequest;
 import com.example.feature.auth.dto.RegisterRequest;
 import com.example.feature.auth.mapper.AuthMapper;
@@ -40,13 +42,13 @@ public class AuthService {
     @Transactional
     public void registerUser(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new RuntimeException("Username đã tồn tại!");
+            throw new AppException(ErrorCode.VALUE_EXISTED, "Username này tồn tại. Vui lòng sử dụng tên khác !");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã được sử dụng!");
+            throw new AppException(ErrorCode.VALUE_EXISTED,"Email đã được sử dụng!");
         }
         if (request.getRoleType() == 1 && userRepository.existsByStudentCode(request.getStudentCode())) {
-            throw new RuntimeException("Mã số sinh viên đã tồn tại!");
+            throw new AppException(ErrorCode.VALUE_EXISTED ,"Mã số sinh viên đã tồn tại!");
         }
 
         UserRepresentation userRep = new UserRepresentation();
@@ -102,7 +104,7 @@ public class AuthService {
                 userRepository.save(user);
 
             } else if (response.getStatus() == 409) {
-                throw new RuntimeException("Username hoặc Email đã tồn tại trên Keycloak!");
+                throw new AppException(ErrorCode.VALUE_EXISTED,"Username hoặc Email đã tồn tại trên Keycloak!");
             } else {
                 throw new RuntimeException("Lỗi Keycloak: " + response.getStatus());
             }
@@ -119,7 +121,7 @@ public class AuthService {
     public Object loginUser(LoginRequest request) {
         System.out.println(">>> Check login = " + request.toString());
         if (userRepository.findByUsername(request.getUsername()).isEmpty()){
-            throw new RuntimeException("Người dùng này không tồn tại !");
+            throw new AppException(ErrorCode.USER_NOT_EXISTED);
         }
 
         return webClient.post()
@@ -132,8 +134,17 @@ public class AuthService {
                         .with("password", request.getPassword()))
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, response ->
-                        response.bodyToMono(String.class).flatMap(error ->
-                                Mono.error(new RuntimeException("Đăng nhập thất bại: " + error))))
+                        response.bodyToMono(String.class).flatMap(errorBody -> {
+                            if (errorBody.contains("Account disabled")) {
+                                return Mono.error(new AppException(ErrorCode.ACCOUNT_LOCKED));
+                            }
+
+                            if (errorBody.contains("invalid_grant")) {
+                                return Mono.error(new AppException(ErrorCode.UNAUTHENTICATED));
+                            }
+
+                            return Mono.error(new RuntimeException("Lỗi xác thực Keycloak: " + errorBody));
+                        }))
                 .bodyToMono(Object.class)
                 .block();
     }

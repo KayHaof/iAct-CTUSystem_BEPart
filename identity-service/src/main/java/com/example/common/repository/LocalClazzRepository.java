@@ -1,10 +1,9 @@
-package com.example.feature.users.repository;
+package com.example.common.repository;
 
 import com.example.common.entity.Clazzes;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface ClazzRepository extends JpaRepository<Clazzes, Long> {
-
+public interface LocalClazzRepository extends JpaRepository<Clazzes, Long> {
 }

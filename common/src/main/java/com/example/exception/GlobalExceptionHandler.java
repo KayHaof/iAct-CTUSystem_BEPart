@@ -18,7 +18,12 @@ public class GlobalExceptionHandler {
 
         ApiResponse<Object> apiResponse = new ApiResponse<>();
         apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage(errorCode.getMessage());
+
+        if (exception.getCustomMessage() != null && !exception.getCustomMessage().isEmpty()) {
+            apiResponse.setMessage(exception.getCustomMessage());
+        } else {
+            apiResponse.setMessage(errorCode.getMessage());
+        }
 
         return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
     }
