@@ -1,13 +1,13 @@
 package com.example.feature.auth.service;
 
 import com.example.common.entity.Clazzes;
+import com.example.common.repository.LocalClazzRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.feature.auth.dto.LoginRequest;
 import com.example.feature.auth.dto.RegisterRequest;
 import com.example.feature.auth.mapper.AuthMapper;
 import com.example.feature.users.model.Users;
-import com.example.feature.users.repository.ClazzRepository;
 import com.example.feature.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.keycloak.admin.client.Keycloak;
@@ -34,7 +34,7 @@ public class AuthService {
     private final String realm = "myRealm";
     private final WebClient webClient;
     private final AuthMapper userMapper;
-    private final ClazzRepository clazzRepository;
+    private final LocalClazzRepository clazzRepository;
 
     @Value("${app.keycloak.token-uri}")
     private String tokenUrl;
@@ -42,12 +42,12 @@ public class AuthService {
     @Transactional
     public void registerUser(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new AppException(ErrorCode.VALUE_EXISTED, "Username này tồn tại. Vui lòng sử dụng tên khác !");
+            throw new AppException(ErrorCode.VALUE_EXISTED, "Username này đã tồn tại. Vui lòng sử dụng tên khác !");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException(ErrorCode.VALUE_EXISTED,"Email đã được sử dụng!");
+            throw new AppException(ErrorCode.VALUE_EXISTED,"Email này đã được sử dụng!");
         }
-        if (request.getRoleType() == 1 && userRepository.existsByStudentCode(request.getStudentCode())) {
+        if (request.getStudentCode() != null && request.getRoleType() == 1 && userRepository.existsByStudentCode(request.getStudentCode())) {
             throw new AppException(ErrorCode.VALUE_EXISTED ,"Mã số sinh viên đã tồn tại!");
         }
 
@@ -75,17 +75,20 @@ public class AuthService {
         cred.setTemporary(false);
         userRep.setCredentials(Collections.singletonList(cred));
 
-        try (Response response = keycloak.realm(realm).users().create(userRep)) {
+        String createdKeycloakId = null;
+
+        try {
+            Response response = keycloak.realm(realm).users().create(userRep);
             if (response.getStatus() == 201) {
                 String path = response.getLocation().getPath();
-                String keycloakId = path.substring(path.lastIndexOf("/") + 1);
+                createdKeycloakId = path.substring(path.lastIndexOf("/") + 1);
 
-                assignRoleToUser(keycloakId, roleName);
-                keycloak.realm(realm).users().get(keycloakId)
+                assignRoleToUser(createdKeycloakId, roleName);
+                keycloak.realm(realm).users().get(createdKeycloakId)
                         .executeActionsEmail(Collections.singletonList("VERIFY_EMAIL"));
 
                 Users user = userMapper.registerRequestToUser(request);
-                user.setKeycloakId(keycloakId);
+                user.setKeycloakId(createdKeycloakId);
 
                 if (request.getClassId() != null) {
                     Long reqClassId = request.getClassId();
@@ -108,7 +111,20 @@ public class AuthService {
             } else {
                 throw new RuntimeException("Lỗi Keycloak: " + response.getStatus());
             }
+            response.close();
         } catch (Exception e) {
+            if (createdKeycloakId != null) {
+                try {
+                    keycloak.realm(realm).users().get(createdKeycloakId).remove();
+                    System.out.println("Đã rollback (xóa) user trên Keycloak do lỗi hệ thống: " + createdKeycloakId);
+                } catch (Exception ex) {
+                    System.err.println("CRITICAL: Không thể rollback user trên Keycloak: " + createdKeycloakId);
+                }
+            }
+
+            if (e instanceof AppException) {
+                throw (AppException) e;
+            }
             throw new RuntimeException("Đăng ký thất bại: " + e.getMessage());
         }
     }
@@ -121,7 +137,7 @@ public class AuthService {
     public Object loginUser(LoginRequest request) {
         System.out.println(">>> Check login = " + request.toString());
         if (userRepository.findByUsername(request.getUsername()).isEmpty()){
-            throw new AppException(ErrorCode.USER_NOT_EXISTED);
+            throw new AppException(ErrorCode.USER_NOT_EXISTED, "Username không tồn tại. Vui lòng thử lại !");
         }
 
         return webClient.post()

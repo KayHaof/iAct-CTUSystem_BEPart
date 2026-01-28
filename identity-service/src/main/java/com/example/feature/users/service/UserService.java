@@ -36,7 +36,7 @@ public class UserService {
     @Transactional
     public void saveUserAfterRegistration(String keycloakId, String username, String email, Integer roleType) {
         if (userRepository.existsByUsername(username)) {
-            throw new AppException(ErrorCode.USER_EXISTED);
+            throw new AppException(ErrorCode.USER_EXISTED, "Username này đã tồn tại");
         }
 
         Users user = Users.builder()
@@ -52,7 +52,7 @@ public class UserService {
     @Transactional
     public Users updateUserInfo(Long id, UserUpdateRequest request) {
         Users user = userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại trong hệ thống!"));
 
         userMapper.updateUserFromDto(request, user);
 
@@ -77,7 +77,7 @@ public class UserService {
 
     public Users getUserById(Long id){
         return userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại trong hệ thống!"));
     }
 
     @Transactional
