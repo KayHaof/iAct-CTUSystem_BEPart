@@ -1,7 +1,7 @@
 package com.example.feature.users.service;
 
-import com.example.common.entity.Clazzes;
-import com.example.common.entity.Departments;
+import com.example.common.Clazzes;
+import com.example.common.Departments;
 import com.example.common.repository.LocalClazzRepository;
 import com.example.common.repository.LocalDepartmentRepository;
 import com.example.exception.AppException;

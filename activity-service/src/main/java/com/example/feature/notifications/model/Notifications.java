@@ -1,6 +1,6 @@
 package com.example.feature.notifications.model;
 
-import com.example.common.Users;
+import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import jakarta.persistence.*;
 import lombok.*;

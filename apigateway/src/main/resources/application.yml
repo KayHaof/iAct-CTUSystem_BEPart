@@ -22,6 +22,13 @@ spring:
             - Path=/identity/**
           filters:
             - RewritePath=/identity/(?<segment>.*), /$\{segment}
+
+        - id: activity-service
+          uri: lb://activity-service
+          predicates:
+            - Path=/activity/**
+          filters:
+            - RewritePath=/activity/(?<segment>.*), /$\{segment}
       httpclient:
         connect-timeout: 5000
         response-timeout: 10s

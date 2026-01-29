@@ -1,6 +1,6 @@
 package com.example.feature.auth.service;
 
-import com.example.common.entity.Clazzes;
+import com.example.common.Clazzes;
 import com.example.common.repository.LocalClazzRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;

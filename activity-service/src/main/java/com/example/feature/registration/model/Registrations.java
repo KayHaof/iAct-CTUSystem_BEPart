@@ -1,7 +1,7 @@
 package com.example.feature.registration.model;
 
-import com.example.common.Attendances;
-import com.example.common.Users;
+import com.example.common.entity.Attendances;
+import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import jakarta.persistence.*;
 import lombok.*;

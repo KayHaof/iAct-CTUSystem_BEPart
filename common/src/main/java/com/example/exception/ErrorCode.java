@@ -16,7 +16,9 @@ public enum ErrorCode {
     FORBIDDEN(1007, "You do not have permission to execute this action", HttpStatus.FORBIDDEN),
     RESOURCE_NOT_EXISTED(1008, "This resource not found", HttpStatus.NOT_FOUND),
     ACCOUNT_LOCKED(1009,"This account is blocked or inactive. Please contact admin to describe problem and resolve", HttpStatus.LOCKED ),
-    VALUE_EXISTED(1010, "This value already exists", HttpStatus.BAD_REQUEST)
+    VALUE_EXISTED(1010, "This value already exists", HttpStatus.BAD_REQUEST),
+    INCORRECT_VALUE(1011, "This value is incorrect or unapproval", HttpStatus.BAD_REQUEST),
+    INVALID_ACTION(1012, "This action is not allowed", HttpStatus.FORBIDDEN)
     ;
 
     private final int code;

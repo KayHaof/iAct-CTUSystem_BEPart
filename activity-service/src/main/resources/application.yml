@@ -17,6 +17,13 @@ spring:
     database-platform: org.hibernate.dialect.MySQL8Dialect
     show-sql: true
 
+  oauth2:
+    resourceserver:
+      jwt:
+        issuer-uri: http://localhost:8088/realms/myRealm
+        jwk-set-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/certs
+
+
 eureka:
   client:
     service-url:

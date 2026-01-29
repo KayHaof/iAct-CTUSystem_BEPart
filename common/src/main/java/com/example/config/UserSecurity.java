@@ -1,15 +1,17 @@
 package com.example.config;
 
-import com.example.feature.users.repository.UserRepository;
+import com.example.repository.CommonUserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 @Component("userSecurity")
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "spring.datasource.url")
 public class UserSecurity {
 
-    private final UserRepository userRepository;
+    private final CommonUserRepository userRepository;
 
     public boolean hasUserId(Authentication authentication, Long userId) {
         boolean isAdmin = authentication.getAuthorities().stream()

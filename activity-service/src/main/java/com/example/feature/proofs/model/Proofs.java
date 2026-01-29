@@ -1,11 +1,9 @@
 package com.example.feature.proofs.model;
 
-import com.example.common.Users;
+import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import jakarta.persistence.*;
 import lombok.*;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "proofs")

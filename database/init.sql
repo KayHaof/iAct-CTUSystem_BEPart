@@ -1,6 +1,8 @@
 -- mysql> GRANT ALL PRIVILEGES ON *.* TO 'database'@'%' WITH GRANT OPTION;
 -- FLUSH PRIVILEGES;
 
+-- docker exec -it mysql_database mysql -u root -p
+
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

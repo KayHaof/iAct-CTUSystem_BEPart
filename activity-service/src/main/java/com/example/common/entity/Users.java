@@ -1,4 +1,4 @@
-package com.example.common;
+package com.example.common.entity;
 
 
 import jakarta.persistence.*;
@@ -23,12 +23,18 @@ public class Users {
     @Column(unique = true)
     private String email;
 
+    @Column(name = "full_name")
+    private String fullName;
+
     @Column(name = "role_type", nullable = false)
     private Integer roleType;
 
     private Integer status;
 
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
 //    @OneToOne(mappedBy = "user")
