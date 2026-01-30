@@ -8,9 +8,31 @@ spring:
     gateway:
 #      default-filters:
 #        - TokenRelay
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"   # Cho phép mọi nguồn
+            allowedMethods: "*"   # Cho phép mọi method (GET, POST...)
+            allowedHeaders: "*"   # Cho phép mọi header
+            allowCredentials: true
+
       routes:
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/notifications/**
+
+        # Route riêng cho WebSocket
+        - id: notification-websocket
+          uri: lb:ws://notification-service
+          predicates:
+            - Path=/ws/**
+          filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+            - PreserveHostHeader
+
         - id: profile-service
-          uri: lb://profile-serivce
+          uri: lb://profile-service
           predicates:
             - Path=/profile/**
           filters:
@@ -32,6 +54,8 @@ spring:
       httpclient:
         connect-timeout: 5000
         response-timeout: 10s
+        websocket:
+          max-frame-payload-length: 1048576
   security:
     oauth2:
       client:

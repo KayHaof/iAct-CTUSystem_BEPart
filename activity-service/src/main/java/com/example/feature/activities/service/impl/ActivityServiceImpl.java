@@ -19,7 +19,9 @@ import com.example.feature.activities.repository.ActivityRepository;
 import com.example.feature.activities.service.ActivityService;
 import com.example.feature.organizers.model.Organizers;
 import com.example.feature.organizers.repository.OrganizerRepository;
+import com.example.feignClient.NotificationClient;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,9 @@ public class ActivityServiceImpl implements ActivityService {
     private final LocalCategoryRepository categoryRepository;
     private final LocalUserRepository userRepository;
     private final ActivityMapper activityMapper;
+
+    @Autowired
+    NotificationClient notificationClient;
 
     // --- CREATE ---
     @Override
@@ -66,6 +71,7 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         Activities savedActivity = activityRepository.save(activity);
+        notificationClient.sendPublicNotification("Có hoạt động mới: " + activity.getTitle());
         return activityMapper.toResponse(savedActivity);
     }
 
@@ -92,6 +98,12 @@ public class ActivityServiceImpl implements ActivityService {
         Activities existingActivity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "The activity with id = " + id + " not found !"));
 
+        if (existingActivity.getStatus() != 0) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Cannot update this activity. Only PENDING (Status 0) activities can be modified. " +
+                            "Current status: " + existingActivity.getStatus());
+        }
+
         activityMapper.updateEntityFromRequest(request, existingActivity);
 
         if (request.getSemesterId() != null &&
@@ -115,6 +127,7 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         Activities updatedActivity = activityRepository.save(existingActivity);
+        notificationClient.sendPublicNotification("Hoạt động " + updatedActivity.getTitle() + " đã được thay đổi. Vui lòng xem chi tiết để có thể cập nhật được các thay đổi !");
         return activityMapper.toResponse(updatedActivity);
     }
 
@@ -187,7 +200,7 @@ public class ActivityServiceImpl implements ActivityService {
         if (newStatus == 2) {
             String reason = request.getRejectReason() != null ? request.getRejectReason() : "No reason provided";
             System.out.println("LOG: Rejected Activity " + id + ". Reason: " + reason);
-            // notificationService.sendNotification(organizerId, "Hoạt động bị từ chối: " + reason);
+//            notificationClient.sendPrivateNotification(mssv, "Bạn đã được duyệt tham gia!");
         }
         else if (newStatus == 3) {
             String reason = request.getCancelReason() != null ? request.getCancelReason() : "Emergency cancellation";
