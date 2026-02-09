@@ -9,6 +9,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.cors.reactive.CorsConfigurationSource; // 1. Nhớ import cái này
 
 @Configuration
 @EnableWebFluxSecurity
@@ -23,13 +24,16 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) throws Exception {
+    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http,
+                                                            CorsConfigurationSource corsConfigurationSource) {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers("/identity/auth/**", "/identity/users/register").permitAll()
                         .pathMatchers(HttpMethod.GET, "/profile/users/**").permitAll()
-                        .pathMatchers("/ws/**").permitAll()
+                        .pathMatchers("/internal/notifications/ws/**").permitAll()
 
                         .anyExchange().authenticated()
                 )

@@ -49,7 +49,7 @@ public class GlobalExceptionHandler {
 
     // 3. Catch-all (Lỗi hệ thống chưa xác định - 500)
     @ExceptionHandler(value = Exception.class)
-    ResponseEntity<ApiResponse<Object>> handlingRuntimeException(RuntimeException exception) {
+    ResponseEntity<ApiResponse<Object>> handlingRuntimeException(Exception exception) {
         ApiResponse<Object> apiResponse = new ApiResponse<>();
 
         apiResponse.setCode(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());

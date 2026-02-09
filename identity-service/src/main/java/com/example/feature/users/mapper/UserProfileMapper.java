@@ -12,7 +12,9 @@ import org.mapstruct.*;
 public interface UserProfileMapper {
 
     @Mapping(target = "classCode", source = "clazz.classCode")
+    @Mapping(target = "classId", source = "clazz.id")
     @Mapping(target = "departmentName", source = "department.name")
+    @Mapping(target = "departmentId", source = "department.id")
     UserResponse toUserResponse(Users user);
 
     @Mapping(target = "id", ignore = true)

@@ -17,19 +17,19 @@ spring:
             allowCredentials: true
 
       routes:
-        - id: notification-service
-          uri: lb://notification-service
-          predicates:
-            - Path=/notifications/**
-
-        # Route riêng cho WebSocket
         - id: notification-websocket
           uri: lb:ws://notification-service
           predicates:
-            - Path=/ws/**
+            - Path=/internal/notifications/ws/**
           filters:
-            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials
+            - StripPrefix=2
             - PreserveHostHeader
+
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/internal/notifications/**
+
 
         - id: profile-service
           uri: lb://profile-service

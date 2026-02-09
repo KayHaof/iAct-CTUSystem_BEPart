@@ -8,6 +8,7 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
+
 import java.security.Principal;
 import java.util.Map;
 
@@ -19,27 +20,29 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
-                // CẤU HÌNH QUAN TRỌNG: Tự lấy ID từ URL để biết ai là ai
-                .setHandshakeHandler(new UserHandshakeHandler())
-                .withSockJS();
+                .setHandshakeHandler(new UserHandshakeHandler());
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // /topic: Kênh chung | /queue: Kênh riêng
         registry.enableSimpleBroker("/topic", "/queue");
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
     }
 
-    // Class giúp lấy userId từ đường dẫn kết nối (ws://...?userId=B190xxxx)
+    // Class này giữ nguyên để lấy User ID
     private class UserHandshakeHandler extends DefaultHandshakeHandler {
         @Override
         protected Principal determineUser(ServerHttpRequest request, WebSocketHandler wsHandler, Map<String, Object> attributes) {
             String uri = request.getURI().toString();
+            // Code này tạm ổn, nhưng nhớ check kỹ null safety
             if (uri.contains("userId=")) {
-                String userId = uri.split("userId=")[1];
-                return () -> userId; // Trả về ID sinh viên làm định danh
+                try {
+                    String userId = uri.split("userId=")[1].split("&")[0]; // Lấy chắc chắn hơn
+                    return () -> userId;
+                } catch (Exception e) {
+                    return null;
+                }
             }
             return null;
         }

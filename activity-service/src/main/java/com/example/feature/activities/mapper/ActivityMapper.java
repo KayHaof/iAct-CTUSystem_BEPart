@@ -1,6 +1,7 @@
 package com.example.feature.activities.mapper;
 
 import com.example.common.dto.BenefitDto;
+import com.example.common.dto.NotificationRequest;
 import com.example.common.entity.Benefits;
 import com.example.common.entity.Semesters;
 import com.example.common.entity.Users;
@@ -68,4 +69,12 @@ public interface ActivityMapper {
     @Mapping(target = "organizer", ignore = true)
     @Mapping(target = "benefits", ignore = true)
     void updateEntityFromRequest(ActivityRequest request, @MappingTarget Activities entity);
+
+    // --- MAPPING CHO NOTIFICATION ---
+    @Mapping(source = "activity.createdBy.id", target = "userId")
+    @Mapping(source = "activity.id", target = "activityId")
+    @Mapping(source = "message", target = "message")
+    @Mapping(source = "title", target = "title")
+    @Mapping(source = "type", target = "type")
+    NotificationRequest toNotificationRequest(Activities activity, String title, String message, Integer type);
 }

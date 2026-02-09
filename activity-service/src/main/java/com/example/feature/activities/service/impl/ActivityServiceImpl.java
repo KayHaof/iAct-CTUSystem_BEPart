@@ -1,6 +1,7 @@
 package com.example.feature.activities.service.impl;
 
 import com.example.common.dto.BenefitDto;
+import com.example.common.dto.NotificationRequest; // Import DTO
 import com.example.common.entity.Benefits;
 import com.example.common.entity.Categories;
 import com.example.common.entity.Semesters;
@@ -13,6 +14,7 @@ import com.example.exception.ErrorCode;
 import com.example.feature.activities.dto.ActivityApprovalRequest;
 import com.example.feature.activities.dto.ActivityRequest;
 import com.example.feature.activities.dto.ActivityResponse;
+import com.example.feature.activities.event.ActivityCreatedEvent;
 import com.example.feature.activities.mapper.ActivityMapper;
 import com.example.feature.activities.model.Activities;
 import com.example.feature.activities.repository.ActivityRepository;
@@ -21,7 +23,8 @@ import com.example.feature.organizers.model.Organizers;
 import com.example.feature.organizers.repository.OrganizerRepository;
 import com.example.feignClient.NotificationClient;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -32,6 +35,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ActivityServiceImpl implements ActivityService {
 
     private final ActivityRepository activityRepository;
@@ -41,8 +45,8 @@ public class ActivityServiceImpl implements ActivityService {
     private final LocalUserRepository userRepository;
     private final ActivityMapper activityMapper;
 
-    @Autowired
-    NotificationClient notificationClient;
+    private final NotificationClient notificationClient;
+    private final ApplicationEventPublisher eventPublisher;
 
     // --- CREATE ---
     @Override
@@ -71,19 +75,26 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         Activities savedActivity = activityRepository.save(activity);
-        notificationClient.sendPublicNotification("Có hoạt động mới: " + activity.getTitle());
+
+        // --- GỬI THÔNG BÁO (Create - Type 1: Info) ---
+        eventPublisher.publishEvent(new ActivityCreatedEvent(
+                savedActivity,
+                "Yêu cầu tổ chức hoạt động thành công",
+                "Hoạt động '" + savedActivity.getTitle() + "' đã được tạo và đang chờ duyệt.",
+                1
+        ));
+
         return activityMapper.toResponse(savedActivity);
     }
 
-    // --- READ ---
+    // --- READ & ALL (Giữ nguyên) ---
     @Override
     public ActivityResponse getActivityById(Long id) {
         Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "The activity with id = " + id + " not found !"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !"));
         return activityMapper.toResponse(activity);
     }
 
-    // --- ALL ---
     @Override
     public List<ActivityResponse> getAllActivities() {
         return activityRepository.findAll().stream()
@@ -96,12 +107,10 @@ public class ActivityServiceImpl implements ActivityService {
     @Transactional
     public ActivityResponse updateActivity(Long id, ActivityRequest request) {
         Activities existingActivity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "The activity with id = " + id + " not found !"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !"));
 
         if (existingActivity.getStatus() != 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Cannot update this activity. Only PENDING (Status 0) activities can be modified. " +
-                            "Current status: " + existingActivity.getStatus());
+            throw new AppException(ErrorCode.INVALID_ACTION, "Only PENDING activities can be modified.");
         }
 
         activityMapper.updateEntityFromRequest(request, existingActivity);
@@ -127,7 +136,13 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         Activities updatedActivity = activityRepository.save(existingActivity);
-        notificationClient.sendPublicNotification("Hoạt động " + updatedActivity.getTitle() + " đã được thay đổi. Vui lòng xem chi tiết để có thể cập nhật được các thay đổi !");
+
+        // --- GỬI THÔNG BÁO (Update - Type 2: Update) ---
+        sendNotificationSafe(updatedActivity,
+                "Cập nhật hoạt động",
+                "Bạn vừa cập nhật thông tin cho hoạt động '" + updatedActivity.getTitle() + "'.",
+                2);
+
         return activityMapper.toResponse(updatedActivity);
     }
 
@@ -136,23 +151,19 @@ public class ActivityServiceImpl implements ActivityService {
     @Transactional
     public void deleteActivity(Long id) {
         if (!activityRepository.existsById(id)) {
-            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "The activity with id = " + id + " not found !");
+            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !");
         }
         activityRepository.deleteById(id);
     }
 
+    // Helper processBenefits
     private List<Benefits> processBenefits(List<BenefitDto> benefitDtos, Activities activity) {
-        if (benefitDtos == null || benefitDtos.isEmpty()) {
-            return new java.util.ArrayList<>();
-        }
+        if (benefitDtos == null) return new java.util.ArrayList<>();
         return benefitDtos.stream().map(dto -> {
             Benefits benefit = activityMapper.toBenefitEntity(dto);
             benefit.setActivity(activity);
-
-            if (dto.getCategoryId() != null) {
-                Categories category = categoryRepository.findById(dto.getCategoryId())
-                        .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED));
-                benefit.setCategory(category);
+            if(dto.getCategoryId() != null) {
+                benefit.setCategory(categoryRepository.findById(dto.getCategoryId()).orElse(null));
             }
             return benefit;
         }).collect(Collectors.toList());
@@ -196,22 +207,45 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         activity.setStatus(newStatus);
-
-        if (newStatus == 2) {
-            String reason = request.getRejectReason() != null ? request.getRejectReason() : "No reason provided";
-            System.out.println("LOG: Rejected Activity " + id + ". Reason: " + reason);
-//            notificationClient.sendPrivateNotification(mssv, "Bạn đã được duyệt tham gia!");
-        }
-        else if (newStatus == 3) {
-            String reason = request.getCancelReason() != null ? request.getCancelReason() : "Emergency cancellation";
-            System.out.println("LOG: Cancelled Activity " + id + ". Reason: " + reason);
-
-            // TODO: Quan trọng! Cần gửi thông báo cho TẤT CẢ sinh viên đã đăng ký
-            // List<User> participants = registerRepository.findUsersByActivity(id);
-            // notificationService.sendBroadCast(participants, "Hoạt động đã bị hủy vì sự cố: " + reason);
-        }
-
         Activities savedActivity = activityRepository.save(activity);
+
+        // --- GỬI THÔNG BÁO THEO TRẠNG THÁI ---
+        if (newStatus == 1) { // APPROVED
+            sendNotificationSafe(savedActivity,
+                    "Hoạt động đã được duyệt",
+                    "Hoạt động '" + savedActivity.getTitle() + "' đã được Admin phê duyệt.",
+                    1); // 1 = Info/Success
+        }
+        else if (newStatus == 2) { // REJECTED
+            String reason = request.getRejectReason() != null ? request.getRejectReason() : "Không có lý do";
+            sendNotificationSafe(savedActivity,
+                    "Hoạt động bị từ chối",
+                    "Lý do: " + reason,
+                    3); // 3 = Warning/Error
+        }
+        else if (newStatus == 3) { // CANCELLED
+            String reason = request.getCancelReason() != null ? request.getCancelReason() : "Sự cố khẩn cấp";
+            sendNotificationSafe(savedActivity,
+                    "Hoạt động bị hủy",
+                    "Hoạt động '" + savedActivity.getTitle() + "' bị hủy. Lý do: " + reason,
+                    3); // 3 = Warning
+
+            // TODO: Ở đây có thể cần logic gửi Broadcast cho sinh viên đã đăng ký
+        }
+
         return activityMapper.toResponse(savedActivity);
+    }
+
+    // --- HELPER RIÊNG ĐỂ GỬI THÔNG BÁO ---
+    // Hàm này giúp code Service chính sạch sẽ, và gom try-catch lại một chỗ
+    private void sendNotificationSafe(Activities activity, String title, String message, Integer type) {
+        try {
+            NotificationRequest notiRequest = activityMapper.toNotificationRequest(activity, title, message, type);
+            notificationClient.createNotification(notiRequest);
+        } catch (Exception e) {
+            // Quan trọng: Log lỗi nhưng KHÔNG ném Exception ra ngoài
+            // Để tránh việc gửi thông báo lỗi làm Rollback transaction của việc Lưu Activity
+            log.error("Failed to send notification for activity {}: {}", activity.getId(), e.getMessage());
+        }
     }
 }

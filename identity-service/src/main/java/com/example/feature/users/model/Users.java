@@ -53,6 +53,7 @@ public class Users {
     private Integer gender; // 0=female, 1=male, 2=other
     private String phone;
     private String address;
+    private String avtUrl;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

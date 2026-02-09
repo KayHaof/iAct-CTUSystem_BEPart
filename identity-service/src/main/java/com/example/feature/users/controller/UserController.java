@@ -10,6 +10,8 @@ import com.example.feature.users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -67,7 +69,7 @@ public class UserController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    // 4. Update status user
+    // 4. Update - Del - Inactive status user
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or @userSecurity.hasUserId(authentication, #id)")
     public ResponseEntity<ApiResponse<String>> deleteUser(@PathVariable Long id) {
@@ -79,6 +81,7 @@ public class UserController {
         return ResponseEntity.ok(apiResponse);
     }
 
+    // 5. Active user by admin
     @PutMapping("/{id}/active")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>> activeUser(@PathVariable long id){
@@ -90,4 +93,26 @@ public class UserController {
         return ResponseEntity.ok(apiResponse);
     }
 
+    // 6. Get info user by email
+    @GetMapping("/my-info")
+    public ResponseEntity<ApiResponse<UserResponse>> getMyInfo() {
+        var context = SecurityContextHolder.getContext();
+        var authentication = context.getAuthentication();
+
+        // Ép kiểu Principal về Jwt
+        Jwt jwt = (Jwt) authentication.getPrincipal();
+
+        // Lấy chính xác claim "email" (hoặc "preferred_username" tùy config Keycloak)
+        String email = jwt.getClaimAsString("email");
+
+        // Log ra kiểm tra thử
+        System.out.println(">> Email extracted: " + email);
+
+        Users user = userService.getUserByEmail(email);
+
+        ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
+        apiResponse.setResult(userProfileMapper.toUserResponse(user));
+
+        return ResponseEntity.ok(apiResponse);
+    }
 }
