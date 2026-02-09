@@ -1,0 +1,187 @@
+/* 1. CẤU HÌNH CƠ BẢN */
+*, *:before, *:after { box-sizing: border-box; }
+html { height: 100%; }
+
+body {
+    background: transparent !important;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; margin: 0; padding: 30px 0;
+    position: relative;
+}
+
+body::before {
+    content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: -1;
+    background-image: url('../img/bg.jpg');
+    background-size: cover; background-position: center;
+    background-repeat: no-repeat; background-color: #1a1a1a;
+}
+#kc-header { display: none; }
+
+
+/* --- 2. KHUNG FORM (TĂNG LÊN 800PX) --- */
+.card-pf {
+    width: 850px !important; /* Tăng thêm 50px nữa cho thoải mái */
+    max-width: 95vw;
+    background-color: #ffffff; border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    margin: auto !important;
+
+    background-image: url('../img/logo.png');
+    background-repeat: no-repeat; background-position: center top 25px;
+    background-size: 130px auto;
+
+    padding: 140px 30px 40px 30px !important;
+
+    position: relative; z-index: 1;
+    display: flex !important; flex-direction: column !important; align-items: center !important;
+}
+#kc-content { width: 100%; margin: 0 !important; padding: 0 !important; }
+
+
+/* --- 🔥 3. TIÊU ĐỀ (CỨNG - 1 DÒNG) --- */
+#kc-page-title {
+    display: block !important; width: 100% !important; text-align: center !important;
+    margin: 0 0 25px 0 !important;
+    font-weight: 800; color: #202124 !important;
+
+    font-size: 24px !important; /* Giữ font to cho đẹp */
+    line-height: 1.3 !important;
+    text-transform: none !important;
+
+    /* Logic chống rớt dòng tuyệt đối */
+    white-space: nowrap !important; /* Cấm xuống dòng ở tiêu đề ngắn */
+    overflow: visible !important;
+
+    /* Riêng với Email dài (nếu có) thì cho phép bẻ gãy */
+    text-overflow: clip;
+}
+
+/* Xử lý riêng cho trang Confirm Email (có class instruction) để nó tự xuống dòng */
+#kc-content-wrapper .instruction {
+    white-space: normal !important;
+    word-break: break-word !important;
+}
+
+
+div.instruction {
+    display: block !important; text-align: center !important;
+    color: #5f6368 !important; margin-bottom: 20px !important; font-size: 16px !important;
+}
+span.subtitle, .pf-c-form__helper-text { display: none !important; }
+
+
+/* --- 4. FORM LAYOUT --- */
+form {
+    display: flex !important; flex-direction: row !important;
+    flex-wrap: wrap !important; justify-content: space-between !important;
+    width: 100% !important; padding: 0 10px !important;
+}
+form .form-group, [class*="col-"] {
+    padding: 0 !important; margin: 0 !important; float: none !important;
+    max-width: none !important; min-height: 0 !important;
+}
+form > div, .form-group {
+    width: 100% !important; margin-bottom: 0 !important; display: block !important; order: 1;
+}
+
+
+/* --- 5. TEXT BÁO LỖI (JS SUPPORT) --- */
+form .form-group > [class*="col-"], form .form-group {
+    display: flex !important; flex-direction: row !important; align-items: center !important;
+    flex-wrap: wrap !important;
+}
+span.kc-feedback-text, .error-message {
+    display: block !important; width: 100% !important;
+    color: #d93025 !important; font-size: 13px !important;
+    margin-top: 4px !important; text-align: left !important; font-weight: 600;
+    animation: fadeIn 0.3s ease-in-out;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+.alert-error, .pf-c-alert.pf-m-danger, .alert-warning { display: none !important; }
+
+
+/* --- 6. LABEL & DẤU SAO (*) --- */
+form label {
+    font-weight: 600; color: #5f6368;
+    margin-bottom: 5px; margin-top: 15px;
+    font-size: 14px; text-align: left !important;
+    display: flex !important; align-items: center !important;
+    width: auto !important; white-space: nowrap !important;
+}
+span.required, .pf-c-form__label-required, label .pf-c-form__label-text::after, form label::after {
+    display: none !important; content: none !important;
+}
+label[for="firstName"]::after, label[for="lastName"]::after {
+    content: " *" !important; color: #d93025 !important; margin-left: 3px !important;
+    font-size: 16px !important; display: inline-block !important;
+    font-weight: bold !important; visibility: visible !important;
+}
+
+
+/* --- 7. INPUT STYLE --- */
+input.form-control, input[type="text"], input[type="password"], input[type="email"] {
+    display: block; width: 100% !important; height: 48px !important;
+    border-radius: 4px !important;
+    border: 1px solid #dadce0 !important; border-bottom: 2px solid #dadce0 !important;
+    background-color: #f1f3f4 !important;
+    padding-left: 15px !important; padding-right: 15px !important;
+    font-size: 16px; transition: all 0.2s; color: #202124;
+    box-sizing: border-box !important; margin-top: 0 !important;
+}
+input:focus { background-color: #ffffff !important; border-color: #dadce0 !important; outline: none; border-bottom-color: #0066cc !important; }
+input[aria-invalid="true"] {
+    background-color: #fff0f0 !important; border-bottom-color: #d93025 !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23d93025'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z'/%3E%3C/svg%3E") !important;
+    background-position: right 10px center !important;
+    background-size: 18px auto !important; background-repeat: no-repeat !important;
+}
+.form-group:has(button) input[aria-invalid="true"], .pf-c-form-control-group input[aria-invalid="true"] {
+    background-position: right 40px center !important;
+}
+
+
+/* --- 8. NÚT MẮT --- */
+form div:has(button), .pf-c-form-control-group { position: relative !important; width: 100% !important; display: block !important; }
+input[type="password"] { padding-right: 45px !important; }
+button.pf-c-button.pf-m-control, .kv-toggle-password, button[type="button"].pf-c-button {
+    position: absolute !important; right: 1px !important; top: 1px !important;
+    height: 46px !important; width: 45px !important;
+    background: transparent !important; border: 0 !important; box-shadow: none !important; outline: none !important;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: #5f6368; z-index: 10;
+}
+button:hover { color: #0066cc !important; background: transparent !important; }
+
+
+/* --- 9. CHIA CỘT INPUT --- */
+.form-group:has(input[name="firstName"]) { width: 48% !important; flex: 0 0 48% !important; margin-right: 0 !important; }
+.form-group:has(input[name="lastName"]) { width: 48% !important; flex: 0 0 48% !important; margin-left: 0 !important; }
+.form-group.col-md-12:has(input[name="firstName"]) { width: 48% !important; }
+
+
+/* --- 10. LOGIC SẮP XẾP --- */
+#kc-form-buttons { width: 100% !important; margin-top: 30px !important; order: 10 !important; position: relative; z-index: 2; }
+#kc-form-buttons input[type="submit"] {
+    background-color: #0066cc; border: none; border-radius: 4px;
+    padding: 12px; width: 100% !important; font-size: 16px; font-weight: 600; color: white;
+    text-transform: uppercase; cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+#kc-form-buttons input[type="submit"]:hover { background-color: #004c99; }
+
+#kc-form-options { width: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+#kc-form-options:has(input[type="checkbox"]) { order: 5 !important; margin-top: 15px !important; justify-content: flex-start !important; }
+#kc-form-options .checkbox { margin: 0 !important; padding: 0 !important; display: block !important; }
+#kc-form-options .checkbox label {
+    display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: flex-start !important;
+    margin: 0 !important; padding: 0 !important; height: auto !important; font-weight: normal !important; color: #5f6368 !important; font-size: 14px !important;
+}
+#kc-form-options .checkbox input[type="checkbox"] {
+    margin: 0 8px 0 0 !important; width: 16px !important; height: 16px !important; padding: 0 !important;
+    border: 1px solid #dadce0 !important; position: static !important; display: inline-block !important; cursor: pointer !important;
+}
+
+#kc-form-options:not(:has(input[type="checkbox"])) { order: 20 !important; margin-top: 25px !important; position: relative !important; }
+#kc-form-options a, #kc-content-wrapper .instruction a { color: #0066cc !important; text-decoration: none; font-weight: 600; }
+#kc-form-options a:hover, #kc-content-wrapper .instruction a:hover { text-decoration: underline; }

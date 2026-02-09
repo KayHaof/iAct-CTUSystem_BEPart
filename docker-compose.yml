@@ -27,6 +27,7 @@ services:
       - my-db
     volumes:
       - ./keycloak/:/opt/keycloak/data/import/
+      - ./keycloak/themes/iAct-themes:/opt/keycloak/themes/iAct-themes
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
@@ -43,6 +44,10 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
+
+      KC_SPI_THEME_CACHE_THEMES: "false"
+      KC_SPI_THEME_CACHE_TEMPLATES: "false"
+      KC_SPI_THEME_STATIC_MAX_AGE: "-1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
