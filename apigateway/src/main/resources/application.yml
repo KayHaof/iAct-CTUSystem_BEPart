@@ -80,3 +80,8 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+
+cloudinary:
+  cloud-name: dhjamvg6j
+  api-key: 237733137343564
+  api-secret: xzojOJkKQH9R6mcX9M8LMPPFlcw

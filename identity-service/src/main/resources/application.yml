@@ -34,3 +34,8 @@ eureka:
 app:
   keycloak:
     token-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/token
+
+cloudinary:
+  cloud-name: dhjamvg6j
+  api-key: 237733137343564
+  api-secret: xzojOJkKQH9R6mcX9M8LMPPFlcw

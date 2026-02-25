@@ -18,7 +18,7 @@ public class UserResponse {
     private Integer roleType;   // 1=student, 2=dept...
     private Integer status;     // 1=active, 0=inactive...
 
-    private String avtUrl;
+    private String avatarUrl;
 
     // Thông tin cá nhân mới thêm
     private LocalDate birthday; // Backend trả về dạng [2003, 5, 20] hoặc "2003-05-20"

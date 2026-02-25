@@ -6,12 +6,14 @@ import com.example.common.repository.LocalClazzRepository;
 import com.example.common.repository.LocalDepartmentRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
+import com.example.feature.users.dto.ChangePasswordRequest;
 import com.example.feature.users.dto.UserUpdateRequest;
 import com.example.feature.users.event.UserDisabledEvent;
 import com.example.feature.users.mapper.UserProfileMapper;
 import com.example.feature.users.model.Users;
 import com.example.feature.users.repository.UserRepository;
 import com.example.service.BaseRedisService;
+import com.example.service.CloudinaryService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,8 +24,13 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +41,7 @@ public class UserService {
     private final LocalClazzRepository localClazzRepository;
     private final LocalDepartmentRepository localDepartmentRepository;
     private final UserProfileMapper userMapper;
+    private final CloudinaryService cloudinaryService;
     private final Keycloak keycloak;
     private final String realm = "myRealm";
     private final ApplicationEventPublisher eventPublisher;
@@ -59,7 +67,18 @@ public class UserService {
         Users user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại trong hệ thống!"));
 
+        // --- BƯỚC 1: LẤY VÀ LƯU TẠM URL ẢNH CŨ TRƯỚC KHI BỊ MAPPER GHI ĐÈ ---
+        String oldAvatarUrl = user.getAvatarUrl();
+
+        // --- BƯỚC 2: CẬP NHẬT DỮ LIỆU MỚI TỪ DTO ---
         userMapper.updateUserFromDto(request, user);
+
+        // --- BƯỚC 3: KIỂM TRA VÀ GỌI HÀM XÓA ẢNH CŨ ---
+        String newAvatarUrl = request.getAvatarUrl();
+        // Chỉ xóa khi: có gửi link mới + đã từng có link cũ + link mới khác link cũ
+        if (newAvatarUrl != null && oldAvatarUrl != null && !oldAvatarUrl.equals(newAvatarUrl)) {
+            deleteOldAvatar(oldAvatarUrl); // Gọi cái hàm xóa ảnh của ní ở đây nè!
+        }
 
         if (request.getClassId() != null) {
             Clazzes clazz = localClazzRepository.findById(request.getClassId())
@@ -74,6 +93,39 @@ public class UserService {
         }
 
         return userRepository.save(user);
+    }
+
+    public void changePasswordViaKeycloak(String bearerToken, ChangePasswordRequest request) {
+        RestTemplate restTemplate = new RestTemplate();
+
+        // Endpoint chuẩn của Keycloak để user tự đổi pass
+        // Lưu ý: Nếu Keycloak < 17 thì là /auth/realms/...
+        String url = "http://localhost:8080" + "/realms/" + realm + "/account/credentials/password";
+
+        // 1. Gắn Token của user vào Header để Keycloak biết ai đang xin đổi pass
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", bearerToken);
+
+        // 2. Đóng gói body theo chuẩn Keycloak yêu cầu
+        Map<String, String> body = new HashMap<>();
+        body.put("currentPassword", request.getCurrentPassword());
+        body.put("newPassword", request.getNewPassword());
+        body.put("confirmation", request.getNewPassword()); // Xác nhận lại pass mới
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            // 3. Bắn request sang Keycloak
+            restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            // Nếu chạy qua dòng này bình thường nghĩa là Keycloak đã đổi pass thành công!
+
+        } catch (HttpClientErrorException e) {
+            // Nếu pass cũ sai, hoặc pass mới quá ngắn, Keycloak sẽ chửi (trả về 400 hoặc 401)
+            // Ní hứng lỗi ở đây và ném ra cho Frontend biết
+            System.err.println("Lỗi từ Keycloak: " + e.getResponseBodyAsString());
+            throw new RuntimeException("Mật khẩu hiện tại không đúng hoặc mật khẩu mới chưa đạt yêu cầu!");
+            // (Thực tế ní nên ném AppException theo chuẩn dự án của ní)
+        }
     }
 
     public List<Users> getAllUsers() {
@@ -172,5 +224,7 @@ public class UserService {
         userRepository.save(user);
     }
 
-//    private Long getID
+    public void deleteOldAvatar(String oldAvatarUrl) {
+        cloudinaryService.deleteImageByUrl(oldAvatarUrl);
+    }
 }

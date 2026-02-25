@@ -2,6 +2,7 @@ package com.example.feature.users.controller;
 
 import com.example.config.UserSecurity;
 import com.example.dto.ApiResponse;
+import com.example.feature.users.dto.ChangePasswordRequest;
 import com.example.feature.users.dto.UserResponse;
 import com.example.feature.users.dto.UserUpdateRequest;
 import com.example.feature.users.mapper.UserProfileMapper;
@@ -114,5 +115,17 @@ public class UserController {
         apiResponse.setResult(userProfileMapper.toUserResponse(user));
 
         return ResponseEntity.ok(apiResponse);
+    }
+
+    // 7. Change password
+    @PutMapping("/my-password")
+    public ResponseEntity<ApiResponse<Void>> changeMyPassword(
+            @RequestHeader("Authorization") String bearerToken,
+            @RequestBody ChangePasswordRequest request) {
+
+        // Đẩy token và request sang Service xử lý
+        userService.changePasswordViaKeycloak(bearerToken, request);
+
+        return ResponseEntity.ok(new ApiResponse<>(200, "Đổi mật khẩu thành công!", null));
     }
 }
