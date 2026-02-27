@@ -5,18 +5,16 @@ import com.example.dto.ApiResponse;
 import com.example.feature.users.dto.ChangePasswordRequest;
 import com.example.feature.users.dto.UserResponse;
 import com.example.feature.users.dto.UserUpdateRequest;
-import com.example.feature.users.mapper.UserProfileMapper;
-import com.example.feature.users.model.Users;
 import com.example.feature.users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -24,18 +22,13 @@ import java.util.stream.Collectors;
 public class UserController {
 
     private final UserService userService;
-    private final UserProfileMapper userProfileMapper;
-    private  final UserSecurity userSecurity;
+    private final UserSecurity userSecurity;
 
     // 1. Get All Users (Admin only)
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
-        List<Users> users = userService.getAllUsers();
-
-        List<UserResponse> userResponses = users.stream()
-                .map(userProfileMapper::toUserResponse)
-                .collect(Collectors.toList());
+        List<UserResponse> userResponses = userService.getAllUsers();
 
         ApiResponse<List<UserResponse>> apiResponse = new ApiResponse<>();
         apiResponse.setResult(userResponses);
@@ -46,10 +39,10 @@ public class UserController {
     // 2. Get User By ID
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
-        Users user = userService.getUserById(id);
+        UserResponse userResponse = userService.getUserById(id);
 
         ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
-        apiResponse.setResult(userProfileMapper.toUserResponse(user));
+        apiResponse.setResult(userResponse);
 
         return ResponseEntity.ok(apiResponse);
     }
@@ -61,10 +54,10 @@ public class UserController {
             @PathVariable Long id,
             @RequestBody UserUpdateRequest request) {
 
-        Users updatedUser = userService.updateUserInfo(id, request);
+        UserResponse updatedUser = userService.updateUserInfo(id, request);
 
         ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
-        apiResponse.setResult(userProfileMapper.toUserResponse(updatedUser));
+        apiResponse.setResult(updatedUser);
         apiResponse.setMessage("Cập nhật thông tin thành công");
 
         return ResponseEntity.ok(apiResponse);
@@ -94,7 +87,7 @@ public class UserController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    // 6. Get info user by email
+    // 6. Get info user by email login
     @GetMapping("/my-info")
     public ResponseEntity<ApiResponse<UserResponse>> getMyInfo() {
         var context = SecurityContextHolder.getContext();
@@ -103,16 +96,13 @@ public class UserController {
         // Ép kiểu Principal về Jwt
         Jwt jwt = (Jwt) authentication.getPrincipal();
 
-        // Lấy chính xác claim "email" (hoặc "preferred_username" tùy config Keycloak)
+        // Lấy chính xác claim "email"
         String email = jwt.getClaimAsString("email");
 
-        // Log ra kiểm tra thử
-        System.out.println(">> Email extracted: " + email);
-
-        Users user = userService.getUserByEmail(email);
+        UserResponse userResponse = userService.getUserByEmail(email);
 
         ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
-        apiResponse.setResult(userProfileMapper.toUserResponse(user));
+        apiResponse.setResult(userResponse);
 
         return ResponseEntity.ok(apiResponse);
     }
@@ -123,9 +113,33 @@ public class UserController {
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody ChangePasswordRequest request) {
 
-        // Đẩy token và request sang Service xử lý
         userService.changePasswordViaKeycloak(bearerToken, request);
 
         return ResponseEntity.ok(new ApiResponse<>(200, "Đổi mật khẩu thành công!", null));
+    }
+
+    // 8. Sync info user form keycloak
+    @PostMapping("/sync")
+    public ResponseEntity<ApiResponse<String>> syncUser(@AuthenticationPrincipal Jwt jwt) {
+        userService.syncUserFromKeycloak(jwt);
+
+        ApiResponse<String> response = new ApiResponse<>();
+        response.setCode(200);
+        response.setMessage("Đồng bộ người dùng thành công!");
+
+        return ResponseEntity.ok(response);
+    }
+
+    // 9. Search user by email
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserByEmail(@RequestParam("email") String email) {
+        UserResponse userResponse = userService.getUserByEmail(email);
+
+        ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
+        apiResponse.setCode(200);
+        apiResponse.setMessage("Tìm thấy người dùng thành công");
+        apiResponse.setResult(userResponse);
+
+        return ResponseEntity.ok(apiResponse);
     }
 }

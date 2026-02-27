@@ -7,6 +7,8 @@ import com.example.common.repository.LocalDepartmentRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.feature.users.dto.ChangePasswordRequest;
+import com.example.feature.users.dto.UserResponse;
+import com.example.feature.users.dto.UserSyncDto;
 import com.example.feature.users.dto.UserUpdateRequest;
 import com.example.feature.users.event.UserDisabledEvent;
 import com.example.feature.users.mapper.UserProfileMapper;
@@ -31,6 +33,7 @@ import org.springframework.http.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -51,7 +54,6 @@ public class UserService {
         if (userRepository.existsByUsername(username)) {
             throw new AppException(ErrorCode.USER_EXISTED, "Username này đã tồn tại");
         }
-
         Users user = Users.builder()
                 .keycloakId(keycloakId)
                 .username(username)
@@ -63,21 +65,16 @@ public class UserService {
     }
 
     @Transactional
-    public Users updateUserInfo(Long id, UserUpdateRequest request) {
+    public UserResponse updateUserInfo(Long id, UserUpdateRequest request) {
         Users user = userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại trong hệ thống!"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại!"));
 
-        // --- BƯỚC 1: LẤY VÀ LƯU TẠM URL ẢNH CŨ TRƯỚC KHI BỊ MAPPER GHI ĐÈ ---
         String oldAvatarUrl = user.getAvatarUrl();
-
-        // --- BƯỚC 2: CẬP NHẬT DỮ LIỆU MỚI TỪ DTO ---
         userMapper.updateUserFromDto(request, user);
 
-        // --- BƯỚC 3: KIỂM TRA VÀ GỌI HÀM XÓA ẢNH CŨ ---
         String newAvatarUrl = request.getAvatarUrl();
-        // Chỉ xóa khi: có gửi link mới + đã từng có link cũ + link mới khác link cũ
         if (newAvatarUrl != null && oldAvatarUrl != null && !oldAvatarUrl.equals(newAvatarUrl)) {
-            deleteOldAvatar(oldAvatarUrl); // Gọi cái hàm xóa ảnh của ní ở đây nè!
+            deleteOldAvatar(oldAvatarUrl);
         }
 
         if (request.getClassId() != null) {
@@ -88,58 +85,53 @@ public class UserService {
 
         if (request.getDepartmentId() != null) {
             Departments department = localDepartmentRepository.findById(request.getDepartmentId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Trường hoặc Khoa không tồn tại !"));
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khoa không tồn tại !"));
             user.setDepartment(department);
         }
 
-        return userRepository.save(user);
+        Users savedUser = userRepository.save(user);
+        return userMapper.toResponse(savedUser);
     }
 
     public void changePasswordViaKeycloak(String bearerToken, ChangePasswordRequest request) {
         RestTemplate restTemplate = new RestTemplate();
-
-        // Endpoint chuẩn của Keycloak để user tự đổi pass
-        // Lưu ý: Nếu Keycloak < 17 thì là /auth/realms/...
         String url = "http://localhost:8080" + "/realms/" + realm + "/account/credentials/password";
 
-        // 1. Gắn Token của user vào Header để Keycloak biết ai đang xin đổi pass
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", bearerToken);
 
-        // 2. Đóng gói body theo chuẩn Keycloak yêu cầu
         Map<String, String> body = new HashMap<>();
         body.put("currentPassword", request.getCurrentPassword());
         body.put("newPassword", request.getNewPassword());
-        body.put("confirmation", request.getNewPassword()); // Xác nhận lại pass mới
+        body.put("confirmation", request.getNewPassword());
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
 
         try {
-            // 3. Bắn request sang Keycloak
             restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-            // Nếu chạy qua dòng này bình thường nghĩa là Keycloak đã đổi pass thành công!
-
         } catch (HttpClientErrorException e) {
-            // Nếu pass cũ sai, hoặc pass mới quá ngắn, Keycloak sẽ chửi (trả về 400 hoặc 401)
-            // Ní hứng lỗi ở đây và ném ra cho Frontend biết
-            System.err.println("Lỗi từ Keycloak: " + e.getResponseBodyAsString());
+            log.error("Lỗi từ Keycloak: {}", e.getResponseBodyAsString());
             throw new RuntimeException("Mật khẩu hiện tại không đúng hoặc mật khẩu mới chưa đạt yêu cầu!");
-            // (Thực tế ní nên ném AppException theo chuẩn dự án của ní)
         }
     }
 
-    public List<Users> getAllUsers() {
-        return userRepository.findAll();
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll()
+                .stream()
+                .map(userMapper::toResponse)
+                .collect(Collectors.toList());
     }
 
-    public Users getUserById(Long id){
-        return userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại trong hệ thống!"));
+    public UserResponse getUserById(Long id){
+        Users user = userRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại!"));
+        return userMapper.toResponse(user);
     }
 
-    public Users getUserByEmail(String email){
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại trong hệ thống!"));
+    public UserResponse getUserByEmail(String email){
+        Users user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy người dùng với email này!"));
+        return userMapper.toResponse(user);
     }
 
     @Transactional
@@ -151,51 +143,34 @@ public class UserService {
         Jwt jwt = (Jwt) authentication.getPrincipal();
 
         String tokenKeycloakId = jwt.getClaimAsString("sub");
-        boolean isOwner = false;
-
-        if (user.getKeycloakId() != null && user.getKeycloakId().equals(tokenKeycloakId)) {
-            isOwner = true;
-        }
+        boolean isOwner = user.getKeycloakId() != null && user.getKeycloakId().equals(tokenKeycloakId);
 
         if (isOwner) {
-            user.setStatus(0); // Tự xóa
+            user.setStatus(0);
         } else {
-            user.setStatus(2); // Admin xóa (Vô hiệu hóa)
+            user.setStatus(2);
         }
 
-        // Logic chặn Keycloak & Redis
         if (user.getKeycloakId() != null) {
-            // Chặn API ngay lập tức qua Redis
             redisService.set("BLOCKED_USER:" + user.getKeycloakId(), "BLOCKED", 7 * 24 * 60);
-
             try {
                 UserResource userResource = keycloak.realm(realm).users().get(user.getKeycloakId());
                 UserRepresentation userRepresentation = userResource.toRepresentation();
-
-                userRepresentation.setEnabled(false); // Disable user
+                userRepresentation.setEnabled(false);
                 userResource.update(userRepresentation);
-
-                // (Optional) Logout các session hiện tại để kill token liền
-                // userResource.logout();
-
             } catch (Exception e) {
-                // Log lỗi bằng Slf4j, không dùng System.err
-                log.error("Error disabling user in Keycloak for user {}: {}", user.getKeycloakId(), e.getMessage());
+                log.error("Lỗi khóa user trên Keycloak: {}", e.getMessage());
             }
         }
 
         userRepository.save(user);
 
-        // --- GỬI SỰ KIỆN ĐÁ USER (Chỉ khi Admin xóa) ---
         if (!isOwner) {
-            // Mapping dữ liệu khớp với UserDisabledEvent và NotificationRequest
-            Long targetUserId = user.getId();
-
             eventPublisher.publishEvent(new UserDisabledEvent(
-                    targetUserId,                                           // userId
-                    "Tài khoản bị vô hiệu hóa",                             // title
-                    "Tài khoản của bạn đã bị vô hiệu hóa bởi quản trị viên. Hệ thống sẽ đăng xuất ngay lập tức.", // message
-                    99                                                      // type (Force Logout)
+                    user.getId(),
+                    "Tài khoản bị vô hiệu hóa",
+                    "Tài khoản của bạn đã bị vô hiệu hóa bởi quản trị viên.",
+                    99
             ));
         }
     }
@@ -205,26 +180,50 @@ public class UserService {
         Users user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        user.setStatus(1); // 1 = Active
+        user.setStatus(1);
 
         if (user.getKeycloakId() != null) {
             redisService.delete("BLOCKED_USER:" + user.getKeycloakId());
             try {
                 UserResource userResource = keycloak.realm(realm).users().get(user.getKeycloakId());
                 UserRepresentation userRepresentation = userResource.toRepresentation();
-
                 userRepresentation.setEnabled(true);
                 userResource.update(userRepresentation);
-
             } catch (Exception e) {
-                System.err.println("Error activating user in Keycloak: " + e.getMessage());
+                log.error("Lỗi mở khóa user trên Keycloak: {}", e.getMessage());
             }
         }
-
         userRepository.save(user);
     }
 
     public void deleteOldAvatar(String oldAvatarUrl) {
         cloudinaryService.deleteImageByUrl(oldAvatarUrl);
+    }
+
+    @Transactional
+    public void syncUserFromKeycloak(Jwt jwt) {
+        String keycloakId = jwt.getSubject();
+        if (!userRepository.existsByKeycloakId(keycloakId)) {
+            String givenName = jwt.getClaimAsString("given_name");
+            String familyName = jwt.getClaimAsString("family_name");
+            String fullName = jwt.getClaimAsString("name");
+
+            if (fullName == null || fullName.trim().isEmpty()) {
+                fullName = (givenName != null ? givenName + " " : "") + (familyName != null ? familyName: "");
+            }
+
+            UserSyncDto syncDto = UserSyncDto.builder()
+                    .keycloakId(keycloakId)
+                    .username(jwt.getClaimAsString("preferred_username"))
+                    .email(jwt.getClaimAsString("email"))
+                    .fullName(fullName.trim())
+                    .status(1)
+                    .roleType(1)
+                    .build();
+
+            Users newUser = userMapper.toUserFromSyncDto(syncDto);
+            userRepository.save(newUser);
+            log.info("Đã đồng bộ user: {}", newUser.getUsername());
+        }
     }
 }
