@@ -55,12 +55,27 @@ public class ActivityServiceImpl implements ActivityService {
         Semesters semester = semesterRepository.findById(request.getSemesterId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Semester not found !"));
 
-        Organizers organizer = organizerRepository.findById(request.getOrganizerId())
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Organizer not found !"));
+        Long targetUserId = request.getOrganizerId();
+
+        Organizers organizer = organizerRepository.findById(targetUserId)
+                .orElseGet(() -> {
+                    Users organizerUser = userRepository.findById(targetUserId)
+                            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người phụ trách không tồn tại trong hệ thống User!"));
+
+                    String organizerName = (organizerUser.getFullName() != null && !organizerUser.getFullName().trim().isEmpty())
+                            ? organizerUser.getFullName()
+                            : organizerUser.getUsername();
+
+                    Organizers newOrganizer = Organizers.builder()
+                            .user(organizerUser)
+                            .name(organizerName)
+                            .build();
+
+                    return organizerRepository.save(newOrganizer);
+                });
 
         Activities activity = activityMapper.toEntity(request, semester, organizer);
 
-        // Logic lấy User
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()) {
             String currentUsername = authentication.getName();
@@ -69,6 +84,7 @@ public class ActivityServiceImpl implements ActivityService {
             activity.setCreatedBy(currentUser);
         }
 
+        // Xử lý Benefits (Quyền lợi)
         List<Benefits> benefitsList = processBenefits(request.getBenefits(), activity);
         if (!benefitsList.isEmpty()) {
             activity.setBenefits(benefitsList);
@@ -76,13 +92,15 @@ public class ActivityServiceImpl implements ActivityService {
 
         Activities savedActivity = activityRepository.save(activity);
 
-        // --- GỬI THÔNG BÁO (Create - Type 1: Info) ---
+        // Event Thông báo
         eventPublisher.publishEvent(new ActivityCreatedEvent(
                 savedActivity,
                 "Yêu cầu tổ chức hoạt động thành công",
                 "Hoạt động '" + savedActivity.getTitle() + "' đã được tạo và đang chờ duyệt.",
                 1
         ));
+
+        System.out.println("Hoạt động đã được tạo thành công!");
 
         return activityMapper.toResponse(savedActivity);
     }
@@ -237,7 +255,6 @@ public class ActivityServiceImpl implements ActivityService {
     }
 
     // --- HELPER RIÊNG ĐỂ GỬI THÔNG BÁO ---
-    // Hàm này giúp code Service chính sạch sẽ, và gom try-catch lại một chỗ
     private void sendNotificationSafe(Activities activity, String title, String message, Integer type) {
         try {
             NotificationRequest notiRequest = activityMapper.toNotificationRequest(activity, title, message, type);

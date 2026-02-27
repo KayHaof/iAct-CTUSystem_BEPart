@@ -11,7 +11,7 @@ public enum ErrorCode {
     USER_EXISTED(1002, "User already exists", HttpStatus.BAD_REQUEST),
     USERNAME_INVALID(1003, "Username must be at least 3 characters", HttpStatus.BAD_REQUEST),
     PASSWORD_INVALID(1004, "Password must be at least 8 characters", HttpStatus.BAD_REQUEST),
-    USER_NOT_EXISTED(1005, "User not found", HttpStatus.NOT_FOUND),
+    USER_NOT_EXISTED(1005, "User not found", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED(1006, "Unauthenticated", HttpStatus.UNAUTHORIZED),
     FORBIDDEN(1007, "You do not have permission to execute this action", HttpStatus.FORBIDDEN),
     RESOURCE_NOT_EXISTED(1008, "This resource not found", HttpStatus.NOT_FOUND),
