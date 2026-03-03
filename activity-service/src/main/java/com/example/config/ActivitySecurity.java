@@ -22,6 +22,7 @@ public class ActivitySecurity {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
         System.out.println(">> Check role admin input = " + isAdmin );
+        System.out.println(">> Check Act ID = " + activityId);
         if (isAdmin) {
             return true;
         }
@@ -32,11 +33,21 @@ public class ActivitySecurity {
     }
 
     private boolean isOwner(Authentication authentication, Activities activity) {
-        String currentKeycloakId = authentication.getName();
+        String currentUsername = authentication.getName();
 
-        if (activity.getOrganizer() != null && activity.getOrganizer().getUser() != null) {
-            String ownerKeycloakId = activity.getOrganizer().getUser().getKeycloakId();
-            return currentKeycloakId.equals(ownerKeycloakId);
+        if (currentUsername == null) {
+            return false;
+        }
+
+        if (activity.getCreatedBy() != null
+                && currentUsername.equals(activity.getCreatedBy().getUsername())) {
+            return true;
+        }
+
+        if (activity.getOrganizer() != null
+                && activity.getOrganizer().getUser() != null
+                && currentUsername.equals(activity.getOrganizer().getUser().getUsername())) {
+            return true;
         }
 
         return false;

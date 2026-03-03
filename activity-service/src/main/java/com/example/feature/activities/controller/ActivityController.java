@@ -55,7 +55,7 @@ public class ActivityController {
     @PreAuthorize("@activitySecurity.hasActivityPermission(authentication, #id)")
     public ResponseEntity<String> deleteActivity(@PathVariable Long id) {
         activityService.deleteActivity(id);
-        return ResponseEntity.ok("The activity was deleted successfully !");
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}/approval")

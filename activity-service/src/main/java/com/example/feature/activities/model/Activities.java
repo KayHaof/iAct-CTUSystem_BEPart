@@ -6,6 +6,8 @@ import com.example.common.entity.Users;
 import com.example.feature.organizers.model.Organizers;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -56,7 +58,7 @@ public class Activities {
     @Column(name = "qr_code_token", unique = true)
     private String qrCodeToken;
 
-    private Integer status; // 0 = pending. 1 = active, 2 = reject
+    private Integer status; // 0 = pending. 1 = active, 2 = reject, 3 = cancel, 4 = draft
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
@@ -64,4 +66,12 @@ public class Activities {
 
     @OneToMany(mappedBy = "activity", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Benefits> benefits;
+
+    @Column(name = "updated_at")
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
+
+    @Column(name = "created_at", updatable = false)
+    @CreationTimestamp
+    private LocalDateTime createdAt;
 }

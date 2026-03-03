@@ -2,8 +2,18 @@ package com.example.feature.activities.repository;
 
 import com.example.feature.activities.model.Activities;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Repository
 public interface ActivityRepository extends JpaRepository<Activities, Long> {
+    List<Activities> findByStatusAndUpdatedAtBefore(Integer status, LocalDateTime cutoffDate);
+
+    long countByStatus(Integer status);
+
+//    @Query("SELECT SUM(a.registeredCount) FROM Activities a WHERE a.status = 1")
+//    Long sumTotalRegistered(); => để làm service rồi tính
 }

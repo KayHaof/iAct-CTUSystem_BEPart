@@ -17,7 +17,7 @@ public interface ActivityMapper {
 
     // --- TO ENTITY (CREATE) ---
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "status", constant = "0")
+    @Mapping(target = "status")
     @Mapping(target = "qrCodeToken", expression = "java(java.util.UUID.randomUUID().toString())")
 
     @Mapping(target = "semester", source = "semester")

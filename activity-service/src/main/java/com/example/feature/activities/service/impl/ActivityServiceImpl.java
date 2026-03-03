@@ -7,6 +7,7 @@ import com.example.common.entity.Categories;
 import com.example.common.entity.Semesters;
 import com.example.common.entity.Users;
 import com.example.common.repository.LocalCategoryRepository;
+import com.example.common.repository.LocalNotificationRepository;
 import com.example.common.repository.LocalSemesterRepository;
 import com.example.common.repository.LocalUserRepository;
 import com.example.exception.AppException;
@@ -22,6 +23,7 @@ import com.example.feature.activities.service.ActivityService;
 import com.example.feature.organizers.model.Organizers;
 import com.example.feature.organizers.repository.OrganizerRepository;
 import com.example.feignClient.NotificationClient;
+import com.example.service.CloudinaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -42,40 +44,52 @@ public class ActivityServiceImpl implements ActivityService {
     private final LocalSemesterRepository semesterRepository;
     private final OrganizerRepository organizerRepository;
     private final LocalCategoryRepository categoryRepository;
+    private final LocalNotificationRepository notificationRepository;
     private final LocalUserRepository userRepository;
     private final ActivityMapper activityMapper;
 
     private final NotificationClient notificationClient;
     private final ApplicationEventPublisher eventPublisher;
 
+    private final CloudinaryService cloudinaryService;
+
     // --- CREATE ---
     @Override
     @Transactional
     public ActivityResponse createActivity(ActivityRequest request) {
-        Semesters semester = semesterRepository.findById(request.getSemesterId())
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Semester not found !"));
+        // 1. Xử lý Semester
+        Semesters semester = null;
+        if (request.getSemesterId() != null) {
+            semester = semesterRepository.findById(request.getSemesterId())
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Semester not found !"));
+        }
 
+        // 2. Xử lý Organizer
+        Organizers organizer = null;
         Long targetUserId = request.getOrganizerId();
+        if (targetUserId != null) {
+            organizer = organizerRepository.findById(targetUserId)
+                    .orElseGet(() -> {
+                        Users organizerUser = userRepository.findById(targetUserId)
+                                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người phụ trách không tồn tại trong hệ thống User!"));
 
-        Organizers organizer = organizerRepository.findById(targetUserId)
-                .orElseGet(() -> {
-                    Users organizerUser = userRepository.findById(targetUserId)
-                            .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người phụ trách không tồn tại trong hệ thống User!"));
+                        String organizerName = (organizerUser.getFullName() != null && !organizerUser.getFullName().trim().isEmpty())
+                                ? organizerUser.getFullName()
+                                : organizerUser.getUsername();
 
-                    String organizerName = (organizerUser.getFullName() != null && !organizerUser.getFullName().trim().isEmpty())
-                            ? organizerUser.getFullName()
-                            : organizerUser.getUsername();
+                        Organizers newOrganizer = Organizers.builder()
+                                .user(organizerUser)
+                                .name(organizerName)
+                                .build();
 
-                    Organizers newOrganizer = Organizers.builder()
-                            .user(organizerUser)
-                            .name(organizerName)
-                            .build();
+                        return organizerRepository.save(newOrganizer);
+                    });
+        }
 
-                    return organizerRepository.save(newOrganizer);
-                });
-
+        // 3. Map sang Entity
         Activities activity = activityMapper.toEntity(request, semester, organizer);
 
+        // 4. Set người tạo hoạt động
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()) {
             String currentUsername = authentication.getName();
@@ -84,23 +98,29 @@ public class ActivityServiceImpl implements ActivityService {
             activity.setCreatedBy(currentUser);
         }
 
-        // Xử lý Benefits (Quyền lợi)
-        List<Benefits> benefitsList = processBenefits(request.getBenefits(), activity);
-        if (!benefitsList.isEmpty()) {
-            activity.setBenefits(benefitsList);
+        // 5. Xử lý Benefits (Bọc check null an toàn)
+        if (request.getBenefits() != null && !request.getBenefits().isEmpty()) {
+            List<Benefits> benefitsList = processBenefits(request.getBenefits(), activity);
+            if (!benefitsList.isEmpty()) {
+                activity.setBenefits(benefitsList);
+            }
         }
 
+        // 6. Lưu xuống DB
         Activities savedActivity = activityRepository.save(activity);
 
-        // Event Thông báo
-        eventPublisher.publishEvent(new ActivityCreatedEvent(
-                savedActivity,
-                "Yêu cầu tổ chức hoạt động thành công",
-                "Hoạt động '" + savedActivity.getTitle() + "' đã được tạo và đang chờ duyệt.",
-                1
-        ));
-
-        System.out.println("Hoạt động đã được tạo thành công!");
+        // 7. Event Thông báo (CHỈ gửi khi Gửi duyệt - status = 0, KHÔNG gửi khi Lưu nháp - status = 3)
+        if (savedActivity.getStatus() != 3) {
+            eventPublisher.publishEvent(new ActivityCreatedEvent(
+                    savedActivity,
+                    "Yêu cầu tổ chức hoạt động thành công",
+                    "Hoạt động '" + savedActivity.getTitle() + "' đã được tạo và đang chờ duyệt.",
+                    1
+            ));
+            System.out.println("Hoạt động đã được tạo và gửi duyệt thành công!");
+        } else {
+            System.out.println("Bản nháp hoạt động đã được lưu thành công!");
+        }
 
         return activityMapper.toResponse(savedActivity);
     }
@@ -115,6 +135,7 @@ public class ActivityServiceImpl implements ActivityService {
 
     @Override
     public List<ActivityResponse> getAllActivities() {
+        System.out.println("Fetch all activities !");
         return activityRepository.findAll().stream()
                 .map(activityMapper::toResponse)
                 .collect(Collectors.toList());
@@ -131,7 +152,18 @@ public class ActivityServiceImpl implements ActivityService {
             throw new AppException(ErrorCode.INVALID_ACTION, "Only PENDING activities can be modified.");
         }
 
+        String oldCoverImg = existingActivity.getCoverImage();
+        String oldThumbnailImg = existingActivity.getThumbnail();
+
         activityMapper.updateEntityFromRequest(request, existingActivity);
+
+        if(request.getCoverImage() != null && !request.getCoverImage().equals(oldCoverImg)){
+            deleteOldImage(oldCoverImg);
+        }
+
+        if(request.getThumbnail() != null && !request.getThumbnail().equals(oldThumbnailImg)){
+            deleteOldImage(oldThumbnailImg);
+        }
 
         if (request.getSemesterId() != null &&
                 (existingActivity.getSemester() == null || !existingActivity.getSemester().getId().equals(request.getSemesterId()))) {
@@ -168,9 +200,25 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     @Transactional
     public void deleteActivity(Long id) {
-        if (!activityRepository.existsById(id)) {
-            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !");
+        Activities activity = activityRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !"));
+
+        Integer currentStatus = activity.getStatus();
+
+        if (currentStatus != null && (currentStatus == 1 || currentStatus == 4)) {
+            throw new AppException(
+                    ErrorCode.INVALID_ACTION,
+                    "Không thể xóa hoạt động đã được phê duyệt hoặc đã hủy! Chỉ có thể xóa bản nháp, chờ duyệt hoặc bị từ chối."
+            );
         }
+
+       if (notificationRepository.existsByActivityId(id)) {
+            notificationRepository.deleteByActivityId(id);
+       }
+
+        deleteOldImage(activity.getCoverImage());
+        deleteOldImage(activity.getThumbnail());
+
         activityRepository.deleteById(id);
     }
 
@@ -214,7 +262,7 @@ public class ActivityServiceImpl implements ActivityService {
                 }
                 break;
 
-            case 3: // CANCEL (Hủy)
+            case 4: // CANCEL (Hủy)
                 if (currentStatus != 0 && currentStatus != 1) {
                     throw new AppException(ErrorCode.INVALID_ACTION, "Invalid status for cancellation.");
                 }
@@ -264,5 +312,10 @@ public class ActivityServiceImpl implements ActivityService {
             // Để tránh việc gửi thông báo lỗi làm Rollback transaction của việc Lưu Activity
             log.error("Failed to send notification for activity {}: {}", activity.getId(), e.getMessage());
         }
+    }
+
+    // Helper functions
+    public void deleteOldImage(String oldImg) {
+        cloudinaryService.deleteImageByUrl(oldImg);
     }
 }
