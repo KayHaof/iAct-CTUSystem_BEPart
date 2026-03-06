@@ -19,7 +19,7 @@ public class CorsConfig {
         configuration.setAllowedOrigins(List.of("http://localhost:4200"));
 
         // 2. Cho phép các method
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
 
         // 3. Cho phép tất cả headers
         configuration.setAllowedHeaders(List.of("*"));

@@ -1,5 +1,6 @@
 package com.example.feature.activities.controller;
 
+import com.example.dto.ApiResponse;
 import com.example.feature.activities.dto.ActivityApprovalRequest;
 import com.example.feature.activities.dto.ActivityRequest;
 import com.example.feature.activities.dto.ActivityResponse;
@@ -22,49 +23,55 @@ public class ActivityController {
     // --- CREATE ---
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT', 'OTHER')")
-    public ResponseEntity<ActivityResponse> createActivity(@RequestBody ActivityRequest request) {
+    public ResponseEntity<ApiResponse<ActivityResponse>> createActivity(@RequestBody ActivityRequest request) {
         ActivityResponse response = activityService.createActivity(request);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return new ResponseEntity<>(ApiResponse.success(response), HttpStatus.CREATED);
     }
 
     // --- READ ALL ---
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<ActivityResponse>> getAllActivities() {
-        return ResponseEntity.ok(activityService.getAllActivities());
+    public ResponseEntity<ApiResponse<List<ActivityResponse>>> getAllActivities(
+            @RequestParam(value = "status", required = false) Integer status
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.success(activityService.getAllActivities(status))
+        );
     }
 
     // --- READ ONE ---
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ActivityResponse> getActivityById(@PathVariable Long id) {
-        return ResponseEntity.ok(activityService.getActivityById(id));
+    public ResponseEntity<ApiResponse<ActivityResponse>> getActivityById(@PathVariable Long id) {
+        return ResponseEntity.ok(
+                ApiResponse.success(activityService.getActivityById(id))
+        );
     }
 
     // --- UPDATE ---
     @PutMapping("/{id}")
     @PreAuthorize("@activitySecurity.hasActivityPermission(authentication, #id)")
-    public ResponseEntity<ActivityResponse> updateActivity(
+    public ResponseEntity<ApiResponse<ActivityResponse>> updateActivity(
             @PathVariable Long id,
             @RequestBody ActivityRequest request) {
-        return ResponseEntity.ok(activityService.updateActivity(id, request));
+        return ResponseEntity.ok(ApiResponse.success(activityService.updateActivity(id, request)));
     }
 
     // --- DELETE ---
     @DeleteMapping("/{id}")
     @PreAuthorize("@activitySecurity.hasActivityPermission(authentication, #id)")
-    public ResponseEntity<String> deleteActivity(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteActivity(@PathVariable Long id) {
         activityService.deleteActivity(id);
-        return ResponseEntity.noContent().build();
+        // Trả về 200 OK kèm theo ApiResponse (result = null) để Frontend parse JSON không bị lỗi
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    // --- APPROVE ---
     @PutMapping("/{id}/approval")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<ActivityResponse> approveActivity(
+    public ResponseEntity<ApiResponse<ActivityResponse>> approveActivity(
             @PathVariable Long id,
             @RequestBody ActivityApprovalRequest request) {
-        return ResponseEntity.ok(activityService.approveActivity(id, request));
+        return ResponseEntity.ok(ApiResponse.success(activityService.approveActivity(id, request)));
     }
-
 
 }

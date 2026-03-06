@@ -31,6 +31,7 @@ public class SecurityConfig {
 
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
+                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .pathMatchers("/identity/auth/**", "/identity/users/register").permitAll()
                         .pathMatchers(HttpMethod.GET, "/profile/users/**").permitAll()
                         .pathMatchers("/internal/notifications/ws/**").permitAll()

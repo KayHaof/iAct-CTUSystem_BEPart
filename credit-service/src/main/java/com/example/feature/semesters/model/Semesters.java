@@ -1,7 +1,7 @@
 package com.example.feature.semesters.model;
 
-import com.example.common.Activities;
-import com.example.common.Complaints;
+import com.example.common.entity.Activities;
+import com.example.common.entity.Complaints;
 import com.example.feature.student_awards.model.Student_awards;
 import jakarta.persistence.*;
 import lombok.*;
@@ -12,7 +12,11 @@ import java.util.List;
 
 @Entity
 @Table(name = "semesters")
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Semesters {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,4 +52,11 @@ public class Semesters {
 
     @OneToMany(mappedBy = "semester")
     private List<Student_awards> studentAwards;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        if (this.isActive == null) this.isActive = false;
+        if (this.isLocked == null) this.isLocked = false;
+    }
 }

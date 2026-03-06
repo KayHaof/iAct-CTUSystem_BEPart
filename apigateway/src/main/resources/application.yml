@@ -11,7 +11,7 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOriginPatterns: "*"   # Cho phép mọi nguồn
+            allowedOriginPatterns: "http://localhost:4200"
             allowedMethods: "*"   # Cho phép mọi method (GET, POST...)
             allowedHeaders: "*"   # Cho phép mọi header
             allowCredentials: true
@@ -51,6 +51,13 @@ spring:
             - Path=/activity/**
           filters:
             - RewritePath=/activity/(?<segment>.*), /$\{segment}
+
+        - id: credit-service
+          uri: lb://credit-service
+          predicates:
+            - Path=/credit/**
+          filters:
+            - RewritePath=/credit/(?<segment>.*), /$\{segment}
       httpclient:
         connect-timeout: 5000
         response-timeout: 10s

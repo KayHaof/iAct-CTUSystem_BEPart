@@ -22,6 +22,7 @@ import com.example.feature.activities.repository.ActivityRepository;
 import com.example.feature.activities.service.ActivityService;
 import com.example.feature.organizers.model.Organizers;
 import com.example.feature.organizers.repository.OrganizerRepository;
+import com.example.feature.registration.repository.RegistrationRepository;
 import com.example.feignClient.NotificationClient;
 import com.example.service.CloudinaryService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,6 +48,7 @@ public class ActivityServiceImpl implements ActivityService {
     private final LocalCategoryRepository categoryRepository;
     private final LocalNotificationRepository notificationRepository;
     private final LocalUserRepository userRepository;
+    private final RegistrationRepository registrationRepository;
     private final ActivityMapper activityMapper;
 
     private final NotificationClient notificationClient;
@@ -59,30 +62,41 @@ public class ActivityServiceImpl implements ActivityService {
     public ActivityResponse createActivity(ActivityRequest request) {
         // 1. Xử lý Semester
         Semesters semester = null;
-        if (request.getSemesterId() != null) {
-            semester = semesterRepository.findById(request.getSemesterId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Semester not found !"));
+        if (request.getStartDate() != null) {
+            LocalDate activityDate = request.getStartDate().toLocalDate();
+            semester = semesterRepository.findSemesterByDate(activityDate)
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
+                            "Ngày bắt đầu tổ chức (" + activityDate + ") không thuộc bất kỳ Học kỳ nào đang được cấu hình!"));
+        } else {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn Ngày bắt đầu tổ chức!");
         }
 
         // 2. Xử lý Organizer
         Organizers organizer = null;
-        Long targetUserId = request.getOrganizerId();
-        if (targetUserId != null) {
-            organizer = organizerRepository.findById(targetUserId)
+        if (request.getOrganizerId() != null) {
+            Long userId = request.getOrganizerId();
+
+            // Bước A: Tìm User trong hệ thống trước (Bắt buộc phải có User mới làm Organizer được)
+            Users user = userRepository.findById(userId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy User với ID: " + userId));
+
+            // Bước B: Tìm trong bảng organizers xem User này đã được đăng ký làm Organizer chưa
+            // Vì user_id là PK của bảng organizers nên findById(userId) là chuẩn bài
+            organizer = organizerRepository.findById(userId)
                     .orElseGet(() -> {
-                        Users organizerUser = userRepository.findById(targetUserId)
-                                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người phụ trách không tồn tại trong hệ thống User!"));
+                        // Nếu chưa có thì "gán" User này vào bảng organizers
+                        log.info("User {} lần đầu tổ chức hoạt động, đang tạo bản ghi Organizer...", user.getUsername());
 
-                        String organizerName = (organizerUser.getFullName() != null && !organizerUser.getFullName().trim().isEmpty())
-                                ? organizerUser.getFullName()
-                                : organizerUser.getUsername();
+                        String displayName = (user.getFullName() != null && !user.getFullName().trim().isEmpty())
+                                ? user.getFullName()
+                                : user.getUsername();
 
-                        Organizers newOrganizer = Organizers.builder()
-                                .user(organizerUser)
-                                .name(organizerName)
+                        Organizers newOrg = Organizers.builder()
+                                .user(user) // Link tới thực thể Users
+                                .name(displayName)
                                 .build();
 
-                        return organizerRepository.save(newOrganizer);
+                        return organizerRepository.save(newOrg);
                     });
         }
 
@@ -96,6 +110,7 @@ public class ActivityServiceImpl implements ActivityService {
             Users currentUser = userRepository.findByUsername(currentUsername)
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
             activity.setCreatedBy(currentUser);
+            activity.setCreatedByUsername(currentUsername);
         }
 
         // 5. Xử lý Benefits (Bọc check null an toàn)
@@ -125,19 +140,42 @@ public class ActivityServiceImpl implements ActivityService {
         return activityMapper.toResponse(savedActivity);
     }
 
-    // --- READ & ALL (Giữ nguyên) ---
+    // --- READ & ALL ---
     @Override
     public ActivityResponse getActivityById(Long id) {
         Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !"));
-        return activityMapper.toResponse(activity);
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động"));
+
+        ActivityResponse response = activityMapper.toResponse(activity);
+        long count = registrationRepository.countByActivityIdAndStatusNot(id, 2);
+        response.setRegisteredCount((int) count);
+
+        return response;
     }
 
     @Override
-    public List<ActivityResponse> getAllActivities() {
-        System.out.println("Fetch all activities !");
-        return activityRepository.findAll().stream()
-                .map(activityMapper::toResponse)
+    public List<ActivityResponse> getAllActivities(Integer status) {
+        List<Activities> activities;
+
+        if (status != null) {
+            activities = activityRepository.findByStatus(status);
+        } else {
+            activities = activityRepository.findAll();
+        }
+
+        return activities.stream()
+                .map(activity -> {
+                    // 1. Map Entity sang DTO
+                    ActivityResponse response = activityMapper.toResponse(activity);
+
+                    // 2. Đếm số lượng thực tế cho từng hoạt động (Bỏ qua status 2 = Đã hủy)
+                    long count = registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2);
+
+                    // 3. Gắn con số vào Response
+                    response.setRegisteredCount((int) count);
+
+                    return response;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -146,48 +184,81 @@ public class ActivityServiceImpl implements ActivityService {
     @Transactional
     public ActivityResponse updateActivity(Long id, ActivityRequest request) {
         Activities existingActivity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
 
-        if (existingActivity.getStatus() != 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Only PENDING activities can be modified.");
+        // Chỉ cho phép sửa khi PENDING (0) hoặc DRAFT (3)
+        if (existingActivity.getStatus() != 0 && existingActivity.getStatus() != 3) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể chỉnh sửa hoạt động đang chờ duyệt hoặc bản nháp.");
         }
 
         String oldCoverImg = existingActivity.getCoverImage();
         String oldThumbnailImg = existingActivity.getThumbnail();
 
+        // 1. Map data cơ bản từ Request đè lên Entity (nhờ MapStruct)
         activityMapper.updateEntityFromRequest(request, existingActivity);
 
+        // Xóa ảnh cũ trên Cloudinary
         if(request.getCoverImage() != null && !request.getCoverImage().equals(oldCoverImg)){
             deleteOldImage(oldCoverImg);
         }
-
         if(request.getThumbnail() != null && !request.getThumbnail().equals(oldThumbnailImg)){
             deleteOldImage(oldThumbnailImg);
         }
 
-        if (request.getSemesterId() != null &&
-                (existingActivity.getSemester() == null || !existingActivity.getSemester().getId().equals(request.getSemesterId()))) {
-            Semesters newSemester = semesterRepository.findById(request.getSemesterId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED));
+        // =========================================================
+        // 2. XỬ LÝ SEMESTER TỰ ĐỘNG THEO NGÀY (Nâng cấp giống Create)
+        // =========================================================
+        if (request.getStartDate() != null) {
+            LocalDate activityDate = request.getStartDate().toLocalDate();
+            Semesters newSemester = semesterRepository.findSemesterByDate(activityDate)
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
+                            "Ngày bắt đầu tổ chức (" + activityDate + ") không thuộc bất kỳ Học kỳ nào!"));
             existingActivity.setSemester(newSemester);
         }
 
+        // =========================================================
+        // 3. XỬ LÝ ORGANIZER THÔNG MINH (Chèn mới nếu chưa có)
+        // =========================================================
         if (request.getOrganizerId() != null &&
                 (existingActivity.getOrganizer() == null || !existingActivity.getOrganizer().getId().equals(request.getOrganizerId()))) {
-            Organizers newOrganizer = organizerRepository.findById(request.getOrganizerId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED));
+
+            Long userId = request.getOrganizerId();
+
+            // Bước A: Tìm xem User có tồn tại không
+            Users user = userRepository.findById(userId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy User với ID: " + userId));
+
+            // Bước B: Dò trong bảng Organizers, không có thì chèn vào
+            Organizers newOrganizer = organizerRepository.findById(userId)
+                    .orElseGet(() -> {
+                        log.info("Cập nhật hoạt động: Đang tự động thêm User {} vào bảng Organizers...", user.getUsername());
+
+                        String displayName = (user.getFullName() != null && !user.getFullName().trim().isEmpty())
+                                ? user.getFullName()
+                                : user.getUsername();
+
+                        Organizers newOrg = Organizers.builder()
+                                .user(user)
+                                .name(displayName)
+                                .build();
+
+                        return organizerRepository.save(newOrg);
+                    });
+
             existingActivity.setOrganizer(newOrganizer);
         }
 
+        // 4. Xử lý Benefits (Điểm rèn luyện)
         if (request.getBenefits() != null) {
-            existingActivity.getBenefits().clear();
-            List<Benefits> newBenefits = processBenefits(request.getBenefits(), existingActivity);
+            existingActivity.getBenefits().clear(); // Xóa sạch data cũ của hoạt động này
+            List<Benefits> newBenefits = processBenefits(request.getBenefits(), existingActivity); // Áp data mới
             existingActivity.getBenefits().addAll(newBenefits);
         }
 
+        // 5. Lưu xuống Database
         Activities updatedActivity = activityRepository.save(existingActivity);
 
-        // --- GỬI THÔNG BÁO (Update - Type 2: Update) ---
+        // 6. GỬI THÔNG BÁO
         sendNotificationSafe(updatedActivity,
                 "Cập nhật hoạt động",
                 "Bạn vừa cập nhật thông tin cho hoạt động '" + updatedActivity.getTitle() + "'.",

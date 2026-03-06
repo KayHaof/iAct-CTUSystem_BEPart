@@ -20,6 +20,9 @@ public class Users {
     @Column(unique = true, length = 100)
     private String username;
 
+    @Column(name = "student_code")
+    private String studentCode;
+
     @Column(unique = true)
     private String email;
 

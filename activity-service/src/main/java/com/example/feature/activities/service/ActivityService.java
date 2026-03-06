@@ -9,7 +9,7 @@ import java.util.List;
 public interface ActivityService {
     ActivityResponse createActivity(ActivityRequest request);
     ActivityResponse getActivityById(Long id);
-    List<ActivityResponse> getAllActivities();
+    List<ActivityResponse> getAllActivities(Integer status);
     ActivityResponse updateActivity(Long id, ActivityRequest request);
     void deleteActivity(Long id);
     ActivityResponse approveActivity(Long id, ActivityApprovalRequest request);

@@ -29,6 +29,9 @@ public class Registrations {
 
     private Integer status; // 0=registered, 1=attended, 2=cancelled
 
+    @Column(columnDefinition = "TEXT")
+    private String cancelReason;
+
     @OneToOne(mappedBy = "registration", cascade = CascadeType.ALL)
     private Attendances attendance;
 }

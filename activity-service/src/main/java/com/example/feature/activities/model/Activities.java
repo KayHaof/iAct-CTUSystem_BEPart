@@ -74,4 +74,7 @@ public class Activities {
     @Column(name = "created_at", updatable = false)
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    @Column(name = "created_by_username")
+    private String createdByUsername;
 }

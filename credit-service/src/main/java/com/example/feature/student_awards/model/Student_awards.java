@@ -1,6 +1,6 @@
 package com.example.feature.student_awards.model;
 
-import com.example.common.Users;
+import com.example.common.entity.Users;
 import com.example.feature.awards.model.Awards;
 import com.example.feature.semesters.model.Semesters;
 import jakarta.persistence.*;
