@@ -21,7 +21,6 @@
         <module>identity-service</module>
         <module>profile-service</module>
         <module>activity-service</module>
-        <module>operation-service</module>
         <module>credit-service</module>
         <module>crawler-service</module>
         <module>discovery-service</module>
