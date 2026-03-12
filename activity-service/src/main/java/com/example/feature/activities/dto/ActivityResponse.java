@@ -2,6 +2,7 @@ package com.example.feature.activities.dto;
 
 import com.example.common.dto.BenefitDto;
 import com.example.common.dto.UserDto;
+import com.example.feature.activitySchedule.dto.ActivityScheduleDto;
 import com.example.feature.organizers.dto.OrganizerResponse;
 import com.example.feature.organizers.model.Organizers;
 import lombok.Data;
@@ -22,6 +23,7 @@ public class ActivityResponse {
     private String thumbnail;
     private String sourceLink;
     private Boolean isExternal;
+    private Boolean isFaculty;
 
     private LocalDateTime registrationStart;
     private LocalDateTime registrationEnd;
@@ -31,6 +33,9 @@ public class ActivityResponse {
     private Long semesterId;
     private OrganizerResponse organizer;
 
+    private Integer departmentId;
+    private String departmentName;
+
     private String qrCodeToken;
     private Integer status;
 
@@ -38,4 +43,6 @@ public class ActivityResponse {
     private UserDto createdBy;
 
     private List<BenefitDto> benefits;
+
+    private List<ActivityScheduleDto> schedules;
 }

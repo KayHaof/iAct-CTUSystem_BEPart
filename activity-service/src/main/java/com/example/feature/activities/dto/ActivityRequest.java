@@ -1,6 +1,7 @@
 package com.example.feature.activities.dto;
 
 import com.example.common.dto.BenefitDto;
+import com.example.feature.activitySchedule.dto.ActivityScheduleDto;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,6 +19,7 @@ public class ActivityRequest {
     private String thumbnail;
     private String sourceLink;
     private Boolean isExternal;
+    private Boolean isFaculty;
 
     private LocalDateTime registrationStart;
     private LocalDateTime registrationEnd;
@@ -30,4 +32,6 @@ public class ActivityRequest {
     private Integer status;
 
     private List<BenefitDto> benefits;
+
+    private List<ActivityScheduleDto> schedules;
 }

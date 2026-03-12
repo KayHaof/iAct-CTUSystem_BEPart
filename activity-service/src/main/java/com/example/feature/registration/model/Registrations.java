@@ -1,12 +1,15 @@
 package com.example.feature.registration.model;
 
-import com.example.common.entity.Attendances;
 import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
+import com.example.feature.activitySchedule.model.ActivitySchedule;
+import com.example.feature.attendances.model.Attendances;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "registrations")
@@ -34,4 +37,12 @@ public class Registrations {
 
     @OneToOne(mappedBy = "registration", cascade = CascadeType.ALL)
     private Attendances attendance;
+
+    @ManyToMany
+    @JoinTable(
+            name = "registration_schedules",
+            joinColumns = @JoinColumn(name = "registration_id"),
+            inverseJoinColumns = @JoinColumn(name = "schedule_id")
+    )
+    private List<ActivitySchedule> registeredSchedules = new ArrayList<>();
 }

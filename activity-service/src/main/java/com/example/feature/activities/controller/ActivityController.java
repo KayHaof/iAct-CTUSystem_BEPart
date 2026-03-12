@@ -1,17 +1,20 @@
 package com.example.feature.activities.controller;
 
 import com.example.dto.ApiResponse;
+import com.example.dto.PageDTO;
 import com.example.feature.activities.dto.ActivityApprovalRequest;
 import com.example.feature.activities.dto.ActivityRequest;
 import com.example.feature.activities.dto.ActivityResponse;
 import com.example.feature.activities.service.ActivityService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/activities")
@@ -30,11 +33,17 @@ public class ActivityController {
 
     // --- READ ALL ---
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ActivityResponse>>> getAllActivities(
-            @RequestParam(value = "status", required = false) Integer status
+    public ResponseEntity<ApiResponse<PageDTO<ActivityResponse>>> getAllActivities(
+            @RequestParam(value = "keyword", required = false, defaultValue = "") String keyword,
+            @RequestParam(value = "level", required = false, defaultValue = "ALL") String level,
+            @RequestParam(value = "status", required = false, defaultValue = "ALL") String status,
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "5") int size
     ) {
+        int pageNumber = page > 0 ? page - 1 : 0;
+        Pageable customPageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "id"));
         return ResponseEntity.ok(
-                ApiResponse.success(activityService.getAllActivities(status))
+                ApiResponse.success(activityService.getAllActivities(keyword, level, status, customPageable))
         );
     }
 
@@ -61,7 +70,6 @@ public class ActivityController {
     @PreAuthorize("@activitySecurity.hasActivityPermission(authentication, #id)")
     public ResponseEntity<ApiResponse<Void>> deleteActivity(@PathVariable Long id) {
         activityService.deleteActivity(id);
-        // Trả về 200 OK kèm theo ApiResponse (result = null) để Frontend parse JSON không bị lỗi
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

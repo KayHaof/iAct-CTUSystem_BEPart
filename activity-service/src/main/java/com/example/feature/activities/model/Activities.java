@@ -3,6 +3,7 @@ package com.example.feature.activities.model;
 import com.example.common.entity.Benefits;
 import com.example.common.entity.Semesters;
 import com.example.common.entity.Users;
+import com.example.feature.activitySchedule.model.ActivitySchedule;
 import com.example.feature.organizers.model.Organizers;
 import jakarta.persistence.*;
 import lombok.*;
@@ -10,6 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -47,6 +49,9 @@ public class Activities {
     @Column(name = "is_external")
     private Boolean isExternal;
 
+    @Column(name = "is_faculty")
+    private Boolean isFaculty;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "semester_id")
     private Semesters semester;
@@ -77,4 +82,17 @@ public class Activities {
 
     @Column(name = "created_by_username")
     private String createdByUsername;
+
+    @OneToMany(mappedBy = "activity", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ActivitySchedule> schedules = new ArrayList<>();
+
+    public void addSchedule(ActivitySchedule schedule) {
+        schedules.add(schedule);
+        schedule.setActivity(this);
+    }
+
+    public void removeSchedule(ActivitySchedule schedule) {
+        schedules.remove(schedule);
+        schedule.setActivity(null);
+    }
 }
