@@ -22,4 +22,7 @@ public class RegistrationResponse {
     private Boolean isAttended;
 
     private List<Long> scheduleIds;
+    private Integer point;
+
+    private Integer proofStatus;
 }

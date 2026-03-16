@@ -82,4 +82,11 @@ public class ActivityController {
         return ResponseEntity.ok(ApiResponse.success(activityService.approveActivity(id, request)));
     }
 
+    // --- GENERATE QR CODE ---
+    @GetMapping("/{id}/qr-code")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
+    public ResponseEntity<ApiResponse<String>> getActivityQrCode(@PathVariable("id") Long id) {
+        String qrImageBase64 = activityService.getQrCodeForActivity(id);
+        return ResponseEntity.ok(ApiResponse.success(qrImageBase64));
+    }
 }

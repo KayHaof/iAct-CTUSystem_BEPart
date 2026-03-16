@@ -9,6 +9,10 @@ import com.example.feature.activities.model.Activities;
 import com.example.feature.activities.repository.ActivityRepository;
 import com.example.feature.activitySchedule.model.ActivitySchedule;
 import com.example.feature.activitySchedule.repository.ActivityScheduleRepository;
+import com.example.feature.attendances.model.Attendances;
+import com.example.feature.attendances.repository.AttendanceRepository;
+import com.example.feature.proofs.model.Proofs;
+import com.example.feature.proofs.repository.ProofRepository;
 import com.example.feature.registration.dto.RegistrationRequest;
 import com.example.feature.registration.dto.RegistrationResponse;
 import com.example.feature.registration.mapper.RegistrationMapper;
@@ -32,6 +36,7 @@ import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,6 +48,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final LocalUserRepository userRepository;
     private final RegistrationMapper registrationMapper;
     private final ExcelExportService excelExportService;
+    private final AttendanceRepository attendanceRepository;
+    private final ProofRepository proofRepository;
 
     // --- Lấy sinh viên đang đăng nhập ---
     private Users getCurrentStudent() {
@@ -51,15 +58,13 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
-    // ---  Xử lý bộ lọc tìm kiếm (Khắc phục lỗi Duplicated code) ---
+    // ---  Xử lý bộ lọc tìm kiếm ---
     private Specification<Registrations> buildFilterSpecification(Long activityId, String keyword, String status) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Bắt buộc phải thuộc Activity này
             predicates.add(cb.equal(root.get("activity").get("id"), activityId));
 
-            // Lọc theo trạng thái
             if (StringUtils.hasText(status) && !"ALL".equalsIgnoreCase(status)) {
                 try {
                     int statusCode = Integer.parseInt(status);
@@ -67,7 +72,6 @@ public class RegistrationServiceImpl implements RegistrationService {
                 } catch (NumberFormatException ignored) {}
             }
 
-            // Lọc theo keyword (Tên hoặc MSSV)
             if (StringUtils.hasText(keyword)) {
                 String likeKeyword = "%" + keyword.trim().toLowerCase() + "%";
                 Predicate nameMatch = cb.like(cb.lower(root.get("student").get("fullName")), likeKeyword);
@@ -95,61 +99,29 @@ public class RegistrationServiceImpl implements RegistrationService {
         Activities activity = activityRepository.findById(request.getActivityId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Hoạt động không tồn tại"));
 
-        if (activity.getStatus() != 1) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Hoạt động này hiện chưa mở đăng ký.");
-        }
-
+        if (activity.getStatus() != 1) throw new AppException(ErrorCode.INVALID_ACTION, "Hoạt động này hiện chưa mở đăng ký.");
         LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(activity.getRegistrationStart()) || now.isAfter(activity.getRegistrationEnd())) {
+        if (now.isBefore(activity.getRegistrationStart()) || now.isAfter(activity.getRegistrationEnd()))
             throw new AppException(ErrorCode.INVALID_ACTION, "Rất tiếc, đã hết hoặc chưa tới thời hạn đăng ký.");
-        }
 
-        Registrations existingReg = registrationRepository.findByStudentIdAndActivityId(student.getId(), activity.getId())
-                .orElse(null);
-
-        if (existingReg != null && (existingReg.getStatus() == 0 || existingReg.getStatus() == 1)) {
+        Registrations existingReg = registrationRepository.findByStudentIdAndActivityId(student.getId(), activity.getId()).orElse(null);
+        if (existingReg != null && (existingReg.getStatus() == 0 || existingReg.getStatus() == 1))
             throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã đăng ký hoạt động này rồi nha!");
-        }
-
-        long currentCount = registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2);
-        if (currentCount >= activity.getMaxParticipants()) {
+        if (registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2) >= activity.getMaxParticipants())
             throw new AppException(ErrorCode.INVALID_ACTION, "Hoạt động này đã full chỗ mất rồi!");
-        }
 
         List<ActivitySchedule> selectedSchedules = new ArrayList<>();
         if (request.getScheduleIds() != null && !request.getScheduleIds().isEmpty()) {
             selectedSchedules = scheduleRepository.findAllById(request.getScheduleIds());
-
-            boolean allMatch = selectedSchedules.stream()
-                    .allMatch(s -> s.getActivity().getId().equals(activity.getId()));
-            if (!allMatch || selectedSchedules.size() != request.getScheduleIds().size()) {
-                throw new AppException(ErrorCode.INVALID_ACTION, "Danh sách buổi đăng ký không hợp lệ!");
-            }
+            if (selectedSchedules.size() != request.getScheduleIds().size()) throw new AppException(ErrorCode.INVALID_ACTION, "Danh sách buổi không hợp lệ!");
         }
 
         Registrations regToSave;
         if (existingReg != null && existingReg.getStatus() == 2) {
             regToSave = existingReg;
-            regToSave.setStatus(0);
-            regToSave.setCancelReason(null);
-            regToSave.setRegisteredAt(LocalDateTime.now());
-            if (regToSave.getRegisteredSchedules() != null) {
-                regToSave.getRegisteredSchedules().clear();
-            }
+            registrationMapper.reRegisterEntity(regToSave, selectedSchedules); // Cập nhật đơn cũ
         } else {
-            regToSave = new Registrations();
-            regToSave.setStudent(student);
-            regToSave.setActivity(activity);
-            regToSave.setRegisteredAt(LocalDateTime.now());
-            regToSave.setStatus(0);
-            regToSave.setRegisteredSchedules(new ArrayList<>());
-        }
-
-        if (!selectedSchedules.isEmpty()) {
-            if (regToSave.getRegisteredSchedules() == null) {
-                regToSave.setRegisteredSchedules(new ArrayList<>());
-            }
-            regToSave.getRegisteredSchedules().addAll(selectedSchedules);
+            regToSave = registrationMapper.toNewEntity(student, activity, selectedSchedules); // Tạo đơn mới
         }
 
         return registrationMapper.toResponse(registrationRepository.save(regToSave));
@@ -173,19 +145,10 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     private RegistrationResponse processCancellation(Registrations reg, String reason) {
-        if (reg.getStatus() == 1) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Không được hủy khi đã điểm danh!");
-        }
-        if (reg.getStatus() == 2) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã hủy đăng ký trước đó rồi!");
-        }
+        if (reg.getStatus() == 1) throw new AppException(ErrorCode.INVALID_ACTION, "Không được hủy khi đã điểm danh!");
+        if (reg.getStatus() == 2) throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã hủy đăng ký trước đó rồi!");
 
-        reg.setStatus(2);
-        reg.setCancelReason(reason);
-
-        if (reg.getRegisteredSchedules() != null) {
-            reg.getRegisteredSchedules().clear();
-        }
+        registrationMapper.cancelEntity(reg, reason);
 
         return registrationMapper.toResponse(registrationRepository.save(reg));
     }
@@ -214,12 +177,10 @@ public class RegistrationServiceImpl implements RegistrationService {
         Registrations reg = registrationRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy đơn đăng ký!"));
 
-        reg.setStatus(status);
         if (status == 2) {
-            reg.setCancelReason("Quản trị viên / Khoa hủy đăng ký");
-            if (reg.getRegisteredSchedules() != null) {
-                reg.getRegisteredSchedules().clear();
-            }
+            registrationMapper.cancelEntity(reg, "Quản trị viên / Khoa hủy đăng ký"); // Gọi mapper hủy
+        } else {
+            reg.setStatus(status);
         }
 
         return registrationMapper.toResponse(registrationRepository.save(reg));
@@ -227,16 +188,11 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     public void exportToExcel(Long activityId, String keyword, String status, OutputStream outputStream) {
-        // 1. Logic lọc danh sách sinh viên
         Specification<Registrations> spec = buildFilterSpecification(activityId, keyword, status);
         List<Registrations> list = registrationRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "registeredAt"));
 
-        // 2. Mảng Header có thêm cột "Buổi đăng ký"
         String[] headers = {"STT", "MSSV", "Họ và Tên", "Thời gian ĐK", "Buổi đăng ký", "Trạng thái", "Lý do hủy"};
-
         java.util.concurrent.atomic.AtomicInteger stt = new java.util.concurrent.atomic.AtomicInteger(1);
-
-        // Formatter để lấy mỗi Giờ:Phút (VD: 08:30)
         java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
         try {
@@ -252,13 +208,12 @@ public class RegistrationServiceImpl implements RegistrationService {
                             schedulesStr = reg.getRegisteredSchedules().stream()
                                     .map(schedule -> {
                                         String title = schedule.getTitle() != null ? schedule.getTitle() : "Ca " + schedule.getId();
-                                        // Gắn thêm giờ bắt đầu - kết thúc (VD: Buổi 1 (08:00 - 11:30))
                                         if (schedule.getStartTime() != null && schedule.getEndTime() != null) {
                                             return title + " (" + schedule.getStartTime().format(timeFormatter) + " - " + schedule.getEndTime().format(timeFormatter) + ")";
                                         }
                                         return title;
                                     })
-                                    .collect(Collectors.joining(",\n")); // Dùng dấu phẩy và xuống dòng để Excel dễ nhìn nếu đk nhiều buổi
+                                    .collect(Collectors.joining(",\n"));
                         }
 
                         return new Object[]{
@@ -276,5 +231,41 @@ public class RegistrationServiceImpl implements RegistrationService {
         } catch (Exception e) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Lỗi khi xuất file Excel!");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RegistrationResponse> getMyRecords(Long semesterId) {
+        Users student = getCurrentStudent();
+
+        Specification<Registrations> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("student").get("id"), student.getId()));
+            if (semesterId != null) predicates.add(cb.equal(root.get("activity").get("semester").get("id"), semesterId));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        List<Registrations> myRecords = registrationRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "registeredAt"));
+
+        return myRecords.stream().map(reg -> {
+            Integer proofStatus = 0; // Mặc định = 0 (Chưa nộp minh chứng)
+
+            if (reg.getStatus() == 1) {
+                Optional<Proofs> proofOpt = proofRepository.findByStudentIdAndActivityId(student.getId(), reg.getActivity().getId());
+
+                if (proofOpt.isPresent()) {
+                    Integer pStatus = proofOpt.get().getStatus();
+                    if (pStatus == 0) {
+                        proofStatus = 1; // Đang chờ BTC duyệt
+                    } else if (pStatus == 1) {
+                        proofStatus = 2; // Đã duyệt -> Lúc này Frontend mới cộng điểm ĐRL
+                    } else if (pStatus == 2) {
+                        proofStatus = 3; // Bị từ chối (bắt nộp lại)
+                    }
+                }
+            }
+
+            return registrationMapper.toResponseWithProof(reg, proofStatus);
+        }).collect(Collectors.toList());
     }
 }

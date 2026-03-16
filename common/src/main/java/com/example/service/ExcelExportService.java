@@ -73,7 +73,7 @@ public class ExcelExportService {
                 }
             }
 
-            // 5. Tự động nới rộng các cột cho vừa khít với chữ bên trong
+            // 5. Tự động nới rộng các cột
             for (int i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
                 int currentWidth = sheet.getColumnWidth(i);

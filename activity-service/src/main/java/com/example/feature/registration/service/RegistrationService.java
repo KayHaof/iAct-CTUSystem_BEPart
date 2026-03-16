@@ -24,4 +24,6 @@ public interface RegistrationService {
 //    List<RegistrationResponse> getByActivity(Long activityId);
 
     void exportToExcel(Long activityId, String keyword, String status, OutputStream outputStream);
+
+    List<RegistrationResponse> getMyRecords(Long semesterId);
 }

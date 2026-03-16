@@ -28,6 +28,7 @@ import com.example.feature.organizers.repository.OrganizerRepository;
 import com.example.feature.registration.repository.RegistrationRepository;
 import com.example.feignClient.NotificationClient;
 import com.example.service.CloudinaryService;
+import com.example.service.QRCodeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -66,6 +67,7 @@ public class ActivityServiceImpl implements ActivityService {
     private final ApplicationEventPublisher eventPublisher;
 
     private final CloudinaryService cloudinaryService;
+    private final QRCodeService qrCodeService;
 
     // --- CREATE ---
     @Override
@@ -461,5 +463,18 @@ public class ActivityServiceImpl implements ActivityService {
 
     public void deleteOldImage(String oldImg) {
         cloudinaryService.deleteImageByUrl(oldImg);
+    }
+
+    public String getQrCodeForActivity(Long activityId) {
+        Activities activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED ,"Không tìm thấy hoạt động có ID: " + activityId));
+
+        String qrToken = activity.getQrCodeToken();
+
+        if (qrToken == null || qrToken.isEmpty()) {
+            throw new AppException(ErrorCode.INCORRECT_VALUE, "Hoạt động này chưa được cấp mã QR Token!");
+        }
+
+        return qrCodeService.generateQRCodeBase64(qrToken, 300, 300);
     }
 }

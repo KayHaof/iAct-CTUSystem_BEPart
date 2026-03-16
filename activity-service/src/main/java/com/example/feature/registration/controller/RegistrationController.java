@@ -14,6 +14,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -86,5 +87,15 @@ public class RegistrationController {
         response.setHeader("Content-Disposition", "attachment; filename=Danh_sach_SV_HoatDong_" + activityId + ".xlsx");
 
         registrationService.exportToExcel(activityId, keyword, status, response.getOutputStream());
+    }
+
+    @GetMapping("/my-records")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ApiResponse<List<RegistrationResponse>> getMyRecords(
+            @RequestParam(required = false) Long semesterId) {
+
+        return ApiResponse.<List<RegistrationResponse>>builder()
+                .result(registrationService.getMyRecords(semesterId))
+                .build();
     }
 }

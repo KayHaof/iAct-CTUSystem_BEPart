@@ -1,6 +1,6 @@
 package com.example.feature.attendances.model;
 
-import com.example.common.Registrations;
+import com.example.feature.registration.model.Registrations;
 import jakarta.persistence.*;
 import lombok.*;
 

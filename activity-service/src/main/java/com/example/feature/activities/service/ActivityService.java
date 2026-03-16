@@ -18,4 +18,6 @@ public interface ActivityService {
     void deleteActivity(Long id);
 
     ActivityResponse approveActivity(Long id, ActivityApprovalRequest request);
+
+    String getQrCodeForActivity(Long activityId);
 }
