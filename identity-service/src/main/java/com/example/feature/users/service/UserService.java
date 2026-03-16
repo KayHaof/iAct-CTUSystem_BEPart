@@ -1,9 +1,7 @@
 package com.example.feature.users.service;
 
 import com.example.common.Clazzes;
-import com.example.common.Departments;
 import com.example.common.repository.LocalClazzRepository;
-import com.example.common.repository.LocalDepartmentRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.feature.users.dto.ChangePasswordRequest;
@@ -42,7 +40,6 @@ public class UserService {
     private final BaseRedisService redisService;
     private final UserRepository userRepository;
     private final LocalClazzRepository localClazzRepository;
-    private final LocalDepartmentRepository localDepartmentRepository;
     private final UserProfileMapper userMapper;
     private final CloudinaryService cloudinaryService;
     private final Keycloak keycloak;
@@ -81,12 +78,6 @@ public class UserService {
             Clazzes clazz = localClazzRepository.findById(request.getClassId())
                     .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,"Lớp học không tồn tại !"));
             user.setClazz(clazz);
-        }
-
-        if (request.getDepartmentId() != null) {
-            Departments department = localDepartmentRepository.findById(request.getDepartmentId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khoa không tồn tại !"));
-            user.setDepartment(department);
         }
 
         Users savedUser = userRepository.save(user);
@@ -209,7 +200,7 @@ public class UserService {
             String fullName = jwt.getClaimAsString("name");
 
             if (fullName == null || fullName.trim().isEmpty()) {
-                fullName = (givenName != null ? givenName + " " : "") + (familyName != null ? familyName: "");
+                fullName = (familyName != null ? familyName: "") + (givenName != null ? givenName + " " : "");
             }
 
             UserSyncDto syncDto = UserSyncDto.builder()

@@ -21,5 +21,4 @@ public class UserUpdateRequest {
 
     private String studentCode;
     private Long classId;
-    private Long departmentId;
 }

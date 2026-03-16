@@ -1,6 +1,5 @@
 package com.example.common.entity;
 
-
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,11 +22,18 @@ public class Users {
     @Column(name = "student_code")
     private String studentCode;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_id", insertable = false, updatable = false)
+    private StudentClass studentClass;
+
     @Column(unique = true)
     private String email;
 
     @Column(name = "full_name")
     private String fullName;
+
+    @Column(name = "avatar_url")
+    private String avatarUrl;
 
     @Column(name = "role_type", nullable = false)
     private Integer roleType;
@@ -39,13 +45,4 @@ public class Users {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-//    @OneToOne(mappedBy = "user")
-//    private Students students;
-//
-//    @OneToOne(mappedBy = "user")
-//    private Organizers organizers;
-//
-//    @OneToMany(mappedBy = "createdBy")
-//    private List<Activities> activities;
 }

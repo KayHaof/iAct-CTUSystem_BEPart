@@ -13,8 +13,6 @@ import org.mapstruct.*;
 public interface UserProfileMapper {
     @Mapping(target = "classCode", source = "clazz.classCode")
     @Mapping(target = "classId", source = "clazz.id")
-    @Mapping(target = "departmentName", source = "department.name")
-    @Mapping(target = "departmentId", source = "department.id")
     UserResponse toResponse(Users user);
 
     @Mapping(target = "id", ignore = true)
@@ -24,12 +22,10 @@ public interface UserProfileMapper {
     @Mapping(target = "roleType", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "clazz", ignore = true)
-    @Mapping(target = "department", ignore = true)
     void updateUserFromDto(UserUpdateRequest dto, @MappingTarget Users entity);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "clazz", ignore = true) // Chưa phân lớp lúc mới tạo
-    @Mapping(target = "department", ignore = true) // Chưa phân khoa lúc mới tạo
     Users toUserFromSyncDto(UserSyncDto dto);
 }

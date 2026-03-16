@@ -6,14 +6,11 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CloudinaryService {
-
     private final Cloudinary cloudinary;
-
     public CloudinaryService(Cloudinary cloudinary) {
         this.cloudinary = cloudinary;
     }
 
-    // 2. Hàm cắt chuỗi (Vẫn giữ nguyên như cũ của ní)
     public static String extractPublicId(String url) {
         if (url == null || !url.contains("/upload/")) {
             return null;
@@ -28,7 +25,6 @@ public class CloudinaryService {
         }
     }
 
-    // 3. THÊM HÀM NÀY: Hàm thực hiện việc xóa ảnh
     public void deleteImageByUrl(String oldAvatarUrl) {
         String publicId = extractPublicId(oldAvatarUrl);
 

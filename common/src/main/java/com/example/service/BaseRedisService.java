@@ -20,7 +20,7 @@ public class BaseRedisService {
     }
 
     public boolean hasKey(String key) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+        return redisTemplate.hasKey(key);
     }
 
     public void delete(String key) {

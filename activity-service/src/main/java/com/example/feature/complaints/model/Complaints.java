@@ -1,8 +1,8 @@
 package com.example.feature.complaints.model;
 
-import com.example.common.Activities;
-import com.example.common.Semesters;
-import com.example.common.Users;
+import com.example.common.entity.Semesters;
+import com.example.common.entity.Users;
+import com.example.feature.activities.model.Activities;
 import jakarta.persistence.*;
 import lombok.*;
 

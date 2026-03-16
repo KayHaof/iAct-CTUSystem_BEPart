@@ -1,7 +1,6 @@
 package com.example.feature.users.model;
 
 import com.example.common.Clazzes;
-import com.example.common.Departments;
 import com.example.common.Notifications;
 import com.example.common.Registrations;
 import jakarta.persistence.Entity;
@@ -62,9 +61,9 @@ public class Users {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id")
-    private Departments department;
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "department_id")
+//    private Departments department;
 
     @OneToMany(mappedBy = "student")
     private List<Registrations> registrations;

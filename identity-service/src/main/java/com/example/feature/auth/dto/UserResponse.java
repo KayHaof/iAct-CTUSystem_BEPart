@@ -22,5 +22,4 @@ public class UserResponse {
 
     private String classCode;
     private String className;
-    private String departmentName;
 }
