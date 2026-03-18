@@ -10,7 +10,7 @@ import java.util.List;
 @Entity
 @Table(name = "major")
 @Data
-public class Majors {
+public class Major {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

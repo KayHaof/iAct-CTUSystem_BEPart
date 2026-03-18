@@ -1,6 +1,6 @@
 package com.example.feature.departments.model;
 
-import com.example.feature.major.model.Majors;
+import com.example.feature.major.model.Major;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.List;
@@ -20,7 +20,6 @@ public class Departments {
     private String name;
     private String description;
 
-    // JsonIgnore hoặc tách DTO để tránh vòng lặp vô tận khi convert JSON
     @OneToMany(mappedBy = "department", fetch = FetchType.LAZY)
-    private List<Majors> majors;
+    private List<Major> majors;
 }

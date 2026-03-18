@@ -1,7 +1,7 @@
 package com.example.feature.classes.model;
 
 import com.example.common.Users;
-import com.example.feature.major.model.Majors;
+import com.example.feature.major.model.Major;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,7 +22,7 @@ public class Clazzes {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "major_id")
-    private Majors major;
+    private Major major;
 
     @Column(name = "academic_year")
     private Integer academicYear;
