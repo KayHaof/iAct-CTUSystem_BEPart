@@ -11,7 +11,6 @@ public interface AuthMapper {
     @Mapping(target = "keycloakId", ignore = true)
     @Mapping(target = "status", constant = "1")
     @Mapping(target = "createdAt", expression = "java(java.time.LocalDateTime.now())")
-    @Mapping(target = "fullName", expression = "java(request.getFirstName() + \" \" + request.getLastName())")
-    @Mapping(target = "clazz", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
     Users registerRequestToUser(RegisterRequest request);
 }

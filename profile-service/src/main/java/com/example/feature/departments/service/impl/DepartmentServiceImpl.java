@@ -5,7 +5,7 @@ import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.feature.departments.dto.DepartmentRequest;
 import com.example.feature.departments.dto.DepartmentResponse;
-import com.example.feature.departments.mapper.DepartmentMapper; // 🚀 Import Mapper
+import com.example.feature.departments.mapper.DepartmentMapper;
 import com.example.feature.departments.model.Departments;
 import com.example.feature.departments.repository.DepartmentRepository;
 import com.example.feature.departments.service.DepartmentService;

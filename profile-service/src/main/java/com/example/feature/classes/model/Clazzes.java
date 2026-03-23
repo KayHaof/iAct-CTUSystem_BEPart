@@ -1,7 +1,7 @@
 package com.example.feature.classes.model;
 
-import com.example.common.Users;
 import com.example.feature.major.model.Major;
+import com.example.feature.user_profile.model.StudentProfile;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -28,7 +28,5 @@ public class Clazzes {
     private Integer academicYear;
 
     @OneToMany(mappedBy = "clazz")
-    private List<Users> students;
+    private List<StudentProfile> students;
 }
-
-

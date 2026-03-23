@@ -2,19 +2,22 @@ package com.example.feature.users.controller;
 
 import com.example.config.UserSecurity;
 import com.example.dto.ApiResponse;
-import com.example.dto.PageDTO; // 🚀 Import PageDTO
+import com.example.dto.PageDTO;
 import com.example.feature.users.dto.ChangePasswordRequest;
+import com.example.feature.users.dto.ImportResultDto;
 import com.example.feature.users.dto.UserResponse;
 import com.example.feature.users.dto.UserUpdateRequest;
+import com.example.feature.users.service.UserImportService;
 import com.example.feature.users.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -23,6 +26,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final UserImportService userImportService;
     private final UserSecurity userSecurity;
 
     // 1. Get All Users (Admin only)
@@ -34,10 +38,11 @@ public class UserController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer roleType,
             @RequestParam(required = false) Long departmentId,
-            @RequestParam(required = false) Integer status) {
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) Long classId) {
 
         return ApiResponse.<PageDTO<UserResponse>>builder()
-                .result(userService.getUsers(page, size, keyword, roleType, departmentId, status))
+                .result(userService.getUsers(page, size, keyword, roleType, departmentId, status, classId))
                 .build();
     }
 
@@ -85,14 +90,8 @@ public class UserController {
     // 6. Get info user by email login
     @GetMapping("/my-info")
     public ApiResponse<UserResponse> getMyInfo() {
-        var context = SecurityContextHolder.getContext();
-        var authentication = context.getAuthentication();
-
-        Jwt jwt = (Jwt) authentication.getPrincipal();
-        String email = jwt.getClaimAsString("email");
-
         return ApiResponse.<UserResponse>builder()
-                .result(userService.getUserByEmail(email))
+                .result(userService.getMyInfo())
                 .build();
     }
 
@@ -147,5 +146,15 @@ public class UserController {
         return ApiResponse.<String>builder()
                 .message("Đã gửi email yêu cầu đặt lại mật khẩu thành công")
                 .build();
+    }
+
+    // 12. Import users by file excel
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<ImportResultDto> importUsersFromExcel(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("roleType") Integer roleType
+    ) {
+        ImportResultDto result = userImportService.importUsers(file, roleType);
+        return ApiResponse.success(result);
     }
 }

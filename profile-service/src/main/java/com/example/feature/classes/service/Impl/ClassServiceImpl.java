@@ -30,9 +30,9 @@ public class ClassServiceImpl implements ClassService {
     }
 
     @Override
-    public List<ClassResponse> getClasses(Long majorId) {
+    public List<ClassResponse> getClasses(Long majorId, Integer academicYear) {
         List<Clazzes> classes = (majorId != null)
-                ? classRepository.findByMajorId(majorId)
+                ? classRepository.findClassesByMajorAndYear(majorId, academicYear)
                 : classRepository.findAll();
         return classes.stream().map(classMapper::toResponse).collect(Collectors.toList());
     }

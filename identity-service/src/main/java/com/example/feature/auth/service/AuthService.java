@@ -1,15 +1,16 @@
 package com.example.feature.auth.service;
 
-import com.example.common.Clazzes;
-import com.example.common.repository.LocalClazzRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.feature.auth.dto.LoginRequest;
 import com.example.feature.auth.dto.RegisterRequest;
 import com.example.feature.auth.mapper.AuthMapper;
+import com.example.feature.users.dto.CreateProfileDto;
 import com.example.feature.users.model.Users;
 import com.example.feature.users.repository.UserRepository;
+import com.example.feignClient.ProfileServiceClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -28,36 +29,36 @@ import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
     private final UserRepository userRepository;
     private final Keycloak keycloak;
     private final String realm = "myRealm";
     private final WebClient webClient;
     private final AuthMapper userMapper;
-    private final LocalClazzRepository clazzRepository;
+    private final ProfileServiceClient profileServiceClient;
 
     @Value("${app.keycloak.token-uri}")
     private String tokenUrl;
 
     @Transactional
     public void registerUser(RegisterRequest request) {
+        // 1. Chỉ check Username & Email ở Local DB
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new AppException(ErrorCode.VALUE_EXISTED, "Username này đã tồn tại. Vui lòng sử dụng tên khác !");
+            throw new AppException(ErrorCode.VALUE_EXISTED, "Username này đã tồn tại. Vui lòng sử dụng tên khác!");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new AppException(ErrorCode.VALUE_EXISTED,"Email này đã được sử dụng!");
         }
-        if (request.getStudentCode() != null && request.getRoleType() == 1 && userRepository.existsByStudentCode(request.getStudentCode())) {
-            throw new AppException(ErrorCode.VALUE_EXISTED ,"Mã số sinh viên đã tồn tại!");
-        }
 
+        // 2. Setup Keycloak User
         UserRepresentation userRep = new UserRepresentation();
         userRep.setUsername(request.getUsername());
         userRep.setEmail(request.getEmail());
         userRep.setFirstName(request.getFirstName());
         userRep.setLastName(request.getLastName());
         userRep.setEnabled(true);
-        userRep.setEmailVerified(false);
+        userRep.setEmailVerified(true);
 
         String roleName;
         String groupPath;
@@ -72,60 +73,57 @@ public class AuthService {
         CredentialRepresentation cred = new CredentialRepresentation();
         cred.setType(CredentialRepresentation.PASSWORD);
         cred.setValue(request.getPassword());
-        cred.setTemporary(false);
+        cred.setTemporary(false); // Đã để false thì user không bị ép đổi pass lúc login lần đầu
         userRep.setCredentials(Collections.singletonList(cred));
 
         String createdKeycloakId = null;
 
         try {
+            // 3. Đẩy thông tin lên Keycloak
             Response response = keycloak.realm(realm).users().create(userRep);
             if (response.getStatus() == 201) {
                 String path = response.getLocation().getPath();
                 createdKeycloakId = path.substring(path.lastIndexOf("/") + 1);
 
                 assignRoleToUser(createdKeycloakId, roleName);
-                keycloak.realm(realm).users().get(createdKeycloakId)
-                        .executeActionsEmail(Collections.singletonList("VERIFY_EMAIL"));
 
+                // 4. Lưu Core User vào bảng `users`
                 Users user = userMapper.registerRequestToUser(request);
                 user.setKeycloakId(createdKeycloakId);
+                user = userRepository.save(user);
 
-                if (request.getClassId() != null) {
-                    Long reqClassId = request.getClassId();
+                // 5. Đóng gói dữ liệu bắn sang Profile Service
+                CreateProfileDto profileDto = CreateProfileDto.builder()
+                        .userId(user.getId())
+                        .fullName(request.getFirstName() + " " + request.getLastName())
+                        .roleType(request.getRoleType())
+                        .studentCode(request.getStudentCode())
+                        .classId(request.getClassId())
+                        .description(request.getDescription())
+                        .build();
 
-                    Clazzes clazz = clazzRepository.findById(reqClassId)
-                            .orElseGet(() -> {
-                                Clazzes newMirror = new Clazzes();
-                                newMirror.setId(reqClassId);
-                                newMirror.setName("Unknown Class (Sync Pending)");
-                                return clazzRepository.save(newMirror);
-                            });
-
-                    user.setClazz(clazz);
-                }
-
-                userRepository.save(user);
+                profileServiceClient.createProfile(profileDto);
 
             } else if (response.getStatus() == 409) {
                 throw new AppException(ErrorCode.VALUE_EXISTED,"Username hoặc Email đã tồn tại trên Keycloak!");
             } else {
-                throw new RuntimeException("Lỗi Keycloak: " + response.getStatus());
+                throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, "Lỗi Keycloak: " + response.getStatus());
             }
             response.close();
         } catch (Exception e) {
             if (createdKeycloakId != null) {
                 try {
                     keycloak.realm(realm).users().get(createdKeycloakId).remove();
-                    System.out.println("Đã rollback (xóa) user trên Keycloak do lỗi hệ thống: " + createdKeycloakId);
+                    log.info("Đã rollback (xóa) user trên Keycloak do lỗi hệ thống: {}", createdKeycloakId);
                 } catch (Exception ex) {
-                    System.err.println("CRITICAL: Không thể rollback user trên Keycloak: " + createdKeycloakId);
+                    log.error("CRITICAL: Không thể rollback user trên Keycloak: {}", createdKeycloakId);
                 }
             }
 
             if (e instanceof AppException) {
                 throw (AppException) e;
             }
-            throw new RuntimeException("Đăng ký thất bại: " + e.getMessage());
+            throw new AppException(ErrorCode.INVALID_ACTION, "Đăng ký thất bại: " + e.getMessage());
         }
     }
 
@@ -135,7 +133,7 @@ public class AuthService {
     }
 
     public Object loginUser(LoginRequest request) {
-        System.out.println(">>> Check login = " + request.toString());
+        log.info(">>> Check login = {}", request.getUsername());
         if (userRepository.findByUsername(request.getUsername()).isEmpty()){
             throw new AppException(ErrorCode.USER_NOT_EXISTED, "Username không tồn tại. Vui lòng thử lại !");
         }
@@ -154,11 +152,9 @@ public class AuthService {
                             if (errorBody.contains("Account disabled")) {
                                 return Mono.error(new AppException(ErrorCode.ACCOUNT_LOCKED));
                             }
-
                             if (errorBody.contains("invalid_grant")) {
                                 return Mono.error(new AppException(ErrorCode.UNAUTHENTICATED));
                             }
-
                             return Mono.error(new RuntimeException("Lỗi xác thực Keycloak: " + errorBody));
                         }))
                 .bodyToMono(Object.class)

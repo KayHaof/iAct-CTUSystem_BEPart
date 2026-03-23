@@ -59,7 +59,6 @@
                             ${kcSanitize(msg("backToApplication"))?no_esc}
                         </a>
                     <#elseif actionUri?has_content>
-                    <#-- ĐÂY LÀ NÚT BỊ LỖI TRONG HÌNH CỦA NÍ -->
                         <a href="${actionUri}" class="block w-full text-center px-8 py-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700 hover:text-white font-bold shadow-lg hover:shadow-blue-200 transition-all text-lg tracking-wide">
                             ${kcSanitize(msg("proceedWithAction"))?no_esc}
                         </a>

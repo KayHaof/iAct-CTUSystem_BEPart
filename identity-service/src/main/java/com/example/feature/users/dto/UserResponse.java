@@ -30,5 +30,8 @@ public class UserResponse {
     private Long classId;
     private String classCode;
 
+    private Long departmentId;
+    private String departmentName;
+
     private LocalDateTime createdAt; // Có thể cần hiển thị ngày tham gia
 }

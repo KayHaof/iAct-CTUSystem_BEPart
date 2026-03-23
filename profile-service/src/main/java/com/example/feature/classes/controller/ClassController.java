@@ -27,9 +27,9 @@ public class ClassController {
     }
 
     @GetMapping
-    public ApiResponse<List<ClassResponse>> getClasses(@RequestParam(required = false) Long majorId) {
+    public ApiResponse<List<ClassResponse>> getClasses(@RequestParam(required = false) Long majorId, @RequestParam(required = false) Integer academicYear) {
         return ApiResponse.<List<ClassResponse>>builder()
-                .result(classService.getClasses(majorId))
+                .result(classService.getClasses(majorId, academicYear))
                 .build();
     }
 

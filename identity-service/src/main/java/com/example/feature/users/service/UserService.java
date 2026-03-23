@@ -1,22 +1,17 @@
 package com.example.feature.users.service;
 
-import com.example.common.Clazzes;
-import com.example.common.repository.LocalClazzRepository;
 import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
-import com.example.feature.users.dto.ChangePasswordRequest;
-import com.example.feature.users.dto.UserResponse;
-import com.example.feature.users.dto.UserSyncDto;
-import com.example.feature.users.dto.UserUpdateRequest;
+import com.example.feature.users.dto.*;
 import com.example.feature.users.event.UserDisabledEvent;
 import com.example.feature.users.mapper.UserProfileMapper;
 import com.example.feature.users.model.Users;
 import com.example.feature.users.repository.UserRepository;
 import com.example.feignClient.ProfileServiceClient;
 import com.example.service.BaseRedisService;
-import com.example.service.CloudinaryService;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,12 +24,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.*;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.http.*;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,9 +43,7 @@ import java.util.stream.Collectors;
 public class UserService {
     private final BaseRedisService redisService;
     private final UserRepository userRepository;
-    private final LocalClazzRepository localClazzRepository;
     private final UserProfileMapper userMapper;
-    private final CloudinaryService cloudinaryService;
     private final Keycloak keycloak;
     private final String realm = "myRealm";
     private final ApplicationEventPublisher eventPublisher;
@@ -71,32 +64,47 @@ public class UserService {
         userRepository.save(user);
     }
 
+    public UserResponse getMyInfo() {
+        // 1. Lấy thông tin Keycloak ID từ token hiện tại
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        Jwt jwt = (Jwt) authentication.getPrincipal();
+        String keycloakId = jwt.getClaimAsString("sub");
+
+        // 2. Lấy Core User từ Local DB (Identity Service)
+        Users user = userRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy thông tin xác thực cục bộ!"));
+
+        // 3. Gọi FeignClient sang Profile Service để lấy dữ liệu Hồ sơ (Avatar, FullName, Class...)
+        ProfileDto profile = null;
+        try {
+            profile = profileServiceClient.getProfileByUserId(user.getId()).getResult();
+        } catch (Exception e) {
+            log.warn("Không thể lấy profile cho userId {}: {}", user.getId(), e.getMessage());
+        }
+
+        // 4. Trộn 2 cục data lại và trả về cho Frontend
+        return userMapper.toResponseAggregated(user, profile);
+    }
+
     @Transactional
     public UserResponse updateUserInfo(Long id, UserUpdateRequest request) {
         Users user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại!"));
 
-        String oldAvatarUrl = user.getAvatarUrl();
-        userMapper.updateUserFromDto(request, user);
-
-        String newAvatarUrl = request.getAvatarUrl();
-        if (newAvatarUrl != null && oldAvatarUrl != null && !oldAvatarUrl.equals(newAvatarUrl)) {
-            deleteOldAvatar(oldAvatarUrl);
+        // 1. Gọi Feign Client
+        try {
+            profileServiceClient.updateUserProfile(id, request);
+        } catch (Exception e) {
+            log.error("Lỗi khi update profile thông qua FeignClient: {}", e.getMessage());
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, "Không thể cập nhật hồ sơ lúc này!");
         }
 
-        if (request.getClassId() != null) {
-            Clazzes clazz = localClazzRepository.findById(request.getClassId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,"Lớp học không tồn tại !"));
-            user.setClazz(clazz);
-        }
-
-        Users savedUser = userRepository.save(user);
-        return userMapper.toResponse(savedUser);
+        return getUserById(id);
     }
 
     public void changePasswordViaKeycloak(String bearerToken, ChangePasswordRequest request) {
         RestTemplate restTemplate = new RestTemplate();
-        String url = "http://localhost:8080" + "/realms/" + realm + "/account/credentials/password";
+        String url = "http://localhost:8080/realms/" + realm + "/account/credentials/password";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -116,172 +124,149 @@ public class UserService {
         }
     }
 
-    // Reset password (action of admin)
     @Transactional
     public void sendResetPasswordEmail(Long id) {
         Users user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại!"));
 
-        if (user.getKeycloakId() == null) {
-            throw new RuntimeException("Tài khoản này chưa được đồng bộ với Keycloak!");
-        }
+        if (user.getKeycloakId() == null) throw new RuntimeException("Tài khoản này chưa được đồng bộ với Keycloak!");
 
         try {
-            keycloak.realm(realm)
-                    .users()
-                    .get(user.getKeycloakId())
-                    .executeActionsEmail(Collections.singletonList("UPDATE_PASSWORD"));
-
+            keycloak.realm(realm).users().get(user.getKeycloakId()).executeActionsEmail(Collections.singletonList("UPDATE_PASSWORD"));
             log.info("Đã yêu cầu Keycloak gửi email reset password cho user: {}", user.getEmail());
-
         } catch (Exception e) {
-            log.error("Lỗi khi gửi email reset mật khẩu qua Keycloak: {}", e.getMessage());
-            throw new AppException(ErrorCode.INVALID_ACTION, "Lỗi hệ thống khi gửi email đặt lại mật khẩu! Vui lòng kiểm tra lại cấu hình SMTP.");
+            log.error("Lỗi khi gửi email reset mật khẩu: {}", e.getMessage());
+            throw new AppException(ErrorCode.INVALID_ACTION, "Lỗi cấu hình SMTP.");
         }
     }
 
-    public PageDTO<UserResponse> getUsers(int page, int size, String keyword, Integer roleType, Long departmentId, Integer status) {
+    // Lấy danh sách người dùng
+    public PageDTO<UserResponse> getUsers(int page, int size, String keyword, Integer roleType, Long departmentId, Integer status, Long classId) {
         Pageable pageable = PageRequest.of(page > 0 ? page - 1 : 0, size, Sort.by("id").descending());
+        List<Long> matchingUserIds = null;
 
-        Specification<Users> spec = (root, query, cb) -> {
-            jakarta.persistence.criteria.Predicate predicate = cb.conjunction();
+        if ((keyword != null && !keyword.trim().isEmpty()) || departmentId != null || classId != null) {
+            try {
+                ApiResponse<List<Long>> response = profileServiceClient.searchUserIdsByCriteria(keyword, departmentId, classId);
+                matchingUserIds = response.getResult();
 
-            // 1. Lọc Keyword
-            if (keyword != null && !keyword.trim().isEmpty()) {
-                String likeKeyword = "%" + keyword.trim().toLowerCase() + "%";
-                predicate = cb.and(predicate, cb.or(
-                        cb.like(cb.lower(root.get("fullName")), likeKeyword),
-                        cb.like(cb.lower(root.get("email")), likeKeyword),
-                        cb.like(cb.lower(root.get("studentCode")), likeKeyword)
-                ));
+                if (matchingUserIds == null || matchingUserIds.isEmpty()) {
+                    return new PageDTO<>(Page.empty(), Collections.emptyList());
+                }
+            } catch (Exception e) {
+                log.error("Lỗi khi gọi Profile-Service để search: {}", e.getMessage());
+                return new PageDTO<>(Page.empty(), Collections.emptyList());
             }
+        }
+        // 2. Build Specification
+        final List<Long> finalMatchingUserIds = matchingUserIds;
+        Specification<Users> spec = (root, query, cb) -> {
+            Predicate predicate = cb.conjunction();
 
-            // 2. Lọc Role
+            if (finalMatchingUserIds != null) {
+                predicate = cb.and(predicate, root.get("id").in(finalMatchingUserIds));
+            }
             if (roleType != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("roleType"), roleType));
             }
-
-            // 3. Lọc Trạng thái
             if (status != null) {
                 predicate = cb.and(predicate, cb.equal(root.get("status"), status));
             }
-
-            //  4. LỌC THEO KHOA BẰNG FEIGN CLIENT (MICROSERVICES WAY)
-            if (departmentId != null) {
-                try {
-                    // Gọi sang Profile-Service lấy danh sách Class ID
-                    ApiResponse<List<Long>> response = profileServiceClient.getClassIdsByDepartment(departmentId);
-                    List<Long> classIds = response.getResult();
-
-                    if (classIds != null && !classIds.isEmpty()) {
-                        // Nếu Khoa có lớp -> Lọc những User có clazz.id nằm trong danh sách này
-                        predicate = cb.and(predicate, root.get("clazz").get("id").in(classIds));
-                    } else {
-                        // Nếu Khoa này KHÔNG có lớp nào -> Chắc chắn không có sinh viên
-                        // Dùng cb.disjunction() để bắt buộc trả về danh sách rỗng (1 = 0)
-                        predicate = cb.and(predicate, cb.disjunction());
-                    }
-                } catch (Exception e) {
-                    log.error("Lỗi khi gọi profile-service lấy danh sách class_id: {}", e.getMessage());
-                    predicate = cb.and(predicate, cb.disjunction());
-                }
-            }
-
             return predicate;
         };
 
+        // 3. Query Local DB lấy danh sách tài khoản
         Page<Users> usersPage = userRepository.findAll(spec, pageable);
+        List<Long> pageUserIds = usersPage.getContent().stream().map(Users::getId).toList();
 
-        List<UserResponse> data = usersPage.getContent().stream()
-                .map(userMapper::toResponse)
-                .collect(Collectors.toList());
+        if (pageUserIds.isEmpty()) return new PageDTO<>(usersPage, Collections.emptyList());
+
+        // 4. Batch Call qua Profile Service lấy Profile của những tài khoản này
+        Map<Long, ProfileDto> profileMap = new HashMap<>();
+        try {
+            ApiResponse<Map<Long, ProfileDto>> profileRes = profileServiceClient.getProfilesBatch(pageUserIds);
+            if (profileRes.getResult() != null) {
+                profileMap = profileRes.getResult();
+            }
+        } catch (Exception e) {
+            log.warn("Không thể lấy profile batch từ Profile-Service: {}", e.getMessage());
+        }
+
+        // 5. Mapping trộn (Auth + Profile) lại với nhau
+        final Map<Long, ProfileDto> finalProfileMap = profileMap;
+        List<UserResponse> data = usersPage.getContent().stream().map(user -> {
+            ProfileDto profile = finalProfileMap.get(user.getId());
+            return userMapper.toResponseAggregated(user, profile);
+        }).collect(Collectors.toList());
 
         return new PageDTO<>(usersPage, data);
     }
 
-    public List<UserResponse> getAllUsers() {
-        return userRepository.findAll()
-                .stream()
-                .map(userMapper::toResponse)
-                .collect(Collectors.toList());
+    public UserResponse getUserById(Long id) {
+        Users user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        ProfileDto profile = null;
+        try {
+            profile = profileServiceClient.getProfileByUserId(id).getResult();
+        } catch (Exception e) {
+            log.warn("Không thể lấy profile cho userId {}: {}", id, e.getMessage());
+        }
+
+        return userMapper.toResponseAggregated(user, profile);
     }
 
-    public UserResponse getUserById(Long id){
-        Users user = userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Người dùng không tồn tại!"));
-        return userMapper.toResponse(user);
-    }
-
-    public UserResponse getUserByEmail(String email){
-        Users user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy người dùng với email này!"));
-        return userMapper.toResponse(user);
+    public UserResponse getUserByEmail(String email) {
+        Users user = userRepository.findByEmail(email).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        return getUserById(user.getId());
     }
 
     @Transactional
     public void deleteUser(Long id) {
-        Users user = userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        Users user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         Jwt jwt = (Jwt) authentication.getPrincipal();
-
         String tokenKeycloakId = jwt.getClaimAsString("sub");
         boolean isOwner = user.getKeycloakId() != null && user.getKeycloakId().equals(tokenKeycloakId);
 
-        if (isOwner) {
-            user.setStatus(0);
-        } else {
-            user.setStatus(2);
-        }
+        user.setStatus(isOwner ? 0 : 2);
 
         if (user.getKeycloakId() != null) {
             redisService.set("BLOCKED_USER:" + user.getKeycloakId(), "BLOCKED", 7 * 24 * 60);
             try {
                 UserResource userResource = keycloak.realm(realm).users().get(user.getKeycloakId());
-                UserRepresentation userRepresentation = userResource.toRepresentation();
-                userRepresentation.setEnabled(false);
-                userResource.update(userRepresentation);
+                UserRepresentation userRep = userResource.toRepresentation();
+                userRep.setEnabled(false);
+                userResource.update(userRep);
             } catch (Exception e) {
-                log.error("Lỗi khóa user trên Keycloak: {}", e.getMessage());
+                log.error("Lỗi khóa user Keycloak: {}", e.getMessage());
             }
         }
 
         userRepository.save(user);
 
         if (!isOwner) {
-            eventPublisher.publishEvent(new UserDisabledEvent(
-                    user.getId(),
-                    "Tài khoản bị vô hiệu hóa",
-                    "Tài khoản của bạn đã bị vô hiệu hóa bởi quản trị viên.",
-                    99
-            ));
+            eventPublisher.publishEvent(new UserDisabledEvent(user.getId(), "Tài khoản bị vô hiệu hóa", "Đã bị vô hiệu hóa bởi Admin.", 99));
         }
     }
 
     @Transactional
     public void activateUser(Long id) {
-        Users user = userRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
+        Users user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         user.setStatus(1);
 
         if (user.getKeycloakId() != null) {
             redisService.delete("BLOCKED_USER:" + user.getKeycloakId());
             try {
                 UserResource userResource = keycloak.realm(realm).users().get(user.getKeycloakId());
-                UserRepresentation userRepresentation = userResource.toRepresentation();
-                userRepresentation.setEnabled(true);
-                userResource.update(userRepresentation);
+                UserRepresentation userRep = userResource.toRepresentation();
+                userRep.setEnabled(true);
+                userResource.update(userRep);
             } catch (Exception e) {
-                log.error("Lỗi mở khóa user trên Keycloak: {}", e.getMessage());
+                log.error("Lỗi mở khóa user Keycloak: {}", e.getMessage());
             }
         }
         userRepository.save(user);
-    }
-
-    public void deleteOldAvatar(String oldAvatarUrl) {
-        cloudinaryService.deleteImageByUrl(oldAvatarUrl);
     }
 
     @Transactional
@@ -296,44 +281,59 @@ public class UserService {
                 fullName = (familyName != null ? familyName: "") + (givenName != null ? givenName + " " : "");
             }
 
-            UserSyncDto syncDto = UserSyncDto.builder()
-                    .keycloakId(keycloakId)
-                    .username(jwt.getClaimAsString("preferred_username"))
-                    .email(jwt.getClaimAsString("email"))
-                    .fullName(fullName.trim())
-                    .status(1)
-                    .roleType(1)
-                    .build();
+            // 1. Lưu core user
+            Users newUser = new Users();
+            newUser.setKeycloakId(keycloakId);
+            newUser.setUsername(jwt.getClaimAsString("preferred_username"));
+            newUser.setEmail(jwt.getClaimAsString("email"));
+            newUser.setRoleType(1);
+            newUser.setStatus(1);
+            newUser = userRepository.save(newUser);
 
-            Users newUser = userMapper.toUserFromSyncDto(syncDto);
-            userRepository.save(newUser);
-            log.info("Đã đồng bộ user: {}", newUser.getUsername());
+            log.info("Đã đồng bộ core user: {}", newUser.getUsername());
+
+            // 2. Truyền data qua Profile Service để tạo hồ sơ ban đầu
+            try {
+                CreateProfileDto profileDto = CreateProfileDto.builder()
+                        .userId(newUser.getId())
+                        .fullName(fullName.trim())
+                        .build();
+                profileServiceClient.createProfile(profileDto);
+            } catch (Exception e) {
+                log.error("Lỗi tạo profile ban đầu cho user {}: {}", newUser.getId(), e.getMessage());
+            }
         }
     }
 
     public Map<String, Long> countUsersByRole(String keyword) {
-        Specification<Users> baseSpec = (root, query, cb) -> {
-            if (keyword == null || keyword.trim().isEmpty()) {
-                return cb.conjunction();
+        List<Long> matchingUserIds = null;
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            try {
+                matchingUserIds = profileServiceClient.searchUserIdsByCriteria(keyword, null, null).getResult();
+                if (matchingUserIds == null || matchingUserIds.isEmpty()) {
+                    return Map.of("student", 0L, "faculty", 0L, "admin", 0L);
+                }
+            } catch (Exception e) {
+                log.error("Lỗi lấy list userId để đếm: {}", e.getMessage());
+                return Map.of("student", 0L, "faculty", 0L, "admin", 0L);
             }
-            String likeKeyword = "%" + keyword.trim().toLowerCase() + "%";
-            return cb.or(
-                    cb.like(cb.lower(root.get("fullName")), likeKeyword),
-                    cb.like(cb.lower(root.get("email")), likeKeyword),
-                    cb.like(cb.lower(root.get("studentCode")), likeKeyword)
-            );
+        }
+
+        final List<Long> finalIds = matchingUserIds;
+        Specification<Users> baseSpec = (root, query, cb) -> {
+            if (finalIds == null) return cb.conjunction();
+            return root.get("id").in(finalIds);
         };
 
-        // Đếm cho từng Role sử dụng baseSpec kết hợp với điều kiện Role
-        long studentCount = userRepository.count(baseSpec.and((root, query, cb) -> cb.equal(root.get("roleType"), 1)));
-        long facultyCount = userRepository.count(baseSpec.and((root, query, cb) -> cb.equal(root.get("roleType"), 2)));
-        long adminCount = userRepository.count(baseSpec.and((root, query, cb) -> cb.equal(root.get("roleType"), 3)));
+        long studentCount = userRepository.count(baseSpec.and((root, q, cb) -> cb.equal(root.get("roleType"), 1)));
+        long facultyCount = userRepository.count(baseSpec.and((root, q, cb) -> cb.equal(root.get("roleType"), 2)));
+        long adminCount = userRepository.count(baseSpec.and((root, q, cb) -> cb.equal(root.get("roleType"), 3)));
 
         Map<String, Long> counts = new HashMap<>();
         counts.put("student", studentCount);
         counts.put("faculty", facultyCount);
         counts.put("admin", adminCount);
-
         return counts;
     }
 }
