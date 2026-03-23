@@ -1,7 +1,9 @@
 package com.example.feature.registration.service.Impl;
 
+import com.example.common.dto.ProfileDto;
 import com.example.common.entity.Users;
 import com.example.common.repository.LocalUserRepository;
+import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
@@ -9,8 +11,6 @@ import com.example.feature.activities.model.Activities;
 import com.example.feature.activities.repository.ActivityRepository;
 import com.example.feature.activitySchedule.model.ActivitySchedule;
 import com.example.feature.activitySchedule.repository.ActivityScheduleRepository;
-import com.example.feature.attendances.model.Attendances;
-import com.example.feature.attendances.repository.AttendanceRepository;
 import com.example.feature.proofs.model.Proofs;
 import com.example.feature.proofs.repository.ProofRepository;
 import com.example.feature.registration.dto.RegistrationRequest;
@@ -19,8 +19,10 @@ import com.example.feature.registration.mapper.RegistrationMapper;
 import com.example.feature.registration.model.Registrations;
 import com.example.feature.registration.repository.RegistrationRepository;
 import com.example.feature.registration.service.RegistrationService;
+import com.example.feignClient.ProfileClient;
 import com.example.service.ExcelExportService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -36,11 +38,13 @@ import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RegistrationServiceImpl implements RegistrationService {
     private final RegistrationRepository registrationRepository;
     private final ActivityRepository activityRepository;
@@ -48,8 +52,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final LocalUserRepository userRepository;
     private final RegistrationMapper registrationMapper;
     private final ExcelExportService excelExportService;
-    private final AttendanceRepository attendanceRepository;
     private final ProofRepository proofRepository;
+    private final ProfileClient profileClient;
 
     // --- Lấy sinh viên đang đăng nhập ---
     private Users getCurrentStudent() {
@@ -58,8 +62,37 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
 
-    // ---  Xử lý bộ lọc tìm kiếm ---
-    private Specification<Registrations> buildFilterSpecification(Long activityId, String keyword, String status) {
+    private void populateProfileData(List<RegistrationResponse> responses) {
+        if (responses == null || responses.isEmpty()) return;
+
+        // Lấy danh sách ID sinh viên cần tìm
+        List<Long> userIds = responses.stream()
+                .map(RegistrationResponse::getStudentId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        try {
+            ApiResponse<Map<Long, ProfileDto>> batchRes = profileClient.getProfilesBatch(userIds);
+            if (batchRes != null && batchRes.getResult() != null) {
+                Map<Long, ProfileDto> profileMap = batchRes.getResult();
+
+                // Đắp data vào từng response
+                for (RegistrationResponse res : responses) {
+                    ProfileDto p = profileMap.get(res.getStudentId());
+                    if (p != null) {
+                        res.setStudentName(p.getFullName());
+                        res.setStudentCode(p.getStudentCode());
+                        res.setAvatarUrl(p.getAvatarUrl());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Lỗi khi gọi Profile Service lấy data hàng loạt: {}", e.getMessage());
+        }
+    }
+
+    // --- Xử lý bộ lọc tìm kiếm ---
+    private Specification<Registrations> buildFilterSpecification(Long activityId, String status, List<Long> searchedUserIds) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -72,11 +105,12 @@ public class RegistrationServiceImpl implements RegistrationService {
                 } catch (NumberFormatException ignored) {}
             }
 
-            if (StringUtils.hasText(keyword)) {
-                String likeKeyword = "%" + keyword.trim().toLowerCase() + "%";
-                Predicate nameMatch = cb.like(cb.lower(root.get("student").get("fullName")), likeKeyword);
-                Predicate codeMatch = cb.like(cb.lower(root.get("student").get("studentCode")), likeKeyword);
-                predicates.add(cb.or(nameMatch, codeMatch));
+            if (searchedUserIds != null) {
+                if (searchedUserIds.isEmpty()) {
+                    predicates.add(cb.disjunction()); // Search không ra ai thì trả về rỗng
+                } else {
+                    predicates.add(root.get("student").get("id").in(searchedUserIds));
+                }
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
@@ -119,9 +153,9 @@ public class RegistrationServiceImpl implements RegistrationService {
         Registrations regToSave;
         if (existingReg != null && existingReg.getStatus() == 2) {
             regToSave = existingReg;
-            registrationMapper.reRegisterEntity(regToSave, selectedSchedules); // Cập nhật đơn cũ
+            registrationMapper.reRegisterEntity(regToSave, selectedSchedules);
         } else {
-            regToSave = registrationMapper.toNewEntity(student, activity, selectedSchedules); // Tạo đơn mới
+            regToSave = registrationMapper.toNewEntity(student, activity, selectedSchedules);
         }
 
         return registrationMapper.toResponse(registrationRepository.save(regToSave));
@@ -132,7 +166,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     public RegistrationResponse cancelByActivityId(Long activityId, String reason) {
         Users student = getCurrentStudent();
         Registrations reg = registrationRepository.findByStudentIdAndActivityId(student.getId(), activityId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Ní chưa đăng ký hoạt động này nên không hủy được!"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Bạn chưa đăng ký hoạt động này nên không hủy được!"));
         return this.processCancellation(reg, reason);
     }
 
@@ -155,13 +189,26 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     public PageDTO<RegistrationResponse> getParticipants(Long activityId, String keyword, String status, Pageable pageable) {
-        Specification<Registrations> spec = buildFilterSpecification(activityId, keyword, status);
+        List<Long> searchedUserIds = null;
 
+        if (StringUtils.hasText(keyword)) {
+            try {
+                ApiResponse<List<Long>> res = profileClient.searchUserIdsByCriteria(keyword);
+                searchedUserIds = (res != null && res.getResult() != null) ? res.getResult() : new ArrayList<>();
+            } catch (Exception e) {
+                log.warn("Lỗi khi tìm user ID từ Profile Service");
+                searchedUserIds = new ArrayList<>();
+            }
+        }
+
+        Specification<Registrations> spec = buildFilterSpecification(activityId, status, searchedUserIds);
         Page<Registrations> pageData = registrationRepository.findAll(spec, pageable);
 
         List<RegistrationResponse> dtoList = pageData.getContent().stream()
                 .map(registrationMapper::toResponse)
                 .collect(Collectors.toList());
+
+        populateProfileData(dtoList);
 
         return PageDTO.<RegistrationResponse>builder()
                 .pageNumber(pageable.getPageNumber() + 1)
@@ -178,7 +225,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy đơn đăng ký!"));
 
         if (status == 2) {
-            registrationMapper.cancelEntity(reg, "Quản trị viên / Khoa hủy đăng ký"); // Gọi mapper hủy
+            registrationMapper.cancelEntity(reg, "Quản trị viên / Khoa hủy đăng ký");
         } else {
             reg.setStatus(status);
         }
@@ -188,8 +235,21 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     public void exportToExcel(Long activityId, String keyword, String status, OutputStream outputStream) {
-        Specification<Registrations> spec = buildFilterSpecification(activityId, keyword, status);
+        List<Long> searchedUserIds = null;
+        if (StringUtils.hasText(keyword)) {
+            try {
+                ApiResponse<List<Long>> res = profileClient.searchUserIdsByCriteria(keyword);
+                searchedUserIds = (res != null && res.getResult() != null) ? res.getResult() : new ArrayList<>();
+            } catch (Exception e) {
+                searchedUserIds = new ArrayList<>();
+            }
+        }
+
+        Specification<Registrations> spec = buildFilterSpecification(activityId, status, searchedUserIds);
         List<Registrations> list = registrationRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "registeredAt"));
+
+        List<RegistrationResponse> dtoList = list.stream().map(registrationMapper::toResponse).collect(Collectors.toList());
+        populateProfileData(dtoList);
 
         String[] headers = {"STT", "MSSV", "Họ và Tên", "Thời gian ĐK", "Buổi đăng ký", "Trạng thái", "Lý do hủy"};
         java.util.concurrent.atomic.AtomicInteger stt = new java.util.concurrent.atomic.AtomicInteger(1);
@@ -199,31 +259,23 @@ public class RegistrationServiceImpl implements RegistrationService {
             excelExportService.export(
                     "Danh_sach_SV",
                     headers,
-                    list,
-                    (reg) -> {
-                        String statusStr = reg.getStatus() == 0 ? "Đã đăng ký" : (reg.getStatus() == 1 ? "Đã tham gia" : "Đã hủy");
+                    dtoList,
+                    (dto) -> {
+                        String statusStr = dto.getStatus() == 0 ? "Đã đăng ký" : (dto.getStatus() == 1 ? "Đã tham gia" : "Đã hủy");
 
                         String schedulesStr = "";
-                        if (reg.getRegisteredSchedules() != null && !reg.getRegisteredSchedules().isEmpty()) {
-                            schedulesStr = reg.getRegisteredSchedules().stream()
-                                    .map(schedule -> {
-                                        String title = schedule.getTitle() != null ? schedule.getTitle() : "Ca " + schedule.getId();
-                                        if (schedule.getStartTime() != null && schedule.getEndTime() != null) {
-                                            return title + " (" + schedule.getStartTime().format(timeFormatter) + " - " + schedule.getEndTime().format(timeFormatter) + ")";
-                                        }
-                                        return title;
-                                    })
-                                    .collect(Collectors.joining(",\n"));
+                        if (dto.getScheduleIds() != null && !dto.getScheduleIds().isEmpty()) {
+                            schedulesStr = dto.getScheduleIds().size() + " buổi đăng ký";
                         }
 
                         return new Object[]{
                                 stt.getAndIncrement(),
-                                reg.getStudent() != null ? reg.getStudent().getStudentCode() : "",
-                                reg.getStudent() != null ? reg.getStudent().getFullName() : "",
-                                reg.getRegisteredAt(),
+                                dto.getStudentCode() != null ? dto.getStudentCode() : "", // Hết lỗi getStudentCode
+                                dto.getStudentName() != null ? dto.getStudentName() : "", // Hết lỗi getFullName
+                                dto.getRegisteredAt(),
                                 schedulesStr,
                                 statusStr,
-                                reg.getCancelReason() != null ? reg.getCancelReason() : ""
+                                dto.getCancelReason() != null ? dto.getCancelReason() : ""
                         };
                     },
                     outputStream
@@ -247,25 +299,22 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         List<Registrations> myRecords = registrationRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "registeredAt"));
 
-        return myRecords.stream().map(reg -> {
-            Integer proofStatus = 0; // Mặc định = 0 (Chưa nộp minh chứng)
-
+        List<RegistrationResponse> responseList = myRecords.stream().map(reg -> {
+            int proofStatus = 0;
             if (reg.getStatus() == 1) {
                 Optional<Proofs> proofOpt = proofRepository.findByStudentIdAndActivityId(student.getId(), reg.getActivity().getId());
-
                 if (proofOpt.isPresent()) {
                     Integer pStatus = proofOpt.get().getStatus();
-                    if (pStatus == 0) {
-                        proofStatus = 1; // Đang chờ BTC duyệt
-                    } else if (pStatus == 1) {
-                        proofStatus = 2; // Đã duyệt -> Lúc này Frontend mới cộng điểm ĐRL
-                    } else if (pStatus == 2) {
-                        proofStatus = 3; // Bị từ chối (bắt nộp lại)
-                    }
+                    if (pStatus == 0) proofStatus = 1;
+                    else if (pStatus == 1) proofStatus = 2;
+                    else if (pStatus == 2) proofStatus = 3;
                 }
             }
-
             return registrationMapper.toResponseWithProof(reg, proofStatus);
         }).collect(Collectors.toList());
+
+        populateProfileData(responseList);
+
+        return responseList;
     }
 }

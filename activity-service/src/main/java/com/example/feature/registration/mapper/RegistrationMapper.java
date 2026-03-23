@@ -17,11 +17,10 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring", imports = {Collectors.class, ArrayList.class})
 public interface RegistrationMapper {
 
-    // --- 1. Map dữ liệu trả về ---
     @Mapping(target = "studentId", source = "entity.student.id")
-    @Mapping(target = "studentName", source = "entity.student.fullName")
-    @Mapping(target = "avatarUrl", source = "entity.student.avatarUrl")
-    @Mapping(target = "studentCode", source = "entity.student.studentCode")
+    @Mapping(target = "studentName", ignore = true)
+    @Mapping(target = "avatarUrl", ignore = true)
+    @Mapping(target = "studentCode", ignore = true)
     @Mapping(target = "activityId", source = "entity.activity.id")
     @Mapping(target = "activityTitle", source = "entity.activity.title")
     @Mapping(target = "isAttended", expression = "java(entity.getAttendance() != null)")
@@ -35,7 +34,6 @@ public interface RegistrationMapper {
         return toResponseWithProof(entity, 0);
     }
 
-    // --- 2. Map Tạo mới đơn đăng ký (Insert) ---
     default Registrations toNewEntity(Users student, Activities activity, List<ActivitySchedule> schedules) {
         Registrations reg = new Registrations();
         reg.setStudent(student);
@@ -46,7 +44,6 @@ public interface RegistrationMapper {
         return reg;
     }
 
-    // --- 3. Map Cập nhật đăng ký lại từ đơn đã hủy (Update) ---
     default void reRegisterEntity(Registrations entity, List<ActivitySchedule> schedules) {
         entity.setStatus(0);
         entity.setCancelReason(null);
@@ -54,7 +51,6 @@ public interface RegistrationMapper {
         entity.setRegisteredSchedules(schedules != null ? schedules : new ArrayList<>());
     }
 
-    // --- 4. Map Hủy đăng ký ---
     default void cancelEntity(Registrations entity, String reason) {
         entity.setStatus(2);
         entity.setCancelReason(reason);

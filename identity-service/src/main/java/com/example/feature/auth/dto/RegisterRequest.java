@@ -18,6 +18,8 @@ public class RegisterRequest {
     private String firstName;
     private String lastName;
 
+    private String description;
+
     private String studentCode;
     private Long classId;
 

@@ -2,7 +2,6 @@ package com.example.config;
 
 import com.example.feature.activities.model.Activities;
 import com.example.feature.activities.repository.ActivityRepository;
-import com.example.feature.registration.model.Registrations; // Ní nhớ import đúng entity Registrations của ní
 import com.example.feature.registration.repository.RegistrationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;

@@ -2,6 +2,7 @@ package com.example.feature.activities.service.impl;
 
 import com.example.common.dto.BenefitDto;
 import com.example.common.dto.NotificationRequest;
+import com.example.common.dto.ProfileDto;
 import com.example.common.entity.Benefits;
 import com.example.common.entity.Semesters;
 import com.example.common.entity.Users;
@@ -9,6 +10,7 @@ import com.example.common.repository.LocalCategoryRepository;
 import com.example.common.repository.LocalNotificationRepository;
 import com.example.common.repository.LocalSemesterRepository;
 import com.example.common.repository.LocalUserRepository;
+import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
@@ -27,6 +29,7 @@ import com.example.feature.organizers.model.Organizers;
 import com.example.feature.organizers.repository.OrganizerRepository;
 import com.example.feature.registration.repository.RegistrationRepository;
 import com.example.feignClient.NotificationClient;
+import com.example.feignClient.ProfileClient;
 import com.example.service.CloudinaryService;
 import com.example.service.QRCodeService;
 import lombok.RequiredArgsConstructor;
@@ -64,10 +67,24 @@ public class ActivityServiceImpl implements ActivityService {
     private final ActivityScheduleMapper scheduleMapper;
 
     private final NotificationClient notificationClient;
+    private final ProfileClient profileClient;
     private final ApplicationEventPublisher eventPublisher;
 
     private final CloudinaryService cloudinaryService;
     private final QRCodeService qrCodeService;
+
+    private String getDisplayNameFromProfile(Users user) {
+        String displayName = user.getUsername();
+        try {
+            ApiResponse<ProfileDto> profileRes = profileClient.getProfile(user.getId());
+            if (profileRes != null && profileRes.getResult() != null && profileRes.getResult().getFullName() != null) {
+                displayName = profileRes.getResult().getFullName();
+            }
+        } catch (Exception e) {
+            log.warn("Không lấy được Profile cho user {}, dùng Username thay thế", user.getId());
+        }
+        return displayName;
+    }
 
     // --- CREATE ---
     @Override
@@ -95,10 +112,7 @@ public class ActivityServiceImpl implements ActivityService {
             organizer = organizerRepository.findById(userId)
                     .orElseGet(() -> {
                         log.info("User {} lần đầu tổ chức hoạt động, đang tạo bản ghi Organizer...", user.getUsername());
-
-                        String displayName = (user.getFullName() != null && !user.getFullName().trim().isEmpty())
-                                ? user.getFullName()
-                                : user.getUsername();
+                        String displayName = getDisplayNameFromProfile(user);
 
                         Organizers newOrg = Organizers.builder()
                                 .user(user)
@@ -168,7 +182,6 @@ public class ActivityServiceImpl implements ActivityService {
 
         ActivityResponse response = activityMapper.toResponse(activity);
 
-        // Đếm số lượng thực tế lúc xem chi tiết
         long count = registrationRepository.countByActivityIdAndStatusNot(id, 2);
         response.setRegisteredCount((int) count);
 
@@ -210,11 +223,14 @@ public class ActivityServiceImpl implements ActivityService {
                     }
                 } else {
                     // LUỒNG 2: NẾU LÀ TÀI KHOẢN SINH VIÊN
-                    // Dò qua cấu trúc: User -> Class -> Major -> Department
-                    if (currentUser.getStudentClass() != null
-                            && currentUser.getStudentClass().getMajor() != null
-                            && currentUser.getStudentClass().getMajor().getDepartment() != null) {
-                        targetDeptId = currentUser.getStudentClass().getMajor().getDepartment().getId();
+                    try {
+                        ApiResponse<ProfileDto> profileRes = profileClient.getProfile(currentUser.getId());
+                        if (profileRes != null && profileRes.getResult() != null) {
+                            targetDeptId = profileRes.getResult().getDepartmentId();
+                            System.out.println("TÌM THẤY KHOA CỦA SINH VIÊN: " + targetDeptId);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Không lấy được thông tin Khoa của Sinh viên {}", currentUser.getId());
                     }
                 }
             }
@@ -294,9 +310,7 @@ public class ActivityServiceImpl implements ActivityService {
                     .orElseGet(() -> {
                         log.info("Cập nhật hoạt động: Đang tự động thêm User {} vào bảng Organizers...", user.getUsername());
 
-                        String displayName = (user.getFullName() != null && !user.getFullName().trim().isEmpty())
-                                ? user.getFullName()
-                                : user.getUsername();
+                        String displayName = getDisplayNameFromProfile(user);
 
                         Organizers newOrg = Organizers.builder()
                                 .user(user)
