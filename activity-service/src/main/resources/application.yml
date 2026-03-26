@@ -14,7 +14,6 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    database-platform: org.hibernate.dialect.MySQL8Dialect
     show-sql: true
 
   oauth2:
@@ -34,4 +33,4 @@ eureka:
 cloudinary:
   cloud-name: dhjamvg6j
   api-key: 237733137343564
-  api-secret: xzojOJkKQH9R6mcX9M8LMPPFlcw
+  api-secret: ${api_secret}

@@ -4,65 +4,70 @@ server:
 spring:
   application:
     name: apigateway
+
+  main:
+    web-application-type: reactive
+
   cloud:
     gateway:
-#      default-filters:
-#        - TokenRelay
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOriginPatterns: "http://localhost:4200"
-            allowedMethods: "*"   # Cho phép mọi method (GET, POST...)
-            allowedHeaders: "*"   # Cho phép mọi header
-            allowCredentials: true
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOriginPatterns: "http://localhost:4200"
+                allowedMethods: "*"
+                allowedHeaders: "*"
+                allowCredentials: true
 
-      routes:
-        - id: notification-websocket
-          uri: lb:ws://notification-service
-          predicates:
-            - Path=/internal/notifications/ws/**
-          filters:
-            - StripPrefix=2
-            - PreserveHostHeader
+          routes:
+            - id: notification-websocket
+              uri: lb:ws://notification-service
+              predicates:
+                - Path=/internal/notifications/ws/**
+              filters:
+                - StripPrefix=2
+                - PreserveHostHeader
 
-        - id: notification-service
-          uri: lb://notification-service
-          predicates:
-            - Path=/internal/notifications/**
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/internal/notifications/**
 
+            - id: profile-service
+              uri: lb://profile-service
+              predicates:
+                - Path=/profile/**
+              filters:
+                - RewritePath=/profile/(?<segment>.*), /$\{segment}
 
-        - id: profile-service
-          uri: lb://profile-service
-          predicates:
-            - Path=/profile/**
-          filters:
-            - RewritePath=/profile/(?<segment>.*), /$\{segment}
+            - id: identity-service
+              uri: lb://identity-service
+              predicates:
+                - Path=/identity/**
+              filters:
+                - RewritePath=/identity/(?<segment>.*), /$\{segment}
 
-        - id: identity-service
-          uri: lb://identity-service
-          predicates:
-            - Path=/identity/**
-          filters:
-            - RewritePath=/identity/(?<segment>.*), /$\{segment}
+            - id: activity-service
+              uri: lb://activity-service
+              predicates:
+                - Path=/activity/**
+              filters:
+                - RewritePath=/activity/(?<segment>.*), /$\{segment}
 
-        - id: activity-service
-          uri: lb://activity-service
-          predicates:
-            - Path=/activity/**
-          filters:
-            - RewritePath=/activity/(?<segment>.*), /$\{segment}
+            - id: credit-service
+              uri: lb://credit-service
+              predicates:
+                - Path=/credit/**
+              filters:
+                - RewritePath=/credit/(?<segment>.*), /$\{segment}
 
-        - id: credit-service
-          uri: lb://credit-service
-          predicates:
-            - Path=/credit/**
-          filters:
-            - RewritePath=/credit/(?<segment>.*), /$\{segment}
-      httpclient:
-        connect-timeout: 5000
-        response-timeout: 10s
-        websocket:
-          max-frame-payload-length: 1048576
+          httpclient:
+            connect-timeout: 5000
+            response-timeout: 10s
+            websocket:
+              max-frame-payload-length: 1048576
+
   security:
     oauth2:
       client:
@@ -72,7 +77,7 @@ spring:
         registration:
           myClient:
             provider: keycloak
-            client-id: myclient123@
+            client-id: "myclient123@"
             client-secret: FNOI5Vml17alkhtIBNFCe4IafsJtXMw2
             authorization-grant-type: authorization_code
             scope: openid, profile
@@ -80,8 +85,6 @@ spring:
         jwt:
           issuer-uri: http://localhost:8088/realms/myRealm
           jwk-set-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/certs
-  main:
-    web-application-type: reactive
 
 eureka:
   client:
@@ -90,5 +93,5 @@ eureka:
 
 cloudinary:
   cloud-name: dhjamvg6j
-  api-key: 237733137343564
-  api-secret: xzojOJkKQH9R6mcX9M8LMPPFlcw
+  api-key: "237733137343564"
+  api-secret: ${api_secret}

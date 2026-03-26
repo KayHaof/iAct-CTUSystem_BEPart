@@ -83,7 +83,6 @@ public class ActivitySpecification {
                         cb.greaterThanOrEqualTo(root.get("registrationEnd"), now)
                 );
 
-                assert query != null;
                 Subquery<Long> countQuery = query.subquery(Long.class);
                 Root<Registrations> regRoot = countQuery.from(Registrations.class);
 
@@ -109,6 +108,21 @@ public class ActivitySpecification {
                 }
                 return null;
             }
+        };
+    }
+
+    public static Specification<Activities> isOwnedByOrOrganizedBy(Long userId) {
+        return (root, query, criteriaBuilder) -> {
+            if (userId == null) return criteriaBuilder.conjunction();
+
+            // 1. Lấy ID từ Object organizer
+            Predicate conditionOrganizer = criteriaBuilder.equal(root.get("organizer").get("id"), userId);
+
+            // 2. Lấy ID từ Object createdBy
+            Predicate conditionCreator = criteriaBuilder.equal(root.get("createdBy").get("id"), userId);
+
+            // 3. Nối bằng OR (Là Người tổ chức HOẶC Người tạo thì đều được xem)
+            return criteriaBuilder.or(conditionOrganizer, conditionCreator);
         };
     }
 }

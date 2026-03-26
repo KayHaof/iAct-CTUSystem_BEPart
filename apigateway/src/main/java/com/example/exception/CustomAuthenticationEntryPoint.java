@@ -3,6 +3,7 @@ package com.example.exception;
 import com.example.dto.ApiResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jspecify.annotations.NonNull;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -16,10 +17,14 @@ import reactor.core.publisher.Mono;
 @Component
 public class CustomAuthenticationEntryPoint implements ServerAuthenticationEntryPoint {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+
+    public CustomAuthenticationEntryPoint(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Override
-    public Mono<Void> commence(ServerWebExchange exchange, AuthenticationException ex) {
+    public Mono<Void> commence(@NonNull ServerWebExchange exchange, @NonNull AuthenticationException ex) {
         ServerHttpResponse response = exchange.getResponse();
 
         response.setStatusCode(HttpStatus.UNAUTHORIZED);

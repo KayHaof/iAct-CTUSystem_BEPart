@@ -99,6 +99,7 @@ public class UserService {
             throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, "Không thể cập nhật hồ sơ lúc này!");
         }
 
+        userRepository.touchUpdatedAt(id);
         return getUserById(id);
     }
 

@@ -10,7 +10,8 @@ import org.mapstruct.*;
 
 @Mapper(
         componentModel = "spring",
-        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE
+        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE,
+        unmappedTargetPolicy = ReportingPolicy.IGNORE
 )
 public interface UserProfileMapper {
 

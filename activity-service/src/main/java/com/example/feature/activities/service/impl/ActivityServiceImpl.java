@@ -4,6 +4,7 @@ import com.example.common.dto.BenefitDto;
 import com.example.common.dto.NotificationRequest;
 import com.example.common.dto.ProfileDto;
 import com.example.common.entity.Benefits;
+import com.example.common.entity.Departments;
 import com.example.common.entity.Semesters;
 import com.example.common.entity.Users;
 import com.example.common.repository.LocalCategoryRepository;
@@ -47,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -73,17 +75,17 @@ public class ActivityServiceImpl implements ActivityService {
     private final CloudinaryService cloudinaryService;
     private final QRCodeService qrCodeService;
 
-    private String getDisplayNameFromProfile(Users user) {
-        String displayName = user.getUsername();
+    private ProfileDto getProfileData(Users user) {
         try {
             ApiResponse<ProfileDto> profileRes = profileClient.getProfile(user.getId());
-            if (profileRes != null && profileRes.getResult() != null && profileRes.getResult().getFullName() != null) {
-                displayName = profileRes.getResult().getFullName();
+            if (profileRes != null && profileRes.getResult() != null) {
+                log.info("<< Gọi FeignClient thành công: {}", profileRes.getResult());
+                return profileRes.getResult();
             }
         } catch (Exception e) {
-            log.warn("Không lấy được Profile cho user {}, dùng Username thay thế", user.getId());
+            log.warn("Lỗi gọi FeignClient lấy Profile cho user {}: {}", user.getId(), e.getMessage());
         }
-        return displayName;
+        return null;
     }
 
     // --- CREATE ---
@@ -109,18 +111,7 @@ public class ActivityServiceImpl implements ActivityService {
             Users user = userRepository.findById(userId)
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy User với ID: " + userId));
 
-            organizer = organizerRepository.findById(userId)
-                    .orElseGet(() -> {
-                        log.info("User {} lần đầu tổ chức hoạt động, đang tạo bản ghi Organizer...", user.getUsername());
-                        String displayName = getDisplayNameFromProfile(user);
-
-                        Organizers newOrg = Organizers.builder()
-                                .user(user)
-                                .name(displayName)
-                                .build();
-
-                        return organizerRepository.save(newOrg);
-                    });
+            organizer = getOrCreateOrganizer(user);
         }
 
         // 3. Map sang Entity
@@ -145,13 +136,8 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         if (request.getSchedules() != null && !request.getSchedules().isEmpty()) {
-            // 1. Dùng mapper chuyển một phát từ List DTO sang List Entity
             List<ActivitySchedule> schedulesList = scheduleMapper.toEntityList(request.getSchedules());
-
-            // 2. Gắn activity cha cho từng phần tử con
             schedulesList.forEach(schedule -> schedule.setActivity(activity));
-
-            // 3. Nạp vào activity
             activity.setSchedules(schedulesList);
         }
 
@@ -166,9 +152,9 @@ public class ActivityServiceImpl implements ActivityService {
                     "Hoạt động '" + savedActivity.getTitle() + "' đã được tạo và đang chờ duyệt.",
                     1
             ));
-            System.out.println("Hoạt động đã được tạo và gửi duyệt thành công!");
+            log.info("Hoạt động đã được tạo và gửi duyệt thành công!");
         } else {
-            System.out.println("Bản nháp hoạt động đã được lưu thành công!");
+            log.info("Bản nháp hoạt động đã được lưu thành công!");
         }
 
         return activityMapper.toResponse(savedActivity);
@@ -192,42 +178,37 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     public PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Pageable pageable) {
         Long targetDeptId = null;
-        boolean isOrganizer = false;
 
-        // 1. Lấy thông tin user hiện tại từ ContextHolder
+        boolean isAdmin = false;
+        boolean isDepartment = false;
+        boolean isStudent = true;
+
+        Users currentUser = null;
+
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        // 2. Kiểm tra user đã đăng nhập chưa
-        if (authentication != null && authentication.isAuthenticated()
-                && !(authentication instanceof AnonymousAuthenticationToken)) {
+        if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {
 
-            isOrganizer = authentication.getAuthorities().stream()
-                    .anyMatch(auth -> auth.getAuthority().equals("ROLE_DEPARTMENT")
-                            || auth.getAuthority().equals("ROLE_ADMIN"));
+            isAdmin = authentication.getAuthorities().stream().anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_ADMIN"));
+            isDepartment = authentication.getAuthorities().stream().anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_DEPARTMENT"));
+            isStudent = !isAdmin && !isDepartment;
 
             String username = authentication.getName();
             Optional<Users> userOpt = userRepository.findByUsername(username);
 
             if (userOpt.isPresent()) {
-                Users currentUser = userOpt.get();
+                currentUser = userOpt.get();
 
-                if (isOrganizer) {
-                    // LUỒNG 1: NẾU LÀ TÀI KHOẢN KHOA / TRƯỜNG
+                if (isAdmin || isDepartment) {
                     Optional<Organizers> orgOpt = organizerRepository.findById(currentUser.getId());
-
                     if (orgOpt.isPresent() && orgOpt.get().getDepartment() != null) {
                         targetDeptId = orgOpt.get().getDepartment().getId();
-                        System.out.println("TÌM THẤY KHOA: " + targetDeptId);
-                    } else {
-                        System.out.println("KHÔNG TÌM THẤY KHOA CHO TK NÀY!");
                     }
                 } else {
-                    // LUỒNG 2: NẾU LÀ TÀI KHOẢN SINH VIÊN
                     try {
                         ApiResponse<ProfileDto> profileRes = profileClient.getProfile(currentUser.getId());
                         if (profileRes != null && profileRes.getResult() != null) {
                             targetDeptId = profileRes.getResult().getDepartmentId();
-                            System.out.println("TÌM THẤY KHOA CỦA SINH VIÊN: " + targetDeptId);
                         }
                     } catch (Exception e) {
                         log.warn("Không lấy được thông tin Khoa của Sinh viên {}", currentUser.getId());
@@ -236,23 +217,21 @@ public class ActivityServiceImpl implements ActivityService {
             }
         }
 
-        // 3. Xây dựng Specification động
-        Specification<Activities> spec = Specification.where(null);
+        Specification<Activities> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
 
-        // Nếu là sinh viên -> Bắt buộc thêm bộ lọc chỉ hiện hoạt động đã duyệt
-        if (!isOrganizer) {
+        if (isStudent) {
             spec = spec.and(ActivitySpecification.isApproved());
+        } else if (isDepartment && currentUser != null) {
+            spec = spec.and(ActivitySpecification.isOwnedByOrOrganizedBy(currentUser.getId()));
         }
 
-        // Ghép các bộ lọc lại
+        boolean isOrganizer = isAdmin || isDepartment;
         spec = spec.and(ActivitySpecification.containsKeyword(keyword))
                 .and(ActivitySpecification.hasLevel(level, targetDeptId))
                 .and(ActivitySpecification.hasStatus(status, keyword, isOrganizer));
 
-        // 4. Gọi Repository để truy vấn DB
         Page<Activities> pageActivities = activityRepository.findAll(spec, pageable);
 
-        // 5. Map Entity sang DTO
         List<ActivityResponse> dtoList = pageActivities.getContent().stream()
                 .map(activity -> {
                     ActivityResponse response = activityMapper.toResponse(activity);
@@ -306,20 +285,7 @@ public class ActivityServiceImpl implements ActivityService {
             Users user = userRepository.findById(userId)
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy User với ID: " + userId));
 
-            Organizers newOrganizer = organizerRepository.findById(userId)
-                    .orElseGet(() -> {
-                        log.info("Cập nhật hoạt động: Đang tự động thêm User {} vào bảng Organizers...", user.getUsername());
-
-                        String displayName = getDisplayNameFromProfile(user);
-
-                        Organizers newOrg = Organizers.builder()
-                                .user(user)
-                                .name(displayName)
-                                .build();
-
-                        return organizerRepository.save(newOrg);
-                    });
-
+            Organizers newOrganizer = getOrCreateOrganizer(user);
             existingActivity.setOrganizer(newOrganizer);
         }
 
@@ -338,7 +304,6 @@ public class ActivityServiceImpl implements ActivityService {
                 existingActivity.setSchedules(new ArrayList<>());
             }
 
-            // Map list mới và gắn cha
             List<ActivitySchedule> newSchedules = scheduleMapper.toEntityList(request.getSchedules());
             newSchedules.forEach(schedule -> schedule.setActivity(existingActivity));
 
@@ -398,27 +363,24 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     @Transactional
     public ActivityResponse approveActivity(Long id, ActivityApprovalRequest request) {
-        // 1. Tìm hoạt động, không thấy thì bắn lỗi ngay
         Activities activity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
 
         int currentStatus = activity.getStatus();
         int newStatus = request.getStatus();
 
-        // 2. Chặn các trường hợp: Đã Từ chối (2) hoặc Đã Hủy (3)
         if (currentStatus == 2 || currentStatus == 3) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Không thể thay đổi trạng thái của hoạt động đã bị Từ chối hoặc đã Hủy!");
         }
 
-        // 3. Kiểm tra logic chuyển đổi trạng thái
         switch (newStatus) {
-            case 1: // DUYỆT (Approve)
+            case 1:
                 if (currentStatus != 0) {
                     throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể duyệt hoạt động đang ở trạng thái Chờ duyệt.");
                 }
                 break;
 
-            case 2: // TỪ CHỐI (Reject)
+            case 2:
                 if (currentStatus != 0) {
                     throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể từ chối hoạt động đang ở trạng thái Chờ duyệt.");
                 }
@@ -434,16 +396,14 @@ public class ActivityServiceImpl implements ActivityService {
                 throw new AppException(ErrorCode.INVALID_KEY, "Mã trạng thái không hợp lệ! Chấp nhận: 1 (Duyệt), 2 (Từ chối), 3 (Hủy)");
         }
 
-        // 4. Cập nhật và lưu vào DB
         activity.setStatus(newStatus);
         Activities savedActivity = activityRepository.save(activity);
 
-        // 5. --- GỬI THÔNG BÁO TƯƠNG ỨNG ---
         if (newStatus == 1) {
             sendNotificationSafe(savedActivity,
                     "Hoạt động đã được duyệt",
                     "Hoạt động '" + savedActivity.getTitle() + "' đã được phê duyệt thành công.",
-                    1); // Type 1: Success/Info
+                    1);
         }
         else if (newStatus == 2) {
             String reason = (request.getRejectReason() != null && !request.getRejectReason().isBlank())
@@ -451,7 +411,7 @@ public class ActivityServiceImpl implements ActivityService {
             sendNotificationSafe(savedActivity,
                     "Hoạt động bị từ chối",
                     "Lý do: " + reason,
-                    3); // Type 3: Warning/Error
+                    3);
         }
         else {
             String reason = (request.getCancelReason() != null && !request.getCancelReason().isBlank())
@@ -459,7 +419,7 @@ public class ActivityServiceImpl implements ActivityService {
             sendNotificationSafe(savedActivity,
                     "Hoạt động đã bị hủy",
                     "Hoạt động '" + savedActivity.getTitle() + "' đã bị hủy. Lý do: " + reason,
-                    3); // Type 3: Warning/Error
+                    3);
         }
 
         return activityMapper.toResponse(savedActivity);
@@ -473,6 +433,32 @@ public class ActivityServiceImpl implements ActivityService {
         } catch (Exception e) {
             log.error("Failed to send notification for activity {}: {}", activity.getId(), e.getMessage());
         }
+    }
+
+    // --- HELPER QUẢN LÝ ORGANIZER ---
+    private Organizers getOrCreateOrganizer(Users user) {
+        return organizerRepository.findById(user.getId())
+                .orElseGet(() -> {
+                    log.info("Hệ thống tự động thêm User {} vào bảng Organizers...", user.getUsername());
+
+                    ProfileDto profile = getProfileData(user);
+                    String displayName = (profile != null && profile.getFullName() != null)
+                            ? profile.getFullName()
+                            : user.getUsername();
+
+                    Organizers newOrg = Organizers.builder()
+                            .user(user)
+                            .name(displayName)
+                            .build();
+
+                    if (profile != null && profile.getDepartmentId() != null) {
+                        Departments dummyDept = new Departments();
+                        dummyDept.setId(profile.getDepartmentId());
+                        newOrg.setDepartment(dummyDept);
+                    }
+
+                    return organizerRepository.save(newOrg);
+                });
     }
 
     public void deleteOldImage(String oldImg) {

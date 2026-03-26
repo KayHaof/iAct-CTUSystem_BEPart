@@ -4,7 +4,6 @@ import com.example.common.dto.BenefitDto;
 import com.example.common.dto.UserDto;
 import com.example.feature.activitySchedule.dto.ActivityScheduleDto;
 import com.example.feature.organizers.dto.OrganizerResponse;
-import com.example.feature.organizers.model.Organizers;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -39,7 +38,7 @@ public class ActivityResponse {
     private String qrCodeToken;
     private Integer status;
 
-    private Integer RegisteredCount;
+    private Integer registeredCount;
     private UserDto createdBy;
 
     private List<BenefitDto> benefits;

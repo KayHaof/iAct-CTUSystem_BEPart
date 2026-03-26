@@ -73,6 +73,7 @@ public interface ActivityMapper {
     @Mapping(target = "semester", ignore = true)
     @Mapping(target = "organizer", ignore = true)
     @Mapping(target = "benefits", ignore = true)
+    @Mapping(target = "schedules", ignore = true)
     void updateEntityFromRequest(ActivityRequest request, @MappingTarget Activities entity);
 
     // --- NOTIFICATION ---
@@ -94,5 +95,14 @@ public interface ActivityMapper {
         result.setData(dtoList);
 
         return result;
+    }
+
+    @AfterMapping
+    default void linkSchedulesToActivity(@MappingTarget Activities activity) {
+        if (activity.getSchedules() != null) {
+            for (ActivitySchedule schedule : activity.getSchedules()) {
+                schedule.setActivity(activity);
+            }
+        }
     }
 }

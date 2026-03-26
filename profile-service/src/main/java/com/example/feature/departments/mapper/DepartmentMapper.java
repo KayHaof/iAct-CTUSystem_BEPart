@@ -5,8 +5,9 @@ import com.example.feature.departments.dto.DepartmentResponse;
 import com.example.feature.departments.model.Departments;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface DepartmentMapper {
     // 1. Chuyển từ Entity sang Response DTO
     DepartmentResponse toResponse(Departments entity);

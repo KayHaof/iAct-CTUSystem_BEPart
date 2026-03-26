@@ -8,6 +8,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
+
 @Component("activitySecurity")
 @RequiredArgsConstructor
 public class ActivitySecurity {
@@ -17,7 +19,7 @@ public class ActivitySecurity {
     @Transactional(readOnly = true)
     public boolean hasActivityPermission(Authentication authentication, Long activityId) {
         boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_ADMIN"));
 
         if (isAdmin) {
             return true;
@@ -32,7 +34,7 @@ public class ActivitySecurity {
     @Transactional(readOnly = true)
     public boolean hasRegistrationPermission(Authentication authentication, Long registrationId) {
         boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_ADMIN"));
 
         if (isAdmin) {
             return true;

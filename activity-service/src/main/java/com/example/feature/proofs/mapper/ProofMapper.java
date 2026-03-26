@@ -8,8 +8,9 @@ import com.example.feature.proofs.model.Proofs;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ProofMapper {
 
     // 1. Chuyển Entity sang DTO trả về FE

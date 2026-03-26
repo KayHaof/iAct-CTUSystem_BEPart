@@ -36,10 +36,7 @@ import jakarta.persistence.criteria.Predicate;
 
 import java.io.OutputStream;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -57,7 +54,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     // --- Lấy sinh viên đang đăng nhập ---
     private Users getCurrentStudent() {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        String username = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getName();
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
     }
@@ -253,8 +250,6 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         String[] headers = {"STT", "MSSV", "Họ và Tên", "Thời gian ĐK", "Buổi đăng ký", "Trạng thái", "Lý do hủy"};
         java.util.concurrent.atomic.AtomicInteger stt = new java.util.concurrent.atomic.AtomicInteger(1);
-        java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
-
         try {
             excelExportService.export(
                     "Danh_sach_SV",
@@ -270,8 +265,8 @@ public class RegistrationServiceImpl implements RegistrationService {
 
                         return new Object[]{
                                 stt.getAndIncrement(),
-                                dto.getStudentCode() != null ? dto.getStudentCode() : "", // Hết lỗi getStudentCode
-                                dto.getStudentName() != null ? dto.getStudentName() : "", // Hết lỗi getFullName
+                                dto.getStudentCode() != null ? dto.getStudentCode() : "",
+                                dto.getStudentName() != null ? dto.getStudentName() : "",
                                 dto.getRegisteredAt(),
                                 schedulesStr,
                                 statusStr,

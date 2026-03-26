@@ -11,10 +11,36 @@
 
     <artifactId>discovery-service</artifactId>
 
+    <properties>
+        <xstream.version>1.4.21</xstream.version>
+        <httpclient.version>4.5.14</httpclient.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.thoughtworks.xstream</groupId>
+                <artifactId>xstream</artifactId>
+                <version>${xstream.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpclient</artifactId>
+                <version>${httpclient.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-jxpath</groupId>
+                    <artifactId>commons-jxpath</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 

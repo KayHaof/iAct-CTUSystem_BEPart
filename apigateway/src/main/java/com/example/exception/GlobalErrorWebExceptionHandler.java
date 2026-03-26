@@ -1,10 +1,11 @@
 package com.example.exception;
 
 import com.example.dto.ApiResponse;
+import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.web.WebProperties;
-import org.springframework.boot.autoconfigure.web.reactive.error.AbstractErrorWebExceptionHandler;
 import org.springframework.boot.web.error.ErrorAttributeOptions;
-import org.springframework.boot.web.reactive.error.ErrorAttributes;
+import org.springframework.boot.webflux.autoconfigure.error.AbstractErrorWebExceptionHandler;
+import org.springframework.boot.webflux.error.ErrorAttributes;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -31,7 +32,7 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
     }
 
     @Override
-    protected RouterFunction<ServerResponse> getRoutingFunction(ErrorAttributes errorAttributes) {
+    protected RouterFunction<ServerResponse> getRoutingFunction(@NonNull ErrorAttributes errorAttributes) {
         return RouterFunctions.route(RequestPredicates.all(), this::renderErrorResponse);
     }
 
@@ -43,13 +44,11 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
         String message = "Lỗi hệ thống tại Gateway";
         int appCode = ErrorCode.UNCATEGORIZED_EXCEPTION.getCode();
 
-        if (throwable instanceof ResponseStatusException) {
-            ResponseStatusException e = (ResponseStatusException) throwable;
+        if (throwable instanceof ResponseStatusException e) {
             httpStatus = (HttpStatus) e.getStatusCode();
             message = e.getReason() != null ? e.getReason() : httpStatus.getReasonPhrase();
 
             if (httpStatus == HttpStatus.NOT_FOUND) {
-                appCode = ErrorCode.UNCATEGORIZED_EXCEPTION.getCode();
                 message = "Đường dẫn không tồn tại";
             }
         }
@@ -57,7 +56,7 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
         ApiResponse<Object> apiResponse = new ApiResponse<>();
         apiResponse.setCode(appCode);
         apiResponse.setMessage(message);
-        // apiResponse.setResult(errorProperties);
+        apiResponse.setResult(errorProperties);
 
         return ServerResponse.status(httpStatus)
                 .contentType(MediaType.APPLICATION_JSON)
