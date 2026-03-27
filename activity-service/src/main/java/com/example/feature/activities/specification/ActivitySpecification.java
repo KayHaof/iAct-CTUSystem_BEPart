@@ -1,5 +1,6 @@
 package com.example.feature.activities.specification;
 
+import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import com.example.feature.registration.model.Registrations;
 import org.springframework.data.jpa.domain.Specification;
@@ -66,12 +67,22 @@ public class ActivitySpecification {
 
     public static Specification<Activities> hasStatus(String status, String keyword, boolean isOrganizer) {
         return (root, query, cb) -> {
+            if ("PENDING".equalsIgnoreCase(status)) {
+                return cb.equal(root.get("status"), 0); // 0 = Chờ duyệt
+            }
+            if ("APPROVED".equalsIgnoreCase(status)) {
+                return cb.equal(root.get("status"), 1); // 1 = Đã duyệt
+            }
+            if ("REJECTED".equalsIgnoreCase(status)) {
+                return cb.equal(root.get("status"), 2); // 2 = Từ chối
+            }
+            if ("ALL".equalsIgnoreCase(status)) {
+                return null;
+            }
             if ("3".equals(status)) {
-                // Lấy riêng Bản nháp
                 return cb.equal(root.get("status"), 3);
             }
             if ("EXCLUDE_DRAFT".equals(status)) {
-                // Lấy tất cả trừ Bản nháp
                 return cb.notEqual(root.get("status"), 3);
             }
 
@@ -123,6 +134,13 @@ public class ActivitySpecification {
 
             // 3. Nối bằng OR (Là Người tổ chức HOẶC Người tạo thì đều được xem)
             return criteriaBuilder.or(conditionOrganizer, conditionCreator);
+        };
+    }
+
+    public static Specification<Activities> hasDepartmentId(Long departmentId) {
+        return (root, query, cb) -> {
+            if (departmentId == null) return null;
+            return cb.equal(root.get("departmentId"), departmentId);
         };
     }
 }

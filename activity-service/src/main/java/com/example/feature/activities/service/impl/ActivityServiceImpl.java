@@ -15,9 +15,9 @@ import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
-import com.example.feature.activities.dto.ActivityApprovalRequest;
 import com.example.feature.activities.dto.ActivityRequest;
 import com.example.feature.activities.dto.ActivityResponse;
+import com.example.feature.activities.dto.ActivityStatsResponse;
 import com.example.feature.activities.event.ActivityCreatedEvent;
 import com.example.feature.activities.mapper.ActivityMapper;
 import com.example.feature.activities.model.Activities;
@@ -46,6 +46,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -92,7 +93,6 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     @Transactional
     public ActivityResponse createActivity(ActivityRequest request) {
-        // 1. Xử lý Semester
         Semesters semester;
         if (request.getStartDate() != null) {
             LocalDate activityDate = request.getStartDate().toLocalDate();
@@ -103,7 +103,6 @@ public class ActivityServiceImpl implements ActivityService {
             throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn Ngày bắt đầu tổ chức!");
         }
 
-        // 2. Xử lý Organizer
         Organizers organizer = null;
         if (request.getOrganizerId() != null) {
             Long userId = request.getOrganizerId();
@@ -114,10 +113,8 @@ public class ActivityServiceImpl implements ActivityService {
             organizer = getOrCreateOrganizer(user);
         }
 
-        // 3. Map sang Entity
         Activities activity = activityMapper.toEntity(request, semester, organizer);
 
-        // 4. Set người tạo hoạt động
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()) {
             String currentUsername = authentication.getName();
@@ -125,9 +122,9 @@ public class ActivityServiceImpl implements ActivityService {
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
             activity.setCreatedBy(currentUser);
             activity.setCreatedByUsername(currentUsername);
+            activity.setDepartmentId(Objects.requireNonNull(getProfileData(currentUser)).getDepartmentId());
         }
 
-        // 5. Xử lý Benefits (Bọc check null an toàn)
         if (request.getBenefits() != null && !request.getBenefits().isEmpty()) {
             List<Benefits> benefitsList = processBenefits(request.getBenefits(), activity);
             if (!benefitsList.isEmpty()) {
@@ -141,10 +138,8 @@ public class ActivityServiceImpl implements ActivityService {
             activity.setSchedules(schedulesList);
         }
 
-        // 6. Lưu xuống DB
         Activities savedActivity = activityRepository.save(activity);
 
-        // 7. Event Thông báo
         if (savedActivity.getStatus() != 3) {
             eventPublisher.publishEvent(new ActivityCreatedEvent(
                     savedActivity,
@@ -176,19 +171,17 @@ public class ActivityServiceImpl implements ActivityService {
 
     // --- READ ALL ---
     @Override
-    public PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Pageable pageable) {
-        Long targetDeptId = null;
+    public PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId, Pageable pageable) {
+        Long userDeptId = null;
 
         boolean isAdmin = false;
         boolean isDepartment = false;
         boolean isStudent = true;
 
         Users currentUser = null;
-
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {
-
             isAdmin = authentication.getAuthorities().stream().anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_ADMIN"));
             isDepartment = authentication.getAuthorities().stream().anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_DEPARTMENT"));
             isStudent = !isAdmin && !isDepartment;
@@ -198,17 +191,16 @@ public class ActivityServiceImpl implements ActivityService {
 
             if (userOpt.isPresent()) {
                 currentUser = userOpt.get();
-
                 if (isAdmin || isDepartment) {
                     Optional<Organizers> orgOpt = organizerRepository.findById(currentUser.getId());
                     if (orgOpt.isPresent() && orgOpt.get().getDepartment() != null) {
-                        targetDeptId = orgOpt.get().getDepartment().getId();
+                        userDeptId = orgOpt.get().getDepartment().getId();
                     }
                 } else {
                     try {
                         ApiResponse<ProfileDto> profileRes = profileClient.getProfile(currentUser.getId());
                         if (profileRes != null && profileRes.getResult() != null) {
-                            targetDeptId = profileRes.getResult().getDepartmentId();
+                            userDeptId = profileRes.getResult().getDepartmentId();
                         }
                     } catch (Exception e) {
                         log.warn("Không lấy được thông tin Khoa của Sinh viên {}", currentUser.getId());
@@ -223,11 +215,19 @@ public class ActivityServiceImpl implements ActivityService {
             spec = spec.and(ActivitySpecification.isApproved());
         } else if (isDepartment && currentUser != null) {
             spec = spec.and(ActivitySpecification.isOwnedByOrOrganizedBy(currentUser.getId()));
+        } else if (isAdmin) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.notEqual(root.get("status"), 3)
+            );
+        }
+
+        if (departmentId != null) {
+            spec = spec.and(ActivitySpecification.hasDepartmentId(departmentId));
         }
 
         boolean isOrganizer = isAdmin || isDepartment;
         spec = spec.and(ActivitySpecification.containsKeyword(keyword))
-                .and(ActivitySpecification.hasLevel(level, targetDeptId))
+                .and(ActivitySpecification.hasLevel(level, userDeptId))
                 .and(ActivitySpecification.hasStatus(status, keyword, isOrganizer));
 
         Page<Activities> pageActivities = activityRepository.findAll(spec, pageable);
@@ -267,7 +267,6 @@ public class ActivityServiceImpl implements ActivityService {
             deleteOldImage(oldThumbnailImg);
         }
 
-        // Xử lý Semester
         if (request.getStartDate() != null) {
             LocalDate activityDate = request.getStartDate().toLocalDate();
             Semesters newSemester = semesterRepository.findSemesterByDate(activityDate)
@@ -276,7 +275,6 @@ public class ActivityServiceImpl implements ActivityService {
             existingActivity.setSemester(newSemester);
         }
 
-        // Xử lý Organizer
         if (request.getOrganizerId() != null &&
                 (existingActivity.getOrganizer() == null || !existingActivity.getOrganizer().getId().equals(request.getOrganizerId()))) {
 
@@ -289,17 +287,15 @@ public class ActivityServiceImpl implements ActivityService {
             existingActivity.setOrganizer(newOrganizer);
         }
 
-        // Xử lý Benefits
         if (request.getBenefits() != null) {
             existingActivity.getBenefits().clear();
             List<Benefits> newBenefits = processBenefits(request.getBenefits(), existingActivity);
             existingActivity.getBenefits().addAll(newBenefits);
         }
 
-        // XỬ LÝ SCHEDULES CHO UPDATE
         if (request.getSchedules() != null) {
             if (existingActivity.getSchedules() != null) {
-                existingActivity.getSchedules().clear(); // Xóa lịch trình cũ
+                existingActivity.getSchedules().clear();
             } else {
                 existingActivity.setSchedules(new ArrayList<>());
             }
@@ -346,7 +342,6 @@ public class ActivityServiceImpl implements ActivityService {
         activityRepository.deleteById(id);
     }
 
-    // Helper processBenefits
     private List<Benefits> processBenefits(List<BenefitDto> benefitDtos, Activities activity) {
         if (benefitDtos == null) return new java.util.ArrayList<>();
         return benefitDtos.stream().map(dto -> {
@@ -362,70 +357,63 @@ public class ActivityServiceImpl implements ActivityService {
     // --- APPROVE ---
     @Override
     @Transactional
-    public ActivityResponse approveActivity(Long id, ActivityApprovalRequest request) {
-        Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
+    public void approveActivity(Long id) {
+        Activities activity = getActivityForAction(id);
 
-        int currentStatus = activity.getStatus();
-        int newStatus = request.getStatus();
-
-        if (currentStatus == 2 || currentStatus == 3) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Không thể thay đổi trạng thái của hoạt động đã bị Từ chối hoặc đã Hủy!");
+        if (activity.getStatus() != 0) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể duyệt hoạt động đang ở trạng thái Chờ duyệt.");
         }
 
-        switch (newStatus) {
-            case 1:
-                if (currentStatus != 0) {
-                    throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể duyệt hoạt động đang ở trạng thái Chờ duyệt.");
-                }
-                break;
-
-            case 2:
-                if (currentStatus != 0) {
-                    throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể từ chối hoạt động đang ở trạng thái Chờ duyệt.");
-                }
-                break;
-
-            case 3:
-                if (currentStatus != 0 && currentStatus != 1) {
-                    throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể hủy hoạt động đang Chờ duyệt hoặc đã được Duyệt.");
-                }
-                break;
-
-            default:
-                throw new AppException(ErrorCode.INVALID_KEY, "Mã trạng thái không hợp lệ! Chấp nhận: 1 (Duyệt), 2 (Từ chối), 3 (Hủy)");
-        }
-
-        activity.setStatus(newStatus);
+        activity.setStatus(1);
+        activity.setHandledBy(getCurrentAdmin());
+        activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
 
-        if (newStatus == 1) {
-            sendNotificationSafe(savedActivity,
-                    "Hoạt động đã được duyệt",
-                    "Hoạt động '" + savedActivity.getTitle() + "' đã được phê duyệt thành công.",
-                    1);
-        }
-        else if (newStatus == 2) {
-            String reason = (request.getRejectReason() != null && !request.getRejectReason().isBlank())
-                    ? request.getRejectReason() : "Không có lý do cụ thể";
-            sendNotificationSafe(savedActivity,
-                    "Hoạt động bị từ chối",
-                    "Lý do: " + reason,
-                    3);
-        }
-        else {
-            String reason = (request.getCancelReason() != null && !request.getCancelReason().isBlank())
-                    ? request.getCancelReason() : "Sự cố ngoài ý muốn";
-            sendNotificationSafe(savedActivity,
-                    "Hoạt động đã bị hủy",
-                    "Hoạt động '" + savedActivity.getTitle() + "' đã bị hủy. Lý do: " + reason,
-                    3);
-        }
-
-        return activityMapper.toResponse(savedActivity);
+        sendNotificationSafe(savedActivity, "Hoạt động đã được duyệt",
+                "Hoạt động '" + savedActivity.getTitle() + "' đã được phê duyệt thành công.", 1);
     }
 
-    // --- HELPER ---
+    // --- REJECT ---
+    @Override
+    @Transactional
+    public void rejectActivity(Long id, String reason) {
+        Activities activity = getActivityForAction(id);
+
+        if (activity.getStatus() != 0) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể từ chối hoạt động đang ở trạng thái Chờ duyệt.");
+        }
+
+        activity.setStatus(2);
+        activity.setReason(reason != null && !reason.isBlank() ? reason : "Không có lý do cụ thể");
+        activity.setHandledBy(getCurrentAdmin());
+        activity.setHandledAt(LocalDateTime.now());
+
+        Activities savedActivity = activityRepository.save(activity);
+
+        sendNotificationSafe(savedActivity, "Hoạt động bị từ chối", "Lý do: " + activity.getReason(), 3);
+    }
+
+    // --- CANCEL ---
+    @Override
+    @Transactional
+    public void cancelActivity(Long id, String reason) {
+        Activities activity = getActivityForAction(id);
+
+        if (activity.getStatus() != 0 && activity.getStatus() != 1) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể hủy hoạt động đang Chờ duyệt hoặc đã được Duyệt.");
+        }
+
+        activity.setStatus(4);
+        activity.setReason(reason != null && !reason.isBlank() ? reason : "Sự cố ngoài ý muốn");
+        activity.setHandledBy(getCurrentAdmin());
+        activity.setHandledAt(LocalDateTime.now());
+
+        Activities savedActivity = activityRepository.save(activity);
+
+        sendNotificationSafe(savedActivity, "Hoạt động đã bị hủy",
+                "Hoạt động '" + savedActivity.getTitle() + "' đã bị hủy. Lý do: " + activity.getReason(), 3);
+    }
+
     private void sendNotificationSafe(Activities activity, String title, String message, Integer type) {
         try {
             NotificationRequest notiRequest = activityMapper.toNotificationRequest(activity, title, message, type);
@@ -435,7 +423,6 @@ public class ActivityServiceImpl implements ActivityService {
         }
     }
 
-    // --- HELPER QUẢN LÝ ORGANIZER ---
     private Organizers getOrCreateOrganizer(Users user) {
         return organizerRepository.findById(user.getId())
                 .orElseGet(() -> {
@@ -477,4 +464,39 @@ public class ActivityServiceImpl implements ActivityService {
 
         return qrCodeService.generateQRCodeBase64(qrToken, 300, 300);
     }
+
+    @Override
+    public ActivityStatsResponse getActivityStats() {
+        long pending = activityRepository.countByStatus(0);
+        long approved = activityRepository.countByStatus(1);
+        long rejected = activityRepository.countByStatus(2);
+
+        return ActivityStatsResponse.builder()
+                .pendingReview(pending)
+                .approvedThisTerm(approved)
+                .rejected(rejected)
+                .build();
+    }
+
+    // ============ HELPER ==================
+    private Activities getActivityForAction(Long id) {
+        Activities activity = activityRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
+
+        int currentStatus = activity.getStatus();
+        if (currentStatus == 2 || currentStatus == 4) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không thể thao tác trên hoạt động đã bị Từ chối hoặc đã Hủy!");
+        }
+        return activity;
+    }
+
+    private Users getCurrentAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {
+            return userRepository.findByUsername(authentication.getName()).orElse(null);
+        }
+        return null;
+    }
+
+
 }

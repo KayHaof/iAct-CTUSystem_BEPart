@@ -69,6 +69,9 @@ public class Activities {
     @JoinColumn(name = "created_by")
     private Users createdBy;
 
+    @Column(name = "department_id")
+    private Long departmentId;
+
     @OneToMany(mappedBy = "activity", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Benefits> benefits;
 
@@ -82,6 +85,16 @@ public class Activities {
 
     @Column(name = "created_by_username")
     private String createdByUsername;
+
+    @Column(name = "reason", columnDefinition = "TEXT")
+    private String reason; // Lưu lý do từ chối (reject) hoặc lý do hủy (cancel)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "handled_by")
+    private Users handledBy; // Lưu ID của Admin đã bấm nút từ chối / hủy
+
+    @Column(name = "handled_at")
+    private LocalDateTime handledAt;
 
     @OneToMany(mappedBy = "activity", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ActivitySchedule> schedules = new ArrayList<>();

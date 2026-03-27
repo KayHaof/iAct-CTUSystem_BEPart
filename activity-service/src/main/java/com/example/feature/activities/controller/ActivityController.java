@@ -2,9 +2,10 @@ package com.example.feature.activities.controller;
 
 import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
-import com.example.feature.activities.dto.ActivityApprovalRequest;
+import com.example.feature.activities.dto.ActivityReasonRequest;
 import com.example.feature.activities.dto.ActivityRequest;
 import com.example.feature.activities.dto.ActivityResponse;
+import com.example.feature.activities.dto.ActivityStatsResponse;
 import com.example.feature.activities.service.ActivityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -37,12 +38,13 @@ public class ActivityController {
             @RequestParam(value = "level", required = false, defaultValue = "ALL") String level,
             @RequestParam(value = "status", required = false, defaultValue = "ALL") String status,
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
-            @RequestParam(value = "size", required = false, defaultValue = "5") int size
+            @RequestParam(value = "size", required = false, defaultValue = "5") int size,
+            @RequestParam(value = "departmentId", required = false, defaultValue = "") Long departmentId
     ) {
         int pageNumber = page > 0 ? page - 1 : 0;
         Pageable customPageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "id"));
         return ResponseEntity.ok(
-                ApiResponse.success(activityService.getAllActivities(keyword, level, status, customPageable))
+                ApiResponse.success(activityService.getAllActivities(keyword, level, status, departmentId, customPageable))
         );
     }
 
@@ -73,12 +75,31 @@ public class ActivityController {
     }
 
     // --- APPROVE ---
-    @PutMapping("/{id}/approval")
+    @PutMapping("/{id}/approve")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<ApiResponse<ActivityResponse>> approveActivity(
+    public ResponseEntity<ApiResponse<String>> approveActivity(@PathVariable Long id) {
+        activityService.approveActivity(id);
+        return ResponseEntity.ok(ApiResponse.success("Phê duyệt hoạt động thành công!"));
+    }
+
+    // --- REJECT ---
+    @PutMapping("/{id}/reject")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> rejectActivity(
             @PathVariable Long id,
-            @RequestBody ActivityApprovalRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(activityService.approveActivity(id, request)));
+            @RequestBody ActivityReasonRequest request) {
+        activityService.rejectActivity(id, request.getReason());
+        return ResponseEntity.ok(ApiResponse.success("Từ chối hoạt động thành công!"));
+    }
+
+    // --- CANCEL ---
+    @PutMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> cancelActivity(
+            @PathVariable Long id,
+            @RequestBody ActivityReasonRequest request) {
+        activityService.cancelActivity(id, request.getReason());
+        return ResponseEntity.ok(ApiResponse.success("Hủy hoạt động thành công!"));
     }
 
     // --- GENERATE QR CODE ---
@@ -87,5 +108,13 @@ public class ActivityController {
     public ResponseEntity<ApiResponse<String>> getActivityQrCode(@PathVariable("id") Long id) {
         String qrImageBase64 = activityService.getQrCodeForActivity(id);
         return ResponseEntity.ok(ApiResponse.success(qrImageBase64));
+    }
+
+    // --- GET COUNT ACT BY STATUS ---
+    @GetMapping("/stats")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ActivityStatsResponse>> getActivityStats() {
+        ActivityStatsResponse stats = activityService.getActivityStats();
+        return ResponseEntity.ok(ApiResponse.success(stats));
     }
 }

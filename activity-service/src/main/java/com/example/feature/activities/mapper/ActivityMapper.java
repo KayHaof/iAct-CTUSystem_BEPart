@@ -21,7 +21,6 @@ import java.util.List;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ActivityMapper {
-
     // --- TO ENTITY (CREATE) ---
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "qrCodeToken", expression = "java(java.util.UUID.randomUUID().toString())")
@@ -43,6 +42,10 @@ public interface ActivityMapper {
     @Mapping(target = "departmentId", source = "organizer.department.id")
     @Mapping(target = "departmentName", source = "organizer.department.name")
     @Mapping(target = "schedules", source = "schedules")
+    @Mapping(target = "createdAt", source = "createdAt")
+    @Mapping(target = "reason", source = "reason")
+    @Mapping(target = "handledBy", source = "handledBy")
+    @Mapping(target = "handledAt", source = "handledAt")
     ActivityResponse toResponse(Activities entity);
 
     // --- MAPPING CHO ORGANIZER ---

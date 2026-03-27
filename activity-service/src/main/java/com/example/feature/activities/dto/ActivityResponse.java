@@ -28,6 +28,7 @@ public class ActivityResponse {
     private LocalDateTime registrationEnd;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
+    private LocalDateTime createdAt;
 
     private Long semesterId;
     private OrganizerResponse organizer;
@@ -40,6 +41,10 @@ public class ActivityResponse {
 
     private Integer registeredCount;
     private UserDto createdBy;
+
+    private String reason;
+    private UserDto handledBy;
+    private LocalDateTime handledAt;
 
     private List<BenefitDto> benefits;
 
