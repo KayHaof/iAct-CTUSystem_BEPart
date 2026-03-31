@@ -68,7 +68,9 @@ public class UserService {
     public UserResponse getMyInfo() {
         // 1. Lấy thông tin Keycloak ID từ token hiện tại
         var authentication = SecurityContextHolder.getContext().getAuthentication();
+        assert authentication != null;
         Jwt jwt = (Jwt) authentication.getPrincipal();
+        assert jwt != null;
         String keycloakId = jwt.getClaimAsString("sub");
 
         // 2. Lấy Core User từ DB
@@ -232,7 +234,9 @@ public class UserService {
         Users user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         var authentication = SecurityContextHolder.getContext().getAuthentication();
+        assert authentication != null;
         Jwt jwt = (Jwt) authentication.getPrincipal();
+        assert jwt != null;
         String tokenKeycloakId = jwt.getClaimAsString("sub");
         boolean isOwner = user.getKeycloakId() != null && user.getKeycloakId().equals(tokenKeycloakId);
 

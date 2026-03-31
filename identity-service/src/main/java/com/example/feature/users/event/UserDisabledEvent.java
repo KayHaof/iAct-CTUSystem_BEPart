@@ -8,9 +8,9 @@ import lombok.NoArgsConstructor;
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder // Thêm Builder vô sau này gọi new UserDisabledEvent cho dễ nhìn
+@Builder
 public class UserDisabledEvent {
-    private Long userId;     // Sửa String -> Long (để khớp với User entity)
+    private Long userId;
     private String title;
     private String message;
     private int type;

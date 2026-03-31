@@ -23,7 +23,6 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public List<Notifications> getAllByUserId(Long userId) {
-        // Dùng hàm fetch để tối ưu query
         return notificationRepository.findAllByUserIdFetched(userId);
     }
 
