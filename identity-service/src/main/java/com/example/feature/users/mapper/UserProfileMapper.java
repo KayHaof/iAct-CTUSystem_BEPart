@@ -29,7 +29,7 @@ public interface UserProfileMapper {
     @Mapping(target = "id", source = "id")
     UserResponse toResponse(Users user);
 
-    // 3. HÀM SYNC TỪ KEYCLOAK VỀ LOCAL (Bảng Lõi)
+    // 3. HÀM SYNC TỪ KEYCLOAK VỀ LOCAL
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

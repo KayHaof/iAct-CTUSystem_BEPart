@@ -19,28 +19,24 @@ public class SemesterController {
 
     private final SemesterService semesterService;
 
-    // Lấy tất cả (Ai cũng xem được)
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<SemesterResponse>>> getAllSemesters() {
         return ResponseEntity.ok(ApiResponse.success(semesterService.getAllSemesters()));
     }
 
-    // Lấy học kỳ đang Active
     @GetMapping("/active")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<SemesterResponse>> getActiveSemester() {
         return ResponseEntity.ok(ApiResponse.success(semesterService.getActiveSemester()));
     }
 
-    // Lấy chi tiết
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<SemesterResponse>> getSemesterById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(semesterService.getSemesterById(id)));
     }
 
-    // Tạo mới (Chỉ Admin)
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<SemesterResponse>> createSemester(@RequestBody SemesterRequest request) {
@@ -50,7 +46,6 @@ public class SemesterController {
         );
     }
 
-    // Cập nhật (Chỉ Admin)
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<SemesterResponse>> updateSemester(
@@ -59,7 +54,6 @@ public class SemesterController {
         return ResponseEntity.ok(ApiResponse.success(semesterService.updateSemester(id, request)));
     }
 
-    // Xóa (Chỉ Admin)
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteSemester(@PathVariable Long id) {

@@ -20,7 +20,7 @@ public class ProofController {
     public ApiResponse<ProofResponse> submitProof(@RequestBody @Valid ProofSubmissionRequest request) {
         return ApiResponse.<ProofResponse>builder()
                 .result(proofService.submitProof(request))
-                .message("Nộp minh chứng thành công! Đang chờ cố vấn duyệt.")
+                .message("Nộp minh chứng thành công! Đang chờ BTC duyệt.")
                 .build();
     }
 }

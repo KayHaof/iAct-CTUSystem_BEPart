@@ -25,7 +25,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .anyRequest().authenticated()
                 )
-                // Lệnh này bắt Spring Boot phải lôi token từ Header ra để check với Keycloak
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
 
         return http.build();

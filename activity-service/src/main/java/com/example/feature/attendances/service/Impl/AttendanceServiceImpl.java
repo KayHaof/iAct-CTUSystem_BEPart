@@ -40,7 +40,6 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Transactional
     public AttendanceResponse checkIn(CheckInRequest request) {
         Users student = getCurrentStudent();
-        // 1. Kiểm tra trạng thái đăng ký
         Registrations registration = registrationRepository.findByStudentIdAndActivityId(student.getId(), request.getActivityId())
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION, "Bạn chưa đăng ký hoạt động này nên không thể điểm danh!"));
 
@@ -48,7 +47,6 @@ public class AttendanceServiceImpl implements AttendanceService {
             throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã hủy đăng ký hoạt động này rồi!");
         }
 
-        // 2. Kiểm tra mã QR
         Activities activity = registration.getActivity();
         String dbQrToken = activity.getQrCodeToken();
         String inputCode = request.getVerifyCode();
@@ -57,7 +55,6 @@ public class AttendanceServiceImpl implements AttendanceService {
             throw new AppException(ErrorCode.INVALID_ACTION, "Mã điểm danh không hợp lệ hoặc đã hết hạn!");
         }
 
-        // 3. LOGIC ĐIỂM DANH
         Optional<Attendances> existingAttendance = attendanceRepository.findByRegistrationId(registration.getId());
 
         if (existingAttendance.isEmpty()) {

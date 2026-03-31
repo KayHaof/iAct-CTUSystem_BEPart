@@ -1,6 +1,5 @@
 package com.example.feature.activities.specification;
 
-import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import com.example.feature.registration.model.Registrations;
 import org.springframework.data.jpa.domain.Specification;
@@ -67,6 +66,21 @@ public class ActivitySpecification {
 
     public static Specification<Activities> hasStatus(String status, String keyword, boolean isOrganizer) {
         return (root, query, cb) -> {
+            LocalDateTime now = LocalDateTime.now();
+            // --- XỬ LÝ STATUS "ALL" ---
+            if ("ALL".equalsIgnoreCase(status)) {
+                if (isOrganizer) {
+                    return null; // Admin/Organizer xem tất cả
+                } else {
+                    // Student: Chỉ xem "Đã duyệt" VÀ "Chưa hết hạn đăng ký"
+                    return cb.and(
+                            cb.equal(root.get("status"), 1),
+                            cb.greaterThanOrEqualTo(root.get("registrationEnd"), now)
+                    );
+                }
+            }
+
+            // --- CÁC TRẠNG THÁI CỐ ĐỊNH CỦA HOẠT ĐỘNG ---
             if ("PENDING".equalsIgnoreCase(status)) {
                 return cb.equal(root.get("status"), 0); // 0 = Chờ duyệt
             }
@@ -76,18 +90,14 @@ public class ActivitySpecification {
             if ("REJECTED".equalsIgnoreCase(status)) {
                 return cb.equal(root.get("status"), 2); // 2 = Từ chối
             }
-            if ("ALL".equalsIgnoreCase(status)) {
-                return null;
-            }
             if ("3".equals(status)) {
-                return cb.equal(root.get("status"), 3);
+                return cb.equal(root.get("status"), 3); // 3 = Draft
             }
             if ("EXCLUDE_DRAFT".equals(status)) {
                 return cb.notEqual(root.get("status"), 3);
             }
 
-            LocalDateTime now = LocalDateTime.now();
-
+            // --- XỬ LÝ TRẠNG THÁI THEO THỜI GIAN (OPEN / UPCOMING) ---
             if ("OPEN".equals(status)) {
                 Predicate timeValid = cb.and(
                         cb.lessThanOrEqualTo(root.get("registrationStart"), now),
@@ -105,10 +115,22 @@ public class ActivitySpecification {
 
                 Predicate notFull = cb.greaterThan(root.get("maxParticipants").as(Long.class), countQuery);
 
-                return cb.and(timeValid, notFull);
+                Predicate openCondition = cb.and(timeValid, notFull);
+
+                // Nếu là Student thì phải thêm điều kiện: Phải là hoạt động Đã Duyệt (status = 1)
+                if (!isOrganizer) {
+                    return cb.and(cb.equal(root.get("status"), 1), openCondition);
+                }
+                return openCondition;
 
             } else if ("UPCOMING".equals(status)) {
-                return cb.greaterThan(root.get("registrationStart"), now);
+                Predicate upcomingCondition = cb.greaterThan(root.get("registrationStart"), now);
+
+                // Nếu là Student thì phải thêm điều kiện: Phải là hoạt động Đã Duyệt (status = 1)
+                if (!isOrganizer) {
+                    return cb.and(cb.equal(root.get("status"), 1), upcomingCondition);
+                }
+                return upcomingCondition;
 
             } else {
                 if (isOrganizer) {

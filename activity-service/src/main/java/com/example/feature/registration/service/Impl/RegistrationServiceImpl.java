@@ -62,7 +62,6 @@ public class RegistrationServiceImpl implements RegistrationService {
     private void populateProfileData(List<RegistrationResponse> responses) {
         if (responses == null || responses.isEmpty()) return;
 
-        // Lấy danh sách ID sinh viên cần tìm
         List<Long> userIds = responses.stream()
                 .map(RegistrationResponse::getStudentId)
                 .distinct()
@@ -73,7 +72,6 @@ public class RegistrationServiceImpl implements RegistrationService {
             if (batchRes != null && batchRes.getResult() != null) {
                 Map<Long, ProfileDto> profileMap = batchRes.getResult();
 
-                // Đắp data vào từng response
                 for (RegistrationResponse res : responses) {
                     ProfileDto p = profileMap.get(res.getStudentId());
                     if (p != null) {
@@ -104,7 +102,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
             if (searchedUserIds != null) {
                 if (searchedUserIds.isEmpty()) {
-                    predicates.add(cb.disjunction()); // Search không ra ai thì trả về rỗng
+                    predicates.add(cb.disjunction());
                 } else {
                     predicates.add(root.get("student").get("id").in(searchedUserIds));
                 }

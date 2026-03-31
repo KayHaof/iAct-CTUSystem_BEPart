@@ -6,6 +6,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 @Component("userSecurity")
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "spring.datasource.url")
@@ -15,7 +17,7 @@ public class UserSecurity {
 
     public boolean hasUserId(Authentication authentication, Long userId) {
         boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_ADMIN"));
 
         if (isAdmin) {
             return true;

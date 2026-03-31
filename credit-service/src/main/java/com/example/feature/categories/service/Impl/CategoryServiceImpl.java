@@ -86,7 +86,6 @@ public class CategoryServiceImpl implements CategoryService {
         category.setName(request.getName());
         category.setMaxPoint(request.getMaxPoint());
 
-        // Cập nhật Cha (Tránh lỗi cha tự nhận nó làm con)
         if (request.getParentId() != null) {
             if (request.getParentId().equals(id)) {
                 throw new AppException(ErrorCode.INVALID_ACTION, "Danh mục không thể tự làm cha của chính nó!");

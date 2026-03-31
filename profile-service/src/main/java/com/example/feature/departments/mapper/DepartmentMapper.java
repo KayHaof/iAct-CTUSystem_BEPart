@@ -9,12 +9,9 @@ import org.mapstruct.ReportingPolicy;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface DepartmentMapper {
-    // 1. Chuyển từ Entity sang Response DTO
     DepartmentResponse toResponse(Departments entity);
 
-    // 2. Chuyển từ Request DTO sang Entity (Dùng cho Create)
     Departments toEntity(DepartmentRequest request);
 
-    // 3. Cập nhật Entity có sẵn từ Request DTO (Dùng cho Update)
     void updateEntityFromRequest(DepartmentRequest request, @MappingTarget Departments entity);
 }

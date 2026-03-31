@@ -40,9 +40,7 @@ public class ActivitySecurity {
             return true;
         }
 
-        // Tìm đơn đăng ký -> Rút ra Hoạt động (Activity)
         return registrationRepository.findById(registrationId)
-                // Giả định entity Registrations có phương thức getActivity()
                 .map(registration -> isOwner(authentication, registration.getActivity()))
                 .orElse(false);
     }

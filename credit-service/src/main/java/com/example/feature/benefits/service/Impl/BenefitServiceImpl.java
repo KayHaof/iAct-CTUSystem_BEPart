@@ -33,7 +33,6 @@ public class BenefitServiceImpl implements BenefitService {
     @Override
     @Transactional
     public BenefitResponse createBenefit(BenefitRequest request) {
-        // TÌm Activity từ bảng Shadow (Đã được Kafka đồng bộ)
         Activities activity = localActivityRepository.findById(request.getActivityId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy thông tin hoạt động trong hệ thống!"));
 

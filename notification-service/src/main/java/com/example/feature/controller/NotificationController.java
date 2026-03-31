@@ -20,7 +20,7 @@ public class NotificationController {
 
     @PostMapping
     public void createNotification(@RequestBody NotificationRequest request) {
-        // 1. Lưu vào DB (để user có lịch sử thông báo, kể cả khi bị khóa)
+        // 1. Lưu vào DB
         Notifications entity = notificationMapper.toEntity(request);
         Notifications savedEntity = notificationService.save(entity);
         NotificationResponse response = notificationMapper.toResponse(savedEntity);
@@ -30,8 +30,6 @@ public class NotificationController {
             // --- TRƯỜNG HỢP: RIÊNG TƯ (PRIVATE / LOCK USER) ---
             String userIdStr = String.valueOf(request.getUserId());
 
-            // LỜI KHUYÊN: Dùng convertAndSend tới topic cụ thể sẽ dễ debug hơn dùng convertAndSendToUser
-            // Frontend sẽ subscribe vào: /topic/user/{userId}
             messagingTemplate.convertAndSend(
                     "/topic/user/" + userIdStr,
                     response
@@ -41,7 +39,6 @@ public class NotificationController {
 
         } else {
             // --- TRƯỜNG HỢP: CÔNG KHAI (PUBLIC) ---
-            // Frontend subscribe vào: /topic/notifications
             messagingTemplate.convertAndSend("/topic/notifications", response);
             System.out.println("LOG: Đã gửi thông báo công khai.");
         }

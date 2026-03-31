@@ -132,7 +132,6 @@ public class UserImportService {
                         assignRoleToUser(keycloakId, "student");
                         createdKeycloakIds.add(keycloakId); // Đưa vào ds để canh chừng
 
-
                         Users user = new Users();
                         user.setKeycloakId(keycloakId);
                         user.setUsername(username);
@@ -167,7 +166,6 @@ public class UserImportService {
             // 3. BATCH INSERT XUỐNG DB & GỌI PROFILE SERVICE
             try {
                 if (!usersToSave.isEmpty()) {
-                    // Lưu 1 cục vào DB (Rất nhanh)
                     usersToSave = userRepository.saveAll(usersToSave);
 
                     // Gán lại ID thực tế từ DB cho list Profile
@@ -205,7 +203,6 @@ public class UserImportService {
         keycloak.realm(realm).users().get(userId).roles().realmLevel().add(Collections.singletonList(roleRep));
     }
 
-    // Các hàm tiện ích: getCellValue, copyRow, writeError (giống lúc nãy)
     private void writeError(Sheet sheet, Row source, int rowIndex, String errorMsg) {
         Row errorRow = sheet.createRow(rowIndex);
         copyRow(source, errorRow);

@@ -14,7 +14,4 @@ public interface ActivityRepository extends JpaRepository<Activities, Long>, Jpa
     List<Activities> findByStatusAndUpdatedAtBefore(Integer status, LocalDateTime cutoffDate);
     List<Activities> findByStatus(Integer status);
     long countByStatus(Integer status);
-
-//    @Query("SELECT SUM(a.registeredCount) FROM Activities a WHERE a.status = 1")
-//    Long sumTotalRegistered(); => để làm service rồi tính
 }

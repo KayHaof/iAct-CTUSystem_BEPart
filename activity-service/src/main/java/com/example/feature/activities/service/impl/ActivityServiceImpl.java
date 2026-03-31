@@ -18,6 +18,7 @@ import com.example.exception.ErrorCode;
 import com.example.feature.activities.dto.ActivityRequest;
 import com.example.feature.activities.dto.ActivityResponse;
 import com.example.feature.activities.dto.ActivityStatsResponse;
+import com.example.feature.activities.dto.ActivityTimeLocationResponse;
 import com.example.feature.activities.event.ActivityCreatedEvent;
 import com.example.feature.activities.mapper.ActivityMapper;
 import com.example.feature.activities.model.Activities;
@@ -162,11 +163,17 @@ public class ActivityServiceImpl implements ActivityService {
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động"));
 
         ActivityResponse response = activityMapper.toResponse(activity);
-
         long count = registrationRepository.countByActivityIdAndStatusNot(id, 2);
         response.setRegisteredCount((int) count);
-
         return response;
+    }
+
+    // GET TIMES AND LOCATION OF ACT
+    @Override
+    public ActivityTimeLocationResponse getActivityTimesAndLocation(Long id) {
+        Activities activity = activityRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động với ID: " + id));
+        return activityMapper.toTimeResponse(activity);
     }
 
     // --- READ ALL ---

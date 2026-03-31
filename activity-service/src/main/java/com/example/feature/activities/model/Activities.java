@@ -91,7 +91,7 @@ public class Activities {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "handled_by")
-    private Users handledBy; // Lưu ID của Admin đã bấm nút từ chối / hủy
+    private Users handledBy;
 
     @Column(name = "handled_at")
     private LocalDateTime handledAt;

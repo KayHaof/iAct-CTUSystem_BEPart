@@ -17,7 +17,6 @@ public class BenefitSecurity {
     private final BenefitRepository benefitRepository;
     private final LocalActivityRepository localActivityRepository;
 
-    // Dùng khi TẠO MỚI (Check qua activityId gửi lên từ request)
     @Transactional(readOnly = true)
     public boolean hasActivityPermission(Authentication authentication, Long activityId) {
         if (isAdmin(authentication)) return true;
@@ -27,7 +26,6 @@ public class BenefitSecurity {
                 .orElse(false);
     }
 
-    // Dùng khi SỬA / XÓA (Check qua id của chính Benefit đang thao tác)
     @Transactional(readOnly = true)
     public boolean hasBenefitPermission(Authentication authentication, Long benefitId) {
         if (isAdmin(authentication)) return true;

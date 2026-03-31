@@ -15,6 +15,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -70,7 +71,7 @@ public class UserService {
         Jwt jwt = (Jwt) authentication.getPrincipal();
         String keycloakId = jwt.getClaimAsString("sub");
 
-        // 2. Lấy Core User từ Local DB (Identity Service)
+        // 2. Lấy Core User từ DB
         Users user = userRepository.findByKeycloakId(keycloakId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy thông tin xác thực cục bộ!"));
 
@@ -160,21 +161,7 @@ public class UserService {
             }
         }
         // 2. Build Specification
-        final List<Long> finalMatchingUserIds = matchingUserIds;
-        Specification<Users> spec = (root, query, cb) -> {
-            Predicate predicate = cb.conjunction();
-
-            if (finalMatchingUserIds != null) {
-                predicate = cb.and(predicate, root.get("id").in(finalMatchingUserIds));
-            }
-            if (roleType != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("roleType"), roleType));
-            }
-            if (status != null) {
-                predicate = cb.and(predicate, cb.equal(root.get("status"), status));
-            }
-            return predicate;
-        };
+        Specification<Users> spec = getUsersSpecification(roleType, status, matchingUserIds);
 
         // 3. Query Local DB lấy danh sách tài khoản
         Page<Users> usersPage = userRepository.findAll(spec, pageable);
@@ -201,6 +188,25 @@ public class UserService {
         }).collect(Collectors.toList());
 
         return new PageDTO<>(usersPage, data);
+    }
+
+    private static @NonNull Specification<Users> getUsersSpecification(Integer roleType, Integer status, List<Long> matchingUserIds) {
+        final List<Long> finalMatchingUserIds = matchingUserIds;
+        Specification<Users> spec = (root, query, cb) -> {
+            Predicate predicate = cb.conjunction();
+
+            if (finalMatchingUserIds != null) {
+                predicate = cb.and(predicate, root.get("id").in(finalMatchingUserIds));
+            }
+            if (roleType != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("roleType"), roleType));
+            }
+            if (status != null) {
+                predicate = cb.and(predicate, cb.equal(root.get("status"), status));
+            }
+            return predicate;
+        };
+        return spec;
     }
 
     public UserResponse getUserById(Long id) {

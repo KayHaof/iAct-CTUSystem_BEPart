@@ -13,11 +13,11 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ProofMapper {
 
-    // 1. Chuyển Entity sang DTO trả về FE
+    // 1. Entity sang DTO
     @Mapping(target = "activityId", source = "activity.id")
     ProofResponse toResponse(Proofs entity);
 
-    // 2. Map từ Request + User + Activity để tạo bản ghi Proofs MỚI
+    // 2. Map từ Request + User + Activity => Proofs MỚI
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "status", expression = "java(0)")
     @Mapping(target = "student", source = "student")
@@ -26,7 +26,7 @@ public interface ProofMapper {
     @Mapping(target = "description", source = "request.description")
     Proofs toNewEntity(ProofSubmissionRequest request, Users student, Activities activity);
 
-    // 3. Cập nhật bản ghi Proofs ĐÃ CÓ từ Request (dùng cho update)
+    // 3. Update
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "student", ignore = true)
     @Mapping(target = "activity", ignore = true)

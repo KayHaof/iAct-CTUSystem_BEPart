@@ -4,12 +4,15 @@ import com.example.dto.PageDTO;
 import com.example.feature.activities.dto.ActivityRequest;
 import com.example.feature.activities.dto.ActivityResponse;
 import com.example.feature.activities.dto.ActivityStatsResponse;
+import com.example.feature.activities.dto.ActivityTimeLocationResponse;
 import org.springframework.data.domain.Pageable;
 
 public interface ActivityService {
     ActivityResponse createActivity(ActivityRequest request);
 
     ActivityResponse getActivityById(Long id);
+
+    ActivityTimeLocationResponse getActivityTimesAndLocation(Long id);
 
     PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId, Pageable pageable);
 

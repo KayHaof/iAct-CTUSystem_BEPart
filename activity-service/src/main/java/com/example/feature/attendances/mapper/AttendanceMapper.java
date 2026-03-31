@@ -10,7 +10,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface AttendanceMapper {
 
-    // 1. Chuyển Request + Registration thành Entity Attendances
+    // 1. Chuyển Request + Registration thành Entity
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "checkoutTime", ignore = true)
     @Mapping(target = "registration", source = "registration")
@@ -20,7 +20,7 @@ public interface AttendanceMapper {
     @Mapping(target = "longitude", source = "request.longitude")
     Attendances toEntity(CheckInRequest request, Registrations registration);
 
-    // 2. Chuyển Entity thành Response trả về FE
+    // 2. Chuyển Entity thành Response
     @Mapping(target = "registrationId", source = "entity.registration.id")
     @Mapping(target = "message", source = "message")
     AttendanceResponse toResponse(Attendances entity, String message);

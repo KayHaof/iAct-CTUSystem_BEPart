@@ -73,7 +73,7 @@ public class UserProfileController {
     // 6. Import hàng loạt users
     @PostMapping("/batch-create")
     public ApiResponse<Void> createProfilesBatch(@RequestBody List<CreateProfileDto> profiles) {
-        profileService.createProfilesBatch(profiles); // Xuống Service gọi studentProfileRepository.saveAll(...)
+        profileService.createProfilesBatch(profiles);
         return ApiResponse.success(null);
     }
 

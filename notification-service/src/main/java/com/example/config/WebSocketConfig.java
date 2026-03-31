@@ -30,15 +30,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setUserDestinationPrefix("/user");
     }
 
-    // Class này giữ nguyên để lấy User ID
     private class UserHandshakeHandler extends DefaultHandshakeHandler {
         @Override
         protected Principal determineUser(ServerHttpRequest request, WebSocketHandler wsHandler, Map<String, Object> attributes) {
             String uri = request.getURI().toString();
-            // Code này tạm ổn, nhưng nhớ check kỹ null safety
             if (uri.contains("userId=")) {
                 try {
-                    String userId = uri.split("userId=")[1].split("&")[0]; // Lấy chắc chắn hơn
+                    String userId = uri.split("userId=")[1].split("&")[0];
                     return () -> userId;
                 } catch (Exception e) {
                     return null;

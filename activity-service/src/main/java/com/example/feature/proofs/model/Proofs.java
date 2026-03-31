@@ -40,7 +40,6 @@ public class Proofs {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
-    // Người kiểm duyệt (Admin/Cố vấn)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "verified_user")
     private Users verifiedUser;

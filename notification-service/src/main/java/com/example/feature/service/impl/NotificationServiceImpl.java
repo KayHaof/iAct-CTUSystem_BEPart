@@ -23,7 +23,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public List<Notifications> getAllByUserId(Long userId) {
-        // Dùng hàm fetch để tối ưu query (lấy luôn thông tin Activity đi kèm)
+        // Dùng hàm fetch để tối ưu query
         return notificationRepository.findAllByUserIdFetched(userId);
     }
 
@@ -33,7 +33,6 @@ public class NotificationServiceImpl implements NotificationService {
         Notifications notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Notification not found with id: " + id));
 
-        // Chỉ update nếu đang là false
         if (!notification.getIsRead()) {
             notification.setIsRead(true);
             notificationRepository.save(notification);

@@ -7,6 +7,7 @@ import com.example.common.entity.Semesters;
 import com.example.common.entity.Users;
 import com.example.common.dto.UserDto;
 import com.example.dto.PageDTO;
+import com.example.feature.activities.dto.ActivityTimeLocationResponse;
 import com.example.feature.activitySchedule.dto.ActivityScheduleDto;
 import com.example.feature.activitySchedule.model.ActivitySchedule;
 import com.example.feature.activities.dto.ActivityRequest;
@@ -47,6 +48,9 @@ public interface ActivityMapper {
     @Mapping(target = "handledBy", source = "handledBy")
     @Mapping(target = "handledAt", source = "handledAt")
     ActivityResponse toResponse(Activities entity);
+
+    // --- LẤY THỜI GIAN HOẠT ĐỘNG ---
+    ActivityTimeLocationResponse toTimeResponse(Activities entity);
 
     // --- MAPPING CHO ORGANIZER ---
     @Mapping(target = "id", source = "user.id")

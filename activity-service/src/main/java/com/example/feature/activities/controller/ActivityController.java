@@ -2,10 +2,7 @@ package com.example.feature.activities.controller;
 
 import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
-import com.example.feature.activities.dto.ActivityReasonRequest;
-import com.example.feature.activities.dto.ActivityRequest;
-import com.example.feature.activities.dto.ActivityResponse;
-import com.example.feature.activities.dto.ActivityStatsResponse;
+import com.example.feature.activities.dto.*;
 import com.example.feature.activities.service.ActivityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -57,6 +54,18 @@ public class ActivityController {
         );
     }
 
+    // --- GET TIMES AND LOCATION BY ID ---
+    @GetMapping("/{id}/times-location")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<ActivityTimeLocationResponse>> getActivityTimesAndLocation(@PathVariable Long id) {
+        ActivityTimeLocationResponse timeResponse = activityService.getActivityTimesAndLocation(id);
+        return ResponseEntity.ok(ApiResponse.<ActivityTimeLocationResponse>builder()
+                .code(200)
+                .message("Lấy thời gian hoạt động thành công")
+                .result(timeResponse)
+                .build());
+    }
+
     // --- UPDATE ---
     @PutMapping("/{id}")
     @PreAuthorize("@activitySecurity.hasActivityPermission(authentication, #id)")
@@ -105,7 +114,7 @@ public class ActivityController {
     // --- GENERATE QR CODE ---
     @GetMapping("/{id}/qr-code")
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
-    public ResponseEntity<ApiResponse<String>> getActivityQrCode(@PathVariable("id") Long id) {
+    public ResponseEntity<ApiResponse<String>> getActivityQrCode(@PathVariable Long id) {
         String qrImageBase64 = activityService.getQrCodeForActivity(id);
         return ResponseEntity.ok(ApiResponse.success(qrImageBase64));
     }

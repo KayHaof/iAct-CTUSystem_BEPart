@@ -102,7 +102,7 @@ public class UserProfileServiceImpl implements UserProfileService {
             if (roleType == 1) return studentRepo.searchIdsByCriteria(keyword, departmentId, classId);
             if (roleType == 2) return departmentProfileRepo.searchIdsByCriteria(keyword, departmentId);
         }
-        // Nếu không có roleType thì mới tìm cả hai
+
         Set<Long> resultIds = new HashSet<>();
         resultIds.addAll(studentRepo.searchIdsByCriteria(keyword, departmentId, classId));
         resultIds.addAll(departmentProfileRepo.searchIdsByCriteria(keyword, departmentId));
