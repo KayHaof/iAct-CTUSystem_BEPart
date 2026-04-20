@@ -14,6 +14,7 @@ public class CreateProfileDto {
     private String fullName;
     private Integer roleType;     // 1: SV, 2: Khoa
     private String studentCode;   // Chỉ dùng cho SV
-    private Long classId;         // Chỉ dùng cho SV
+    private Long classId;
+    private String classCode;// Chỉ dùng cho SV
     private String description;
 }

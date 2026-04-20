@@ -73,7 +73,7 @@ public class AuthService {
         CredentialRepresentation cred = new CredentialRepresentation();
         cred.setType(CredentialRepresentation.PASSWORD);
         cred.setValue(request.getPassword());
-        cred.setTemporary(false); // Đã để false thì user không bị ép đổi pass lúc login lần đầu
+        cred.setTemporary(false);
         userRep.setCredentials(Collections.singletonList(cred));
 
         String createdKeycloakId = null;

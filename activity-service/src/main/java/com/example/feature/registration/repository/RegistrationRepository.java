@@ -2,7 +2,7 @@ package com.example.feature.registration.repository;
 
 import com.example.feature.registration.model.Registrations;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor; // ✅ Nhớ import cái này
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;

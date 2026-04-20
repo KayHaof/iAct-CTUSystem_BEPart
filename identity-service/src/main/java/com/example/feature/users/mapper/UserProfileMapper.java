@@ -1,5 +1,6 @@
 package com.example.feature.users.mapper;
 
+import com.example.common.model.IdtLocalProfile;
 import com.example.feature.users.dto.ProfileDto;
 import com.example.feature.users.dto.UserResponse;
 import com.example.feature.users.dto.UserSyncDto;
@@ -34,4 +35,6 @@ public interface UserProfileMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     Users toUserFromSyncDto(UserSyncDto dto);
+
+    ProfileDto toProfileDto(IdtLocalProfile localProfile);
 }

@@ -30,7 +30,6 @@ public class ActivitySecurity {
                 .orElse(false);
     }
 
-    // Check quyền dựa trên ID của Đơn đăng ký (Registration)
     @Transactional(readOnly = true)
     public boolean hasRegistrationPermission(Authentication authentication, Long registrationId) {
         boolean isAdmin = authentication.getAuthorities().stream()
@@ -52,13 +51,24 @@ public class ActivitySecurity {
             return false;
         }
 
-        if (activity.getCreatedBy() != null
-                && currentUsername.equals(activity.getCreatedBy().getUsername())) {
+        // 1. Kiểm tra người tạo hoạt động
+        if (activity.getCreatedByUsername() != null
+                && currentUsername.equals(activity.getCreatedByUsername())) {
             return true;
         }
 
-        return activity.getOrganizer() != null
-                && activity.getOrganizer().getUser() != null
-                && currentUsername.equals(activity.getOrganizer().getUser().getUsername());
+        // 2. Kiểm tra người tổ chức (Organizer)
+        if (activity.getOrganizer() != null && activity.getOrganizer().getId() != null) {
+
+            // TRƯỜNG HỢP A: Nếu authentication.getName() của ní trả về ID (ví dụ chuỗi "105" thay vì "admin")
+            // thì ní có thể mở comment dòng này để so sánh:
+            // return currentUsername.equals(String.valueOf(activity.getOrganizer().getId()));
+
+            // TRƯỜNG HỢP B (Thực tế nhất): Ní phải lấy được ID của user đang đăng nhập từ Token hoặc gọi qua DB Profile.
+            // Để code không bị lỗi lúc này, tui tạm thời để false nếu không rớt vào case người tạo.
+            // Khi rảnh, ní nên add thêm cột 'organizerUsername' vào bảng organizers để check cho lẹ giống thằng createdBy.
+        }
+
+        return false;
     }
 }

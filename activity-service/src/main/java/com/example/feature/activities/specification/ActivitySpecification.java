@@ -8,11 +8,10 @@ import org.springframework.util.StringUtils;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
-import jakarta.persistence.criteria.Join;
-import jakarta.persistence.criteria.JoinType;
 import java.time.LocalDateTime;
 
 public class ActivitySpecification {
+
     public static Specification<Activities> isApproved() {
         return (root, query, cb) -> cb.equal(root.get("status"), 1);
     }
@@ -44,10 +43,9 @@ public class ActivitySpecification {
                 Predicate isNotExternal = cb.isFalse(root.get("isExternal"));
                 Predicate isFaculty = cb.isTrue(root.get("isFaculty"));
 
+                // Chọc thẳng vào biến departmentId (Long)
                 if (studentDeptId != null) {
-                    Join<Object, Object> organizerJoin = root.join("organizer", JoinType.INNER);
-                    Join<Object, Object> departmentJoin = organizerJoin.join("department", JoinType.INNER);
-                    Predicate isMyFaculty = cb.equal(departmentJoin.get("id"), studentDeptId);
+                    Predicate isMyFaculty = cb.equal(root.get("departmentId"), studentDeptId);
                     return cb.and(isNotExternal, isFaculty, isMyFaculty);
                 }
 
@@ -67,6 +65,7 @@ public class ActivitySpecification {
     public static Specification<Activities> hasStatus(String status, String keyword, boolean isOrganizer) {
         return (root, query, cb) -> {
             LocalDateTime now = LocalDateTime.now();
+
             // --- XỬ LÝ STATUS "ALL" ---
             if ("ALL".equalsIgnoreCase(status)) {
                 if (isOrganizer) {
@@ -114,10 +113,8 @@ public class ActivitySpecification {
                         ));
 
                 Predicate notFull = cb.greaterThan(root.get("maxParticipants").as(Long.class), countQuery);
-
                 Predicate openCondition = cb.and(timeValid, notFull);
 
-                // Nếu là Student thì phải thêm điều kiện: Phải là hoạt động Đã Duyệt (status = 1)
                 if (!isOrganizer) {
                     return cb.and(cb.equal(root.get("status"), 1), openCondition);
                 }
@@ -126,7 +123,6 @@ public class ActivitySpecification {
             } else if ("UPCOMING".equals(status)) {
                 Predicate upcomingCondition = cb.greaterThan(root.get("registrationStart"), now);
 
-                // Nếu là Student thì phải thêm điều kiện: Phải là hoạt động Đã Duyệt (status = 1)
                 if (!isOrganizer) {
                     return cb.and(cb.equal(root.get("status"), 1), upcomingCondition);
                 }
@@ -148,13 +144,13 @@ public class ActivitySpecification {
         return (root, query, criteriaBuilder) -> {
             if (userId == null) return criteriaBuilder.conjunction();
 
-            // 1. Lấy ID từ Object organizer
+            // [FIX LỖI MỚI NHẤT]:
+            // organizer là Object Entity -> Phải get("organizer").get("id")
             Predicate conditionOrganizer = criteriaBuilder.equal(root.get("organizer").get("id"), userId);
 
-            // 2. Lấy ID từ Object createdBy
-            Predicate conditionCreator = criteriaBuilder.equal(root.get("createdBy").get("id"), userId);
+            // createdBy là Long nguyên thủy -> get thẳng tên biến
+            Predicate conditionCreator = criteriaBuilder.equal(root.get("createdBy"), userId);
 
-            // 3. Nối bằng OR (Là Người tổ chức HOẶC Người tạo thì đều được xem)
             return criteriaBuilder.or(conditionOrganizer, conditionCreator);
         };
     }
@@ -162,6 +158,7 @@ public class ActivitySpecification {
     public static Specification<Activities> hasDepartmentId(Long departmentId) {
         return (root, query, cb) -> {
             if (departmentId == null) return null;
+            // Chọc thẳng vào biến departmentId (Long)
             return cb.equal(root.get("departmentId"), departmentId);
         };
     }

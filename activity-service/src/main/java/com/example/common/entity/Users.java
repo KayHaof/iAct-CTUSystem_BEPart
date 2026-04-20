@@ -7,11 +7,9 @@ import lombok.*;
 @Table(name = "users")
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class Users {
+
     @Id
     private Long id;
-
-    @Column(name = "keycloak_id", nullable = false, unique = true)
-    private String keycloakId;
 
     @Column(unique = true, length = 100)
     private String username;
@@ -19,8 +17,4 @@ public class Users {
     @Column(unique = true)
     private String email;
 
-    @Column(name = "role_type", nullable = false)
-    private Integer roleType;
-
-    private Integer status;
 }

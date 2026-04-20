@@ -6,14 +6,12 @@ import com.example.dto.PageDTO;
 import com.example.feature.users.dto.ChangePasswordRequest;
 import com.example.feature.users.dto.ImportResultDto;
 import com.example.feature.users.dto.UserResponse;
-import com.example.feature.users.dto.UserUpdateRequest;
 import com.example.feature.users.service.UserImportService;
 import com.example.feature.users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,7 +27,6 @@ public class UserController {
     private final UserImportService userImportService;
     private final UserSecurity userSecurity;
 
-    // 1. Get All Users (Admin only)
     @PreAuthorize("hasAuthority('admin') or hasRole('ADMIN')")
     @GetMapping
     public ApiResponse<PageDTO<UserResponse>> getAllUsers(
@@ -40,67 +37,38 @@ public class UserController {
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Integer status,
             @RequestParam(required = false) Long classId) {
-
-        return ApiResponse.<PageDTO<UserResponse>>builder()
-                .result(userService.getUsers(page, size, keyword, roleType, departmentId, status, classId))
-                .build();
+        return ApiResponse.success(userService.getUsers(page, size, keyword, roleType, departmentId, status, classId));
     }
 
-    // 2. Get User By ID
     @GetMapping("/{id}")
     public ApiResponse<UserResponse> getUserById(@PathVariable Long id) {
-        return ApiResponse.<UserResponse>builder()
-                .result(userService.getUserById(id))
-                .build();
+        return ApiResponse.success(userService.getUserById(id));
     }
 
-    // 3. Update Profile
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('admin') or hasRole('ADMIN') or @userSecurity.hasUserId(authentication, #id)")
-    public ApiResponse<UserResponse> updateProfile(
-            @PathVariable Long id,
-            @RequestBody UserUpdateRequest request) {
 
-        return ApiResponse.<UserResponse>builder()
-                .result(userService.updateUserInfo(id, request))
-                .message("Cập nhật thông tin thành công")
-                .build();
-    }
-
-    // 4. Update - Del - Inactive status user
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('admin') or hasRole('ADMIN') or @userSecurity.hasUserId(authentication, #id)")
+    @PreAuthorize("hasAuthority('admin') or hasRole('ADMIN')")
     public ApiResponse<String> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
-        return ApiResponse.<String>builder()
-                .message("Xóa hoặc vô hiệu người dùng thành công")
-                .build();
+        return ApiResponse.success("Xóa hoặc vô hiệu người dùng thành công");
     }
 
-    // 5. Active user by admin
     @PutMapping("/{id}/active")
     @PreAuthorize("hasAuthority('admin') or hasRole('ADMIN')")
     public ApiResponse<String> activeUser(@PathVariable long id) {
         userService.activateUser(id);
-        return ApiResponse.<String>builder()
-                .message("Kích hoạt tài khoản thành công")
-                .build();
+        return ApiResponse.success("Kích hoạt tài khoản thành công");
     }
 
-    // 6. Get info user by email login
     @GetMapping("/my-info")
     public ApiResponse<UserResponse> getMyInfo() {
-        return ApiResponse.<UserResponse>builder()
-                .result(userService.getMyInfo())
-                .build();
+        return ApiResponse.success(userService.getMyInfo());
     }
 
-    // 7. Change password
     @PutMapping("/my-password")
     public ApiResponse<Void> changeMyPassword(
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody ChangePasswordRequest request) {
-
         userService.changePasswordViaKeycloak(bearerToken, request);
         return ApiResponse.<Void>builder()
                 .code(200)
@@ -108,17 +76,12 @@ public class UserController {
                 .build();
     }
 
-    // 8. Sync info user form keycloak
     @PostMapping("/sync")
     public ApiResponse<String> syncUser(@AuthenticationPrincipal Jwt jwt) {
         userService.syncUserFromKeycloak(jwt);
-        return ApiResponse.<String>builder()
-                .code(200)
-                .message("Đồng bộ người dùng thành công!")
-                .build();
+        return ApiResponse.success("Đồng bộ người dùng thành công!");
     }
 
-    // 9. Search user by email
     @GetMapping("/search")
     public ApiResponse<UserResponse> getUserByEmail(@RequestParam("email") String email) {
         return ApiResponse.<UserResponse>builder()
@@ -128,27 +91,19 @@ public class UserController {
                 .build();
     }
 
-    // 10. Count user by role
     @PreAuthorize("hasAuthority('admin') or hasRole('ADMIN')")
     @GetMapping("/counts")
     public ApiResponse<Map<String, Long>> getUserCounts(@RequestParam(required = false) String keyword) {
-        return ApiResponse.<Map<String, Long>>builder()
-                .result(userService.countUsersByRole(keyword))
-                .build();
+        return ApiResponse.success(userService.countUsersByRole(keyword));
     }
 
-    // 11. Reset password by admin
     @PutMapping("/{id}/reset-password")
     @PreAuthorize("hasAuthority('admin') or hasRole('ADMIN')")
     public ApiResponse<String> resetPassword(@PathVariable Long id) {
         userService.sendResetPasswordEmail(id);
-
-        return ApiResponse.<String>builder()
-                .message("Đã gửi email yêu cầu đặt lại mật khẩu thành công")
-                .build();
+        return ApiResponse.success("Đã gửi email yêu cầu đặt lại mật khẩu thành công");
     }
 
-    // 12. Import users by file excel
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ImportResultDto> importUsersFromExcel(
             @RequestParam("file") MultipartFile file,
@@ -156,5 +111,12 @@ public class UserController {
     ) {
         ImportResultDto result = userImportService.importUsers(file, roleType);
         return ApiResponse.success(result);
+    }
+
+    @GetMapping("/username/{username}")
+    public ApiResponse<UserResponse> getUserByUsername(@PathVariable String username) {
+        return ApiResponse.<UserResponse>builder()
+                .result(userService.getUserByUsername(username))
+                .build();
     }
 }

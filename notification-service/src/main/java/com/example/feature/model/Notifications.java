@@ -14,17 +14,15 @@ public class Notifications {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = true)
-    private Users user;
+    @Column(name = "user_id")
+    private Long userId;
 
     private String title;
     private String message;
     private Integer type;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "activity_id")
-    private Activities activity;
+    @Column(name = "activity_id")
+    private Long activityId;
 
     @Column(name = "is_read")
     private Boolean isRead = false;

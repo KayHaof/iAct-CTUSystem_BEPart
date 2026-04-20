@@ -1,7 +1,5 @@
 package com.example.feature.organizers.model;
 
-import com.example.common.entity.Departments;
-import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import jakarta.persistence.*;
 import lombok.*;
@@ -17,21 +15,13 @@ public class Organizers {
     @Column(name = "user_id")
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @MapsId
-    @JoinColumn(name = "user_id")
-    @ToString.Exclude
-    private Users user;
-
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id")
-    private Departments department;
+    @Column(name = "department_id")
+    private Long departmentId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "representative_user")
-    private Users representative;
+    @Column(name = "representative_user")
+    private Long representativeUser;
 
     @OneToMany(mappedBy = "organizer", fetch = FetchType.LAZY)
     private List<Activities> activities;

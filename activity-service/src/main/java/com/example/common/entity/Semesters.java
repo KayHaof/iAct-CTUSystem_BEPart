@@ -1,11 +1,7 @@
 package com.example.common.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
+import lombok.*;
 import java.time.LocalDate;
 
 @Entity
@@ -17,9 +13,7 @@ public class Semesters {
     private Long id;
 
     private String semesterName;
-    private String academicYear;
     private LocalDate startDate;
     private LocalDate endDate;
     private Boolean isActive;
-    private Boolean isLocked;
 }

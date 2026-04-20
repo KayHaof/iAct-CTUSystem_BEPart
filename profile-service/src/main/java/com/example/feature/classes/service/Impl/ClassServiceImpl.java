@@ -30,6 +30,7 @@ public class ClassServiceImpl implements ClassService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ClassResponse> getClasses(Long majorId, Integer academicYear) {
         List<Clazzes> classes = (majorId != null)
                 ? classRepository.findClassesByMajorAndYear(majorId, academicYear)

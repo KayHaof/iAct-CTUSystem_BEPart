@@ -1,8 +1,5 @@
 package com.example.feature.activities.model;
 
-import com.example.common.entity.Benefits;
-import com.example.common.entity.Semesters;
-import com.example.common.entity.Users;
 import com.example.feature.activitySchedule.model.ActivitySchedule;
 import com.example.feature.organizers.model.Organizers;
 import jakarta.persistence.*;
@@ -52,28 +49,22 @@ public class Activities {
     @Column(name = "is_faculty")
     private Boolean isFaculty;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "semester_id")
-    private Semesters semester;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organizer_id")
-    private Organizers organizer;
-
     @Column(name = "qr_code_token", unique = true)
     private String qrCodeToken;
 
     private Integer status; // 0 = pending. 1 = active, 2 = reject, 3 = cancel, 4 = draft
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by")
-    private Users createdBy;
-
     @Column(name = "department_id")
     private Long departmentId;
 
-    @OneToMany(mappedBy = "activity", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Benefits> benefits;
+    @Column(name = "reason", columnDefinition = "TEXT")
+    private String reason;
+
+    @Column(name = "handled_at")
+    private LocalDateTime handledAt;
+
+    @Column(name = "created_by_username")
+    private String createdByUsername;
 
     @Column(name = "updated_at")
     @UpdateTimestamp
@@ -83,21 +74,22 @@ public class Activities {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
-    @Column(name = "created_by_username")
-    private String createdByUsername;
-
-    @Column(name = "reason", columnDefinition = "TEXT")
-    private String reason; // Lưu lý do từ chối (reject) hoặc lý do hủy (cancel)
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "handled_by")
-    private Users handledBy;
-
-    @Column(name = "handled_at")
-    private LocalDateTime handledAt;
+    @JoinColumn(name = "organizer_id")
+    private Organizers organizer;
 
     @OneToMany(mappedBy = "activity", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ActivitySchedule> schedules = new ArrayList<>();
+
+    // Giao tiếp với các DB khác
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "handled_by")
+    private Long handledBy;
+
+    @Column(name = "semester_id")
+    private Long semesterId;
 
     public void addSchedule(ActivitySchedule schedule) {
         schedules.add(schedule);

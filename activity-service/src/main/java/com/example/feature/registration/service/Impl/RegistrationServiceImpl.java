@@ -19,6 +19,7 @@ import com.example.feature.registration.mapper.RegistrationMapper;
 import com.example.feature.registration.model.Registrations;
 import com.example.feature.registration.repository.RegistrationRepository;
 import com.example.feature.registration.service.RegistrationService;
+import com.example.feignClient.IdentityServiceClient;
 import com.example.feignClient.ProfileClient;
 import com.example.service.ExcelExportService;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -51,12 +53,31 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final ExcelExportService excelExportService;
     private final ProofRepository proofRepository;
     private final ProfileClient profileClient;
+    private final IdentityServiceClient identityServiceClient;
 
     // --- Lấy sinh viên đang đăng nhập ---
-    private Users getCurrentStudent() {
-        String username = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    public Users getCurrentStudent() {
+        Jwt jwt = (Jwt) Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getPrincipal();
+        assert jwt != null;
+        String username = jwt.getClaimAsString("preferred_username");
+
+        return userRepository.findByUsername(username).orElseGet(() -> {
+            log.warn("User {} chưa có trong Activity DB. Tiến hành Lazy Sync...", username);
+
+            try {
+                var response = identityServiceClient.getUserByUsername(username).getResult();
+
+                Users newUser = new Users();
+                newUser.setId(response.getId());
+                newUser.setUsername(response.getUsername());
+                newUser.setEmail(response.getEmail());
+
+                return userRepository.save(newUser);
+            } catch (Exception e) {
+                log.error("Không thể Lazy Sync user từ Identity", e);
+                throw new AppException(ErrorCode.USER_NOT_EXISTED);
+            }
+        });
     }
 
     private void populateProfileData(List<RegistrationResponse> responses) {
@@ -104,6 +125,7 @@ public class RegistrationServiceImpl implements RegistrationService {
                 if (searchedUserIds.isEmpty()) {
                     predicates.add(cb.disjunction());
                 } else {
+                    // [ĐÃ SỬA CHUẨN]: Trả lại get("student").get("id") vì student là Entity
                     predicates.add(root.get("student").get("id").in(searchedUserIds));
                 }
             }
@@ -113,6 +135,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public RegistrationResponse getMyStatusByActivity(Long activityId) {
         Users student = getCurrentStudent();
         return registrationRepository.findByStudentIdAndActivityId(student.getId(), activityId)
@@ -150,6 +173,7 @@ public class RegistrationServiceImpl implements RegistrationService {
             regToSave = existingReg;
             registrationMapper.reRegisterEntity(regToSave, selectedSchedules);
         } else {
+            // [ĐÃ SỬA CHUẨN]: Phải truyền nguyên object Users student, không phải student.getId()
             regToSave = registrationMapper.toNewEntity(student, activity, selectedSchedules);
         }
 
@@ -285,8 +309,16 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         Specification<Registrations> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            // Lọc theo Sinh viên hiện tại (Đúng)
             predicates.add(cb.equal(root.get("student").get("id"), student.getId()));
-            if (semesterId != null) predicates.add(cb.equal(root.get("activity").get("semester").get("id"), semesterId));
+
+            // [CHỖ CẦN SỬA]: Chọc thẳng vào semesterId của Activities
+            if (semesterId != null) {
+                // Nếu trong Activities.java ní đặt tên là semesterId thì dùng tên đó
+                predicates.add(cb.equal(root.get("activity").get("semesterId"), semesterId));
+            }
+
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 

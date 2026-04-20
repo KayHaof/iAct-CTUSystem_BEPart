@@ -26,6 +26,7 @@ public class MajorServiceImpl implements MajorService {
     private final MajorMapper majorMapper;
 
     @Override
+    @Transactional(readOnly = true)
     public List<MajorResponse> getMajors(Long departmentId) {
         List<Major> majors;
         if (departmentId != null) {

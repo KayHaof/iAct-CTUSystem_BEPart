@@ -1,13 +1,9 @@
 package com.example.feature.activities.service.impl;
 
-import com.example.common.dto.BenefitDto;
 import com.example.common.dto.NotificationRequest;
 import com.example.common.dto.ProfileDto;
-import com.example.common.entity.Benefits;
-import com.example.common.entity.Departments;
 import com.example.common.entity.Semesters;
 import com.example.common.entity.Users;
-import com.example.common.repository.LocalCategoryRepository;
 import com.example.common.repository.LocalNotificationRepository;
 import com.example.common.repository.LocalSemesterRepository;
 import com.example.common.repository.LocalUserRepository;
@@ -62,7 +58,6 @@ public class ActivityServiceImpl implements ActivityService {
     private final ActivityRepository activityRepository;
     private final LocalSemesterRepository semesterRepository;
     private final OrganizerRepository organizerRepository;
-    private final LocalCategoryRepository categoryRepository;
     private final LocalNotificationRepository notificationRepository;
     private final LocalUserRepository userRepository;
     private final RegistrationRepository registrationRepository;
@@ -114,23 +109,26 @@ public class ActivityServiceImpl implements ActivityService {
             organizer = getOrCreateOrganizer(user);
         }
 
-        Activities activity = activityMapper.toEntity(request, semester, organizer);
+        // [FIX LỖI 117] Bỏ truyền `semester` vào mapper (do mapper đã bỏ). Tự map ID thủ công
+        Activities activity = activityMapper.toEntity(request, organizer);
+        activity.setSemesterId(semester.getId());
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()) {
             String currentUsername = authentication.getName();
             Users currentUser = userRepository.findByUsername(currentUsername)
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-            activity.setCreatedBy(currentUser);
+
+            // [FIX LỖI 124] Truyền Long ID thay vì Object Users
+            activity.setCreatedBy(currentUser.getId());
             activity.setCreatedByUsername(currentUsername);
             activity.setDepartmentId(Objects.requireNonNull(getProfileData(currentUser)).getDepartmentId());
         }
 
+        // [FIX LỖI 132] Tạm thời KHÔNG lưu trực tiếp Benefits. Giao phó cho Kafka
         if (request.getBenefits() != null && !request.getBenefits().isEmpty()) {
-            List<Benefits> benefitsList = processBenefits(request.getBenefits(), activity);
-            if (!benefitsList.isEmpty()) {
-                activity.setBenefits(benefitsList);
-            }
+            log.info("TODO KAFKA: Sẽ gửi danh sách Benefits qua Credit Service qua topic 'activity-created'");
+            // Code bắn Kafka sẽ nằm ở đây sau này.
         }
 
         if (request.getSchedules() != null && !request.getSchedules().isEmpty()) {
@@ -158,6 +156,7 @@ public class ActivityServiceImpl implements ActivityService {
 
     // --- READ DETAILS ---
     @Override
+    @Transactional(readOnly = true)
     public ActivityResponse getActivityById(Long id) {
         Activities activity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động"));
@@ -178,6 +177,7 @@ public class ActivityServiceImpl implements ActivityService {
 
     // --- READ ALL ---
     @Override
+    @Transactional(readOnly = true)
     public PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId, Pageable pageable) {
         Long userDeptId = null;
 
@@ -200,8 +200,9 @@ public class ActivityServiceImpl implements ActivityService {
                 currentUser = userOpt.get();
                 if (isAdmin || isDepartment) {
                     Optional<Organizers> orgOpt = organizerRepository.findById(currentUser.getId());
-                    if (orgOpt.isPresent() && orgOpt.get().getDepartment() != null) {
-                        userDeptId = orgOpt.get().getDepartment().getId();
+                    // [FIX LỖI 203, 204] Đổi từ getDepartment() thành getDepartmentId()
+                    if (orgOpt.isPresent() && orgOpt.get().getDepartmentId() != null) {
+                        userDeptId = orgOpt.get().getDepartmentId();
                     }
                 } else {
                     try {
@@ -279,7 +280,8 @@ public class ActivityServiceImpl implements ActivityService {
             Semesters newSemester = semesterRepository.findSemesterByDate(activityDate)
                     .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
                             "Ngày bắt đầu tổ chức (" + activityDate + ") không thuộc bất kỳ Học kỳ nào!"));
-            existingActivity.setSemester(newSemester);
+            // [FIX LỖI 282]
+            existingActivity.setSemesterId(newSemester.getId());
         }
 
         if (request.getOrganizerId() != null &&
@@ -294,10 +296,14 @@ public class ActivityServiceImpl implements ActivityService {
             existingActivity.setOrganizer(newOrganizer);
         }
 
+        // [FIX LỖI 298, 300] Comment lại việc set Benefits. Dùng Kafka sau
         if (request.getBenefits() != null) {
+            log.info("TODO KAFKA: Gửi lệnh cập nhật Benefits qua Credit Service (Topic: activity-updated)");
+            /*
             existingActivity.getBenefits().clear();
             List<Benefits> newBenefits = processBenefits(request.getBenefits(), existingActivity);
             existingActivity.getBenefits().addAll(newBenefits);
+            */
         }
 
         if (request.getSchedules() != null) {
@@ -347,19 +353,10 @@ public class ActivityServiceImpl implements ActivityService {
         deleteOldImage(activity.getThumbnail());
 
         activityRepository.deleteById(id);
+        log.info("TODO KAFKA: Gửi lệnh xóa Benefits qua Credit Service (Topic: activity-deleted)");
     }
 
-    private List<Benefits> processBenefits(List<BenefitDto> benefitDtos, Activities activity) {
-        if (benefitDtos == null) return new java.util.ArrayList<>();
-        return benefitDtos.stream().map(dto -> {
-            Benefits benefit = activityMapper.toBenefitEntity(dto);
-            benefit.setActivity(activity);
-            if(dto.getCategoryId() != null) {
-                benefit.setCategory(categoryRepository.findById(dto.getCategoryId()).orElse(null));
-            }
-            return benefit;
-        }).collect(Collectors.toList());
-    }
+    // [FIX LỖI 355] Đã xóa (hoặc comment) hàm processBenefits vì ta không còn dùng Entity Benefits ở đây nữa.
 
     // --- APPROVE ---
     @Override
@@ -372,7 +369,9 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         activity.setStatus(1);
-        activity.setHandledBy(getCurrentAdmin());
+        // [FIX LỖI 375] set HandledBy bằng ID
+        Users admin = getCurrentAdmin();
+        activity.setHandledBy(admin != null ? admin.getId() : null);
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
 
@@ -392,7 +391,9 @@ public class ActivityServiceImpl implements ActivityService {
 
         activity.setStatus(2);
         activity.setReason(reason != null && !reason.isBlank() ? reason : "Không có lý do cụ thể");
-        activity.setHandledBy(getCurrentAdmin());
+        // [FIX LỖI 395] set HandledBy bằng ID
+        Users admin = getCurrentAdmin();
+        activity.setHandledBy(admin != null ? admin.getId() : null);
         activity.setHandledAt(LocalDateTime.now());
 
         Activities savedActivity = activityRepository.save(activity);
@@ -412,7 +413,9 @@ public class ActivityServiceImpl implements ActivityService {
 
         activity.setStatus(4);
         activity.setReason(reason != null && !reason.isBlank() ? reason : "Sự cố ngoài ý muốn");
-        activity.setHandledBy(getCurrentAdmin());
+        // [FIX LỖI 415] set HandledBy bằng ID
+        Users admin = getCurrentAdmin();
+        activity.setHandledBy(admin != null ? admin.getId() : null);
         activity.setHandledAt(LocalDateTime.now());
 
         Activities savedActivity = activityRepository.save(activity);
@@ -440,15 +443,15 @@ public class ActivityServiceImpl implements ActivityService {
                             ? profile.getFullName()
                             : user.getUsername();
 
+                    // [FIX LỖI 444] Đổi từ .user(user) thành .id(user.getId())
                     Organizers newOrg = Organizers.builder()
-                            .user(user)
+                            .id(user.getId())
                             .name(displayName)
                             .build();
 
+                    // [FIX LỖI 451] Đổi thành setDepartmentId()
                     if (profile != null && profile.getDepartmentId() != null) {
-                        Departments dummyDept = new Departments();
-                        dummyDept.setId(profile.getDepartmentId());
-                        newOrg.setDepartment(dummyDept);
+                        newOrg.setDepartmentId(profile.getDepartmentId());
                     }
 
                     return organizerRepository.save(newOrg);
@@ -504,6 +507,5 @@ public class ActivityServiceImpl implements ActivityService {
         }
         return null;
     }
-
 
 }

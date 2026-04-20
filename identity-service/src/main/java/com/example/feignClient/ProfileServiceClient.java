@@ -16,7 +16,7 @@ public interface ProfileServiceClient {
 
     // 1. Lấy chi tiết 1 hồ sơ
     @GetMapping("/api/v1/users/{userId}")
-    ApiResponse<ProfileDto> getProfileByUserId(@PathVariable("userId") Long userId);
+    ApiResponse<ProfileDto> getProfileByUserId(@PathVariable Long userId);
 
     // 2. Lấy một nhóm hồ sơ
     @PostMapping("/api/v1/users/batch")
@@ -33,7 +33,7 @@ public interface ProfileServiceClient {
     // 4. Cập nhật hồ sơ (Phân lớp, đổi tên, đổi avatar...)
     @PutMapping("/api/v1/users/{userId}")
     ApiResponse<Void> updateUserProfile(
-            @PathVariable("userId") Long userId,
+            @PathVariable Long userId,
             @RequestBody UserUpdateRequest request
     );
 

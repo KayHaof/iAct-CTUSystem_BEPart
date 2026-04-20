@@ -1,6 +1,5 @@
 package com.example.feature.registration.mapper;
 
-import com.example.common.entity.Benefits;
 import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import com.example.feature.activitySchedule.model.ActivitySchedule;
@@ -17,6 +16,7 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring", imports = {Collectors.class, ArrayList.class})
 public interface RegistrationMapper {
 
+    // [ĐÃ SỬA]: Lấy studentId từ Object student (entity.student.id)
     @Mapping(target = "studentId", source = "entity.student.id")
     @Mapping(target = "studentName", ignore = true)
     @Mapping(target = "avatarUrl", ignore = true)
@@ -27,16 +27,17 @@ public interface RegistrationMapper {
     @Mapping(target = "attendedAt", source = "entity.attendance.checkinTime")
     @Mapping(target = "scheduleIds", expression = "java( entity.getRegisteredSchedules() != null ? entity.getRegisteredSchedules().stream().map(s -> s.getId()).collect(Collectors.toList()) : new ArrayList<Long>() )")
     @Mapping(target = "proofStatus", source = "proofStatus")
-    @Mapping(target = "point", expression = "java( calculateTotalPoints(entity.getActivity().getBenefits()) )")
+    @Mapping(target = "point", ignore = true)
     RegistrationResponse toResponseWithProof(Registrations entity, Integer proofStatus);
 
     default RegistrationResponse toResponse(Registrations entity) {
         return toResponseWithProof(entity, 0);
     }
 
+    // [ĐÃ SỬA]: Đổi tham số thành Object `Users` và dùng `setStudent` thay vì `setStudentId`
     default Registrations toNewEntity(Users student, Activities activity, List<ActivitySchedule> schedules) {
         Registrations reg = new Registrations();
-        reg.setStudent(student);
+        reg.setStudent(student); // Gán nguyên Object Users lấy từ DB/Lazy Sync
         reg.setActivity(activity);
         reg.setRegisteredSchedules(schedules != null ? schedules : new ArrayList<>());
         reg.setStatus(0);
@@ -57,15 +58,5 @@ public interface RegistrationMapper {
         if (entity.getRegisteredSchedules() != null) {
             entity.getRegisteredSchedules().clear();
         }
-    }
-
-    default Integer calculateTotalPoints(List<Benefits> benefits) {
-        if (benefits == null || benefits.isEmpty()) {
-            return 0;
-        }
-        return benefits.stream()
-                .filter(b -> b.getPoint() != null)
-                .mapToInt(Benefits::getPoint)
-                .sum();
     }
 }

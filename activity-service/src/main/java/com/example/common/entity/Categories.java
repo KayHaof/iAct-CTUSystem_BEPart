@@ -3,8 +3,6 @@ package com.example.common.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 
-import java.util.List;
-
 @Entity
 @Table(name = "categories")
 @Data
@@ -19,11 +17,7 @@ public class Categories {
     @Column(name = "max_point")
     private Integer maxPoint;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private Categories parent;
+    @Column(name = "parent_id")
+    private Long parentId;
 
-    @OneToMany(mappedBy = "parent")
-    private List<Categories> subCategories;
 }
-

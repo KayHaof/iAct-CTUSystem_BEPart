@@ -31,7 +31,7 @@ public class UserProfileController {
 
     // 2. Lấy profile theo userId
     @GetMapping("/{userId}")
-    public ApiResponse<ProfileDto> getProfileByUserId(@PathVariable Long userId) {
+            public ApiResponse<ProfileDto> getProfileByUserId(@PathVariable Long userId) {
         ProfileDto result = profileService.getProfileByUserId(userId);
          System.out.println("===> DỮ LIỆU TỪ SERVICE TRẢ VỀ: " + result);
 

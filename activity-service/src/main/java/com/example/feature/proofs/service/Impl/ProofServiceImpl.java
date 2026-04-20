@@ -69,7 +69,7 @@ public class ProofServiceImpl implements ProofService {
             proofMapper.updateEntityFromRequest(request, proofToSave);
             proofToSave.setStatus(0);
         } else {
-            proofToSave = proofMapper.toNewEntity(request, student, activity);
+            proofToSave = proofMapper.toNewEntity(request, student.getId(), activity);
             proofToSave.setStatus(0);
         }
 

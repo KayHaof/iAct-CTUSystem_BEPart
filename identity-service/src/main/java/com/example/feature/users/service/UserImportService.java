@@ -5,6 +5,7 @@ import com.example.feature.users.dto.ImportResultDto;
 import com.example.feature.users.model.Users;
 import com.example.feature.users.repository.UserRepository;
 import com.example.feignClient.ProfileServiceClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -12,6 +13,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,6 +31,8 @@ public class UserImportService {
     private final ProfileServiceClient profileServiceClient;
     private final Keycloak keycloak;
     private final String realm = "myRealm";
+    private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Transactional(rollbackFor = Exception.class)
     public ImportResultDto importUsers(MultipartFile file, Integer roleType) {
@@ -41,13 +45,11 @@ public class UserImportService {
             Sheet errorSheet = errorWorkbook.createSheet("Lỗi Import");
             int errorRowIdx = 0;
 
-            // Header cho file lỗi
             Row headerRow = sheet.getRow(0);
             Row errorHeader = errorSheet.createRow(errorRowIdx++);
             copyRow(headerRow, errorHeader);
             errorHeader.createCell(headerRow.getLastCellNum()).setCellValue("LÝ DO LỖI");
 
-            // 1. GOM DATA ĐỂ VALIDATE 1 LẦN
             List<Row> dataRows = new ArrayList<>();
             Set<String> excelUsernames = new HashSet<>();
             Set<String> excelEmails = new HashSet<>();
@@ -64,10 +66,8 @@ public class UserImportService {
                 dataRows.add(row);
             }
 
-            // Gọi DB 1 lần duy nhất
             Set<String> existingUsernames = userRepository.findExistingUsernames(excelUsernames);
             Set<String> existingEmails = userRepository.findExistingEmails(excelEmails);
-
             Set<String> existingMssvs = new HashSet<>();
             try {
                 if (!excelMssvs.isEmpty()) {
@@ -81,7 +81,6 @@ public class UserImportService {
             List<CreateProfileDto> profilesToSync = new ArrayList<>();
             List<String> createdKeycloakIds = new ArrayList<>();
 
-            // 2. XỬ LÝ TỪNG DÒNG
             for (Row row : dataRows) {
                 String username = getCellValue(row, 0);
                 String email = getCellValue(row, 1);
@@ -107,7 +106,6 @@ public class UserImportService {
                 userRep.setUsername(username);
                 userRep.setEmail(email);
 
-                // Cắt First Name / Last Name từ Full Name (Sơ bộ)
                 String[] nameParts = fullName.trim().split(" ", 2);
                 userRep.setFirstName(nameParts[0]);
                 if (nameParts.length > 1) userRep.setLastName(nameParts[1]);
@@ -128,9 +126,8 @@ public class UserImportService {
                         String path = response.getLocation().getPath();
                         String keycloakId = path.substring(path.lastIndexOf("/") + 1);
 
-                        // Gán Role
                         assignRoleToUser(keycloakId, "student");
-                        createdKeycloakIds.add(keycloakId); // Đưa vào ds để canh chừng
+                        createdKeycloakIds.add(keycloakId);
 
                         Users user = new Users();
                         user.setKeycloakId(keycloakId);
@@ -144,6 +141,7 @@ public class UserImportService {
                                 .fullName(fullName)
                                 .roleType(1)
                                 .studentCode(mssv)
+                                .classCode(classCode)
                                 .build();
                         profilesToSync.add(profile);
 
@@ -163,17 +161,23 @@ public class UserImportService {
                 }
             }
 
-            // 3. BATCH INSERT XUỐNG DB & GỌI PROFILE SERVICE
             try {
                 if (!usersToSave.isEmpty()) {
                     usersToSave = userRepository.saveAll(usersToSave);
-
-                    // Gán lại ID thực tế từ DB cho list Profile
                     for (int i = 0; i < usersToSave.size(); i++) {
                         profilesToSync.get(i).setUserId(usersToSave.get(i).getId());
                     }
 
                     profileServiceClient.createProfilesBatch(profilesToSync);
+
+                    for (Users u : usersToSave) {
+                        Map<String, Object> payload = new HashMap<>();
+                        payload.put("userId", u.getId());
+                        payload.put("username", u.getUsername());
+                        try {
+                            kafkaTemplate.send("user-created-topic", objectMapper.writeValueAsString(payload));
+                        } catch (Exception ignored) {}
+                    }
                 }
             } catch (Exception dbException) {
                 log.error("Lỗi khi lưu DB/Profile, tiến hành rollback Keycloak...", dbException);
@@ -183,7 +187,6 @@ public class UserImportService {
                 throw new RuntimeException("Lỗi hệ thống khi lưu dữ liệu, đã hoàn tác.");
             }
 
-            // 4. MÃ HÓA FILE LỖI
             if (result.getFailCount() > 0) {
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 errorWorkbook.write(bos);

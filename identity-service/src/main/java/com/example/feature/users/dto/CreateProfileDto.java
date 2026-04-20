@@ -14,6 +14,7 @@ public class CreateProfileDto {
     private String fullName;
     private Integer roleType;
     private String studentCode;
+    private String classCode;
     private Long classId;
     private String description;
 }

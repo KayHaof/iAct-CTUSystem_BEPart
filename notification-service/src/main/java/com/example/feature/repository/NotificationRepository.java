@@ -15,6 +15,6 @@ public interface NotificationRepository extends JpaRepository<Notifications, Lon
 
     long countByUserIdAndIsReadFalse(Long userId);
 
-    @Query("SELECT n FROM Notifications n LEFT JOIN FETCH n.activity WHERE n.user.id = :userId ORDER BY n.createdAt DESC")
+    @Query("SELECT n FROM Notifications n WHERE n.userId = :userId ORDER BY n.createdAt DESC")
     List<Notifications> findAllByUserIdFetched(@Param("userId") Long userId);
 }

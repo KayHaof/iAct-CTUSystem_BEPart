@@ -1,6 +1,5 @@
 package com.example.feature.proofs.model;
 
-import com.example.common.entity.Users;
 import com.example.feature.activities.model.Activities;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -20,10 +19,11 @@ public class Proofs {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "student_id")
-    private Users student;
+    // [CẮT BỎ] Đổi từ Object Users sang ID nguyên thủy
+    @Column(name = "student_id")
+    private Long studentId;
 
+    // [GIỮ NGUYÊN] Vì bảng Activities nằm chung DB iact_activity
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "activity_id")
     private Activities activity;
@@ -40,11 +40,10 @@ public class Proofs {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "verified_user")
-    private Users verifiedUser;
+    // [CẮT BỎ] Đổi từ Object Users sang ID nguyên thủy
+    @Column(name = "verified_user")
+    private Long verifiedBy;
 
     @Column(name = "verified_time")
     private LocalDateTime verifiedTime;
 }
-
