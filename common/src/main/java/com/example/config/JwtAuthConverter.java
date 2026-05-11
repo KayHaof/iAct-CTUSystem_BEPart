@@ -24,8 +24,7 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
     public AbstractAuthenticationToken convert(Jwt jwt) {
         Collection<GrantedAuthority> authorities = Stream.concat(
                 jwtGrantedAuthoritiesConverter.convert(jwt).stream(),
-                extractResourceRoles(jwt).stream()
-        ).collect(Collectors.toSet());
+                extractResourceRoles(jwt).stream()).collect(Collectors.toSet());
 
         String principalClaimName = jwt.getClaimAsString("preferred_username");
         if (principalClaimName == null) {
@@ -35,6 +34,8 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
         return new JwtAuthenticationToken(jwt, authorities, principalClaimName);
     }
 
+    // THÊM ANNOTATION NÀY VÀO ĐÂY ĐỂ TẮT CẢNH BÁO
+    @SuppressWarnings("unchecked")
     private Collection<? extends GrantedAuthority> extractResourceRoles(Jwt jwt) {
         Map<String, Object> realmAccess;
         Collection<String> roles;

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class KeycloakRoleConverter {
+    @SuppressWarnings("unchecked")
     public static Collection<GrantedAuthority> extractAuthorities(Map<String, Object> claims) {
         Map<String, Object> realmAccess = (Map<String, Object>) claims.get("realm_access");
         if (realmAccess == null || realmAccess.get("roles") == null) {

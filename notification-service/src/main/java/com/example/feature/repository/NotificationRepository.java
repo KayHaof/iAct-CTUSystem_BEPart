@@ -2,6 +2,7 @@ package com.example.feature.repository;
 
 import com.example.feature.model.Notifications;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,4 +18,10 @@ public interface NotificationRepository extends JpaRepository<Notifications, Lon
 
     @Query("SELECT n FROM Notifications n WHERE n.userId = :userId ORDER BY n.createdAt DESC")
     List<Notifications> findAllByUserIdFetched(@Param("userId") Long userId);
+
+    boolean existsByActivityId(Long activityId);
+
+    @Modifying
+    @Query("DELETE FROM Notifications n WHERE n.activityId = :activityId")
+    void deleteByActivityId(@Param("activityId") Long activityId);
 }

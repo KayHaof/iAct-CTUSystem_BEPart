@@ -279,7 +279,7 @@
         "containerId" : "160ca3a8-7d74-40e7-a91e-ac83b40be720",
         "attributes" : { }
       } ],
-      "myclient123@" : [ ],
+      "myClient" : [ ],
       "security-admin-console" : [ ],
       "admin-cli" : [ ],
       "account-console" : [ ],
@@ -575,7 +575,7 @@
     "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
   }, {
     "id" : "2741ef2e-4102-4206-9304-36245fc31742",
-    "clientId" : "myclient123@",
+    "clientId" : "myClient",
     "name" : "myClient",
     "description" : "",
     "rootUrl" : "http://localhost:8080/",

@@ -1,7 +1,5 @@
 package com.example.feature.model;
 
-import com.example.common.entity.Activities;
-import com.example.entity.Users;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -25,6 +23,7 @@ public class Notifications {
     private Long activityId;
 
     @Column(name = "is_read")
+    @Builder.Default
     private Boolean isRead = false;
 
     @Column(name = "created_at")

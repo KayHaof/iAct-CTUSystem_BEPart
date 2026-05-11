@@ -3,70 +3,83 @@
 
     <#if section = "header">
     <#elseif section = "form">
-        <script src="https://cdn.tailwindcss.com"></script>
 
-        <style>
-            body, .login-pf-page {
-                background-image: url('${url.resourcesPath}/img/bg.jpg') !important;
-                background-size: cover !important; background-position: center !important;
-                background-attachment: fixed !important; background-color: #f3f4f6 !important;
-                min-height: 100vh !important; width: 100vw !important;
-                display: flex !important; align-items: center !important; justify-content: center !important;
-                margin: 0 !important; padding: 2rem 1rem !important; box-sizing: border-box !important;
-            }
-            .card-pf {
-                background: transparent !important; border: none !important; box-shadow: none !important;
-                padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important;
-            }
-            #kc-header, #kc-page-title { display: none !important; }
-        </style>
-
-        <div class="w-full max-w-lg mx-auto p-8 sm:p-10 bg-white rounded-3xl shadow-2xl">
-
-            <#-- LOGO -->
-            <div class="flex justify-center mb-6">
-                <img src="${url.resourcesPath}/img/logo.png" alt="Logo" class="h-20 object-contain">
-            </div>
-
-            <#-- TIÊU ĐỀ -->
-            <div class="text-center mb-8">
-                <h2 class="text-3xl font-extrabold text-blue-600 mb-2 tracking-tight">Quên mật khẩu?</h2>
-                <p class="text-gray-500 text-base font-medium">Nhập email hoặc tên đăng nhập của bạn để nhận liên kết khôi phục</p>
-            </div>
-
-            <#-- HIỆN LỖI/THÔNG BÁO -->
-            <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
-                <div class="mb-6 p-4 rounded-xl text-sm font-bold flex items-center gap-2
-                    <#if message.type = 'success'>bg-green-50 text-green-700
-                    <#elseif message.type = 'warning'>bg-yellow-50 text-yellow-700
-                    <#elseif message.type = 'error'>bg-red-50 text-red-700
-                    <#else>bg-blue-50 text-blue-700</#if>">
-                    ${kcSanitize(message.summary)?no_esc}
-                </div>
-            </#if>
-
-            <#-- FORM SUBMIT -->
-            <form id="kc-reset-password-form" class="space-y-6" action="${url.loginAction}" method="post">
-                <div>
-                    <label for="username" class="block text-sm font-bold text-gray-700 mb-2">
-                        <#if !realm.loginWithEmailAllowed>Tên đăng nhập<#elseif !realm.registrationEmailAsUsername>Tên đăng nhập hoặc Email<#else>Email</#if>
-                    </label>
-                    <input type="text" id="username" name="username" class="w-full px-5 py-4 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-semibold text-gray-800 text-lg placeholder-gray-400" autofocus placeholder="Nhập tài khoản của bạn..." value="${(auth.attemptedUsername!'')}" />
-                </div>
-
-                <div class="pt-2">
-                    <button type="submit" class="w-full px-8 py-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold shadow-lg hover:shadow-blue-300 transition-all text-lg tracking-wide">
-                        Gửi yêu cầu
-                    </button>
-                </div>
-
-                <#-- QUAY LẠI ĐĂNG NHẬP -->
-                <div class="text-center mt-6">
-                    <a href="${url.loginUrl}" class="text-base font-bold text-gray-500 hover:text-blue-600 transition-colors underline underline-offset-4">Quay lại trang Đăng nhập</a>
-                </div>
-            </form>
+        <div class="iact-logo-area">
+            <img src="${url.resourcesPath}/img/logo.png" alt="iAct Logo" class="iact-logo">
+            <span class="iact-brand-name">iAct</span>
+            <span class="iact-brand-sub">Can Tho University</span>
         </div>
 
-    <#elseif section = "info" >
+        <div class="iact-page-header">
+            <div class="iact-status-icon-wrap">
+                <div class="iact-status-icon iact-status-icon-primary">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                </div>
+            </div>
+            <h1 class="iact-page-title">Quen mat khau?</h1>
+            <p class="iact-page-desc">Nhap email hoac ten dang nhap de nhan lien ket khoi phuc mat khau</p>
+        </div>
+
+        <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
+            <div class="iact-alert iact-alert-<#if message.type = 'success'>success<#elseif message.type = 'warning'>warning<#elseif message.type = 'error'>error<#else>info</#if> iact-mb-6">
+                <span class="iact-alert-icon">
+                    <#if message.type = 'success'>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <#elseif message.type = 'error'>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    <#else>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    </#if>
+                </span>
+                <span>${kcSanitize(message.summary)?no_esc}</span>
+            </div>
+        </#if>
+
+        <form id="kc-reset-password-form" action="${url.loginAction}" method="post" novalidate>
+
+            <div class="iact-field">
+                <label for="username" class="iact-label">
+                    <#if !realm.loginWithEmailAllowed>Ten dang nhap<#elseif !realm.registrationEmailAsUsername>Ten dang nhap hoac Email<#else>Email</#if>
+                </label>
+                <div class="iact-input-wrap">
+                    <span class="iact-input-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                            <polyline points="22,6 12,13 2,6"/>
+                        </svg>
+                    </span>
+                    <input type="text" id="username" name="username"
+                        class="iact-input has-icon"
+                        value="${(auth.attemptedUsername!'')}"
+                        placeholder="email@student.ctu.edu.vn"
+                        autofocus>
+                </div>
+                <span class="iact-error"></span>
+            </div>
+
+            <button type="submit" class="iact-btn iact-btn-primary iact-mt-4">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+                Gui yeu cau khoi phuc
+            </button>
+
+            <div class="iact-footer-simple">
+                <a href="${url.loginUrl}" class="iact-footer-link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"/>
+                        <polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                    Quay lai dang nhap
+                </a>
+            </div>
+
+        </form>
+
+    <#elseif section = "info">
     </#if>
 </@layout.registrationLayout>

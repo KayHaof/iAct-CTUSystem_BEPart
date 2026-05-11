@@ -1,136 +1,382 @@
-document.addEventListener("DOMContentLoaded", function() {
-    document.querySelectorAll('.toggle-password').forEach(function(button) {
-        button.addEventListener('click', function() {
-            var targetId = this.getAttribute('data-target');
-            var input = document.getElementById(targetId);
-            var icon = this.querySelector('.eye-icon');
+/* ============================================================
+   iAct Keycloak Theme - JavaScript
+   Handles: toggle password, validation, strength, UX
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', function () {
 
-            if (input && input.type === 'password') {
-                input.type = 'text';
-                input.classList.remove('tracking-widest');
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />';
-            } else if (input) {
-                input.type = 'password';
-                input.classList.add('tracking-widest');
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />';
-            }
-        });
+  /* -------------------------------------------------------
+     1. PASSWORD TOGGLE
+     ------------------------------------------------------- */
+  document.querySelectorAll('.iact-toggle-password').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var targetId = this.getAttribute('data-target');
+      var input = document.getElementById(targetId);
+      var icon = this.querySelector('.iact-eye-icon');
+      if (!input || !icon) return;
+
+      var isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      icon.setAttribute('fill', isPassword ? 'none' : 'none');
+      icon.classList.toggle('hidden', !isPassword);
+
+      var iconAlt = this.querySelector('.iact-eye-off-icon');
+      if (iconAlt) iconAlt.classList.toggle('hidden', isPassword);
+    });
+  });
+
+  /* -------------------------------------------------------
+     2. PASSWORD STRENGTH METER
+     ------------------------------------------------------- */
+  function calculateStrength(pw) {
+    if (!pw) return 0;
+    var score = 0;
+    if (pw.length >= 8) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    return score; // 0-4
+  }
+
+  function updateStrengthUI(inputId, strength) {
+    var container = document.querySelector('[data-strength="' + inputId + '"]');
+    if (!container) return;
+
+    var bars = container.querySelectorAll('.iact-strength-bar');
+    var label = container.querySelector('.iact-strength-label');
+    var levels = ['weak', 'fair', 'good', 'strong'];
+    var levelClass = levels[Math.min(strength - 1, 3)] || '';
+
+    bars.forEach(function (bar, i) {
+      bar.className = 'iact-strength-bar';
+      if (i < strength) {
+        bar.classList.add('active-' + levelClass);
+      }
     });
 
-    function showError(input, message) {
-        if (!input) return;
-        var formGroup = input.parentElement;
-        if (formGroup.classList.contains('relative')) {
-            formGroup = formGroup.parentElement; // Nếu là ô pass có con mắt, phải nhảy ra ngoài thêm 1 cấp
+    if (label) {
+      label.className = 'iact-strength-label visible ' + levelClass;
+      var labels = ['', 'Mat khau yeu', 'Mat khau trung binh', 'Mat khau tot', 'Mat khau manh'];
+      label.textContent = labels[strength] || '';
+    }
+  }
+
+  document.querySelectorAll('[data-strength]').forEach(function (container) {
+    var inputId = container.getAttribute('data-strength');
+    var input = document.getElementById(inputId);
+    if (input) {
+      input.addEventListener('input', function () {
+        updateStrengthUI(inputId, calculateStrength(this.value));
+      });
+    }
+  });
+
+  /* -------------------------------------------------------
+     3. PASSWORD REQUIREMENTS CHECKLIST
+     ------------------------------------------------------- */
+  function setupRequirements(passwordId, confirmId) {
+    var password = document.getElementById(passwordId);
+    var confirm = confirmId ? document.getElementById(confirmId) : null;
+    if (!password) return;
+
+    var checks = {
+      length:    /.{8,}/,
+      uppercase: /[A-Z]/,
+      lowercase: /[a-z]/,
+      number:    /[0-9]/,
+      special:   /[^A-Za-z0-9]/
+    };
+
+    function validate() {
+      var pw = password.value;
+      Object.keys(checks).forEach(function (key) {
+        var el = document.querySelector('[data-req="' + key + '"]');
+        if (el) {
+          var met = checks[key].test(pw);
+          el.classList.toggle('met', met);
+          var icon = el.querySelector('.iact-pw-req-check');
+          if (icon) {
+            icon.setAttribute('fill', met ? 'currentColor' : 'none');
+            icon.setAttribute('stroke', met ? 'currentColor' : '#94A3B8');
+          }
         }
+      });
 
-        input.classList.remove('border-gray-300', 'focus:ring-blue-500');
-        input.classList.add('border-red-500', 'focus:ring-red-500', 'bg-red-50');
-
-        var errorText = formGroup.querySelector('.kc-feedback-text');
-        if (!errorText) {
-            errorText = document.createElement("span");
-            errorText.className = "kc-feedback-text text-red-500 text-sm font-bold mt-2 block animate-pulse";
-            formGroup.appendChild(errorText);
+      if (confirm) {
+        var matchEl = document.querySelector('[data-req="match"]');
+        if (matchEl) {
+          var met = confirm.value.length > 0 && pw === confirm.value;
+          matchEl.classList.toggle('met', met);
         }
-        errorText.innerText = message;
-        errorText.style.display = 'block';
+      }
     }
 
-    function clearError(input) {
-        if (!input) return;
-        var formGroup = input.parentElement;
-        if (formGroup.classList.contains('relative')) {
-            formGroup = formGroup.parentElement;
+    password.addEventListener('input', validate);
+    if (confirm) confirm.addEventListener('input', validate);
+  }
+
+  setupRequirements('password', 'password-confirm');
+  setupRequirements('password-new', 'password-confirm');
+
+  /* -------------------------------------------------------
+     4. FORM VALIDATION HELPERS
+     ------------------------------------------------------- */
+  function showFieldError(inputEl, message) {
+    if (!inputEl) return;
+    var field = inputEl.closest('.iact-field') || inputEl.parentElement;
+    if (field.classList.contains('iact-input-wrap')) {
+      field = field.parentElement;
+    }
+
+    inputEl.classList.add('has-error');
+
+    var errEl = field.querySelector('.iact-error');
+    if (errEl) {
+      errEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ' + message;
+      errEl.classList.add('visible');
+    }
+  }
+
+  function clearFieldError(inputEl) {
+    if (!inputEl) return;
+    inputEl.classList.remove('has-error');
+
+    var field = inputEl.closest('.iact-field') || inputEl.parentElement;
+    if (field.classList.contains('iact-input-wrap')) {
+      field = field.parentElement;
+    }
+
+    var errEl = field.querySelector('.iact-error');
+    if (errEl) errEl.classList.remove('visible');
+  }
+
+  function attachLiveValidation(inputName, validatorFn) {
+    var input = document.querySelector('input[name="' + inputName + '"]');
+    if (input) {
+      input.addEventListener('input', function () { clearFieldError(input); });
+      input.addEventListener('blur', function () {
+        if (this.value && !validatorFn(this.value)) {
+          showFieldError(this, 'Gia tri khong hop le.');
         }
-
-        input.classList.remove('border-red-500', 'focus:ring-red-500', 'bg-red-50');
-        input.classList.add('border-gray-300', 'focus:ring-blue-500');
-
-        var errorText = formGroup.querySelector('.kc-feedback-text');
-        if (errorText) errorText.remove();
+      });
     }
+  }
 
-    function attachInputListener(fields) {
-        fields.forEach(function(field) {
-            var input = document.querySelector('input[name="' + field.name + '"]');
-            if (input) {
-                input.addEventListener('input', function() { clearError(input); });
-            }
-        });
-    }
+  /* -------------------------------------------------------
+     5. LOGIN FORM VALIDATION
+     ------------------------------------------------------- */
+  var loginForm = document.getElementById('kc-form-login');
+  if (loginForm) {
+    var loginFields = [
+      { name: 'username', message: 'Vui long nhap ten dang nhap.' },
+      { name: 'password', message: 'Vui long nhap mat khau.' }
+    ];
 
-    function handleFormSubmit(event, fields) {
-        var isValid = true;
-        fields.forEach(function(field) {
-            var input = document.querySelector('input[name="' + field.name + '"]');
-            if (input && !input.value.trim()) {
-                showError(input, field.message);
-                isValid = false;
-            }
-        });
-        return isValid;
-    }
+    loginFields.forEach(function (f) {
+      var input = document.querySelector('input[name="' + f.name + '"]');
+      if (input) {
+        input.addEventListener('input', function () { clearFieldError(input); });
+      }
+    });
 
-    var registerForm = document.getElementById("kc-register-form");
-    if (registerForm) {
-        var regFields = [
-            { name: "lastName", message: "Vui lòng nhập họ và đệm." },
-            { name: "firstName", message: "Vui lòng nhập tên." },
-            { name: "email", message: "Vui lòng nhập email hợp lệ." },
-            { name: "username", message: "Vui lòng nhập tên đăng nhập." },
-            { name: "password", message: "Vui lòng nhập mật khẩu." },
-            { name: "password-confirm", message: "Vui lòng xác nhận mật khẩu." }
-        ];
-        attachInputListener(regFields);
-
-        registerForm.addEventListener("submit", function(e) {
-            if (!handleFormSubmit(e, regFields)) e.preventDefault();
-
-            var pass = document.querySelector('input[name="password"]');
-            var conf = document.querySelector('input[name="password-confirm"]');
-            if (pass && conf && pass.value !== conf.value) {
-                showError(conf, "Mật khẩu xác nhận không khớp.");
-                e.preventDefault();
-            }
-        });
-    }
-
-    var loginForm = document.getElementById("kc-form-login");
-    if (loginForm) {
-        var loginFields = [
-            { name: "username", message: "Vui lòng nhập tài khoản." },
-            { name: "password", message: "Vui lòng nhập mật khẩu." }
-        ];
-        attachInputListener(loginFields);
-
-        loginForm.addEventListener("submit", function(e) {
-            if (!handleFormSubmit(e, loginFields)) e.preventDefault();
-        });
-
-        var errorMsg = "";
-        var serverAlert = document.querySelector('.bg-red-50.text-red-700');
-
-        if (serverAlert) {
-            errorMsg = serverAlert.innerText.trim();
+    loginForm.addEventListener('submit', function (e) {
+      var valid = true;
+      loginFields.forEach(function (f) {
+        var input = document.querySelector('input[name="' + f.name + '"]');
+        if (!input || !input.value.trim()) {
+          showFieldError(input, f.message);
+          valid = false;
         }
+      });
 
-        if (errorMsg) {
-            console.log("Server Error Detected:", errorMsg);
-            if (errorMsg.includes("Invalid username or password")) {
-                var passInput = document.querySelector('input[name="password"]');
-                showError(passInput, "Sai tài khoản hoặc mật khẩu.");
-                passInput.value = "";
-                passInput.focus();
-            }
-            else if (errorMsg.toLowerCase().includes("account is disabled")) {
-                var userInput = document.querySelector('input[name="username"]');
-                showError(userInput, "Tài khoản của bạn đã bị vô hiệu hóa.");
-            }
-            else if (errorMsg.toLowerCase().includes("temporarily disabled")) {
-                var userInput = document.querySelector('input[name="username"]');
-                showError(userInput, "Tài khoản tạm khóa do đăng nhập sai nhiều lần.");
-            }
+      if (!valid) {
+        e.preventDefault();
+        var card = document.querySelector('.card-pf');
+        if (card) {
+          card.classList.add('iact-shake');
+          setTimeout(function () { card.classList.remove('iact-shake'); }, 600);
         }
+        return;
+      }
+
+      var btn = document.getElementById('kc-login');
+      if (btn) {
+        btn.classList.add('loading');
+        btn.disabled = true;
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+     6. REGISTER FORM VALIDATION
+     ------------------------------------------------------- */
+  var registerForm = document.getElementById('kc-register-form');
+  if (registerForm) {
+    var regFields = [
+      { name: 'lastName',        message: 'Vui long nhap ho va dem.' },
+      { name: 'firstName',       message: 'Vui long nhap ten.' },
+      { name: 'email',            message: 'Vui long nhap email.',       validate: function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); } },
+      { name: 'username',         message: 'Vui long nhap ten dang nhap.', validate: function (v) { return v.length >= 3; } },
+      { name: 'password',         message: 'Vui long nhap mat khau.' },
+      { name: 'password-confirm', message: 'Vui long xac nhan mat khau.' }
+    ];
+
+    regFields.forEach(function (f) {
+      var input = document.querySelector('input[name="' + f.name + '"]');
+      if (input) {
+        input.addEventListener('input', function () { clearFieldError(input); });
+        if (f.validate) {
+          input.addEventListener('blur', function () {
+            if (this.value && !f.validate(this.value)) {
+              showFieldError(this, f.message);
+            }
+          });
+        }
+      }
+    });
+
+    registerForm.addEventListener('submit', function (e) {
+      var valid = true;
+      regFields.forEach(function (f) {
+        var input = document.querySelector('input[name="' + f.name + '"]');
+        if (!input || !input.value.trim()) {
+          showFieldError(input, f.message);
+          valid = false;
+        } else if (f.validate && !f.validate(input.value)) {
+          showFieldError(input, f.message);
+          valid = false;
+        }
+      });
+
+      var pass = document.querySelector('input[name="password"]');
+      var conf = document.querySelector('input[name="password-confirm"]');
+      if (pass && conf && pass.value && conf.value && pass.value !== conf.value) {
+        showFieldError(conf, 'Mat khau xac nhan khong khop.');
+        valid = false;
+      }
+
+      if (!valid) {
+        e.preventDefault();
+        var card = document.querySelector('.card-pf');
+        if (card) {
+          card.classList.add('iact-shake');
+          setTimeout(function () { card.classList.remove('iact-shake'); }, 600);
+        }
+        return;
+      }
+
+      var btn = registerForm.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.classList.add('loading');
+        btn.disabled = true;
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+     7. RESET PASSWORD FORM
+     ------------------------------------------------------- */
+  var resetForm = document.getElementById('kc-reset-password-form');
+  if (resetForm) {
+    var usernameInput = document.querySelector('input[name="username"]');
+    if (usernameInput) {
+      usernameInput.addEventListener('input', function () { clearFieldError(usernameInput); });
     }
+
+    resetForm.addEventListener('submit', function (e) {
+      var input = document.querySelector('input[name="username"]');
+      if (!input || !input.value.trim()) {
+        showFieldError(input, 'Vui long nhap ten dang nhap hoac email.');
+        e.preventDefault();
+        return;
+      }
+      var btn = resetForm.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.classList.add('loading');
+        btn.disabled = true;
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+     8. UPDATE PASSWORD FORM
+     ------------------------------------------------------- */
+  var updateForm = document.querySelector('form[action="${url.loginAction}"]');
+  if (updateForm && document.getElementById('password-new')) {
+    var pwNew = document.getElementById('password-new');
+    var pwConf = document.getElementById('password-confirm');
+
+    if (pwNew) pwNew.addEventListener('input', function () { clearFieldError(pwNew); });
+    if (pwConf) pwConf.addEventListener('input', function () { clearFieldError(pwConf); });
+
+    updateForm.addEventListener('submit', function (e) {
+      var valid = true;
+      if (!pwNew || !pwNew.value.trim()) {
+        showFieldError(pwNew, 'Vui long nhap mat khau moi.');
+        valid = false;
+      }
+      if (!pwConf || !pwConf.value.trim()) {
+        showFieldError(pwConf, 'Vui long xac nhan mat khau moi.');
+        valid = false;
+      }
+      if (pwNew && pwConf && pwNew.value && pwConf.value && pwNew.value !== pwConf.value) {
+        showFieldError(pwConf, 'Mat khau xac nhan khong khop.');
+        valid = false;
+      }
+
+      if (!valid) {
+        e.preventDefault();
+        var card = document.querySelector('.card-pf');
+        if (card) {
+          card.classList.add('iact-shake');
+          setTimeout(function () { card.classList.remove('iact-shake'); }, 600);
+        }
+      } else {
+        var btn = updateForm.querySelector('button[type="submit"]');
+        if (btn) {
+          btn.classList.add('loading');
+          btn.disabled = true;
+        }
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+     9. AUTO-DISMISS SERVER ALERTS
+     ------------------------------------------------------- */
+  var alerts = document.querySelectorAll('.iact-alert');
+  alerts.forEach(function (alert) {
+    if (!alert.classList.contains('iact-alert-warning') || !document.getElementById('kc-form-login')) {
+      setTimeout(function () {
+        alert.style.transition = 'opacity 0.4s ease';
+        alert.style.opacity = '0';
+        setTimeout(function () { alert.remove(); }, 400);
+      }, 6000);
+    }
+  });
+
+  /* -------------------------------------------------------
+     10. SMOOTH ANCHOR SCROLL
+     ------------------------------------------------------- */
+  document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+    anchor.addEventListener('click', function (e) {
+      var target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  /* -------------------------------------------------------
+     11. AUTO-FOCUS FIRST INPUT
+     ------------------------------------------------------- */
+  var firstInput = document.querySelector(
+    '#kc-form-login input[name="username"],' +
+    '#kc-register-form input[name="lastName"],' +
+    '#kc-reset-password-form input[name="username"]'
+  );
+  if (firstInput && !firstInput.disabled) {
+    setTimeout(function () { firstInput.focus(); }, 200);
+  }
+
 });

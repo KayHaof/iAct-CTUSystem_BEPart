@@ -6,9 +6,9 @@ spring:
     name: notification-service
 
   datasource:
-    url: jdbc:mysql://localhost:3306/iact_notification?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: ${MYSQL_USER}
-    password: ${MYSQL_PASSWORD}
+    url: jdbc:mysql://localhost:3306/notification_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:database}
+    password: ${MYSQL_PASSWORD:password1}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -35,4 +35,4 @@ eureka:
 cloudinary:
   cloud-name: dhjamvg6j
   api-key: 237733137343564
-  api-secret: ${api_secret}
+  api-secret: ${api_secret:xzojOJkKQH9R6mcX9M8LMPPFlcw}

@@ -4,11 +4,14 @@ server:
 spring:
   application:
     name: activity-service
+  devtools:
+    restart:
+      enabled: false
 
   datasource:
-    url: jdbc:mysql://localhost:3306/iact_activity?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: ${MYSQL_USER}
-    password: ${MYSQL_PASSWORD}
+    url: jdbc:mysql://localhost:3306/activity_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:database}
+    password: ${MYSQL_PASSWORD:password1}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -17,21 +20,35 @@ spring:
     show-sql: true
     open-in-view: false
 
-  oauth2:
-    resourceserver:
-      jwt:
-        issuer-uri: http://localhost:8088/realms/myRealm
-        jwk-set-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/certs
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/certs
 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+  cloud:
+    gcp:
+      storage:
+        enabled: false
 
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
-    instance:
-      prefer-ip-address: true
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
 
 cloudinary:
   cloud-name: dhjamvg6j
   api-key: 237733137343564
-  api-secret: ${api_secret}
+  api-secret: ${api_secret:changeme}
