@@ -1,0 +1,16 @@
+package com.example.userservice.feature.auth.mapper;
+
+import com.example.userservice.feature.auth.dto.RegisterRequest;
+import com.example.userservice.feature.users.model.Users;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(componentModel = "spring")
+public interface AuthMapper {
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "keycloakId", ignore = true)
+    @Mapping(target = "status", constant = "1")
+    @Mapping(target = "createdAt", expression = "java(java.time.LocalDateTime.now())")
+    @Mapping(target = "updatedAt", ignore = true)
+    Users registerRequestToUser(RegisterRequest request);
+}

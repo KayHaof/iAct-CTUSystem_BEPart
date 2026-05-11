@@ -1,63 +1,49 @@
 <#import "template.ftl" as layout>
 <@layout.registrationLayout displayMessage=false; section>
+
     <#if section = "header">
-    <#-- Ẩn tiêu đề mặc định -->
     <#elseif section = "form">
-        <script src="https://cdn.tailwindcss.com"></script>
 
-        <style>
-            body, .login-pf-page {
-                background-image: url('${url.resourcesPath}/img/bg.jpg') !important;
-                background-size: cover !important; background-position: center !important;
-                background-attachment: fixed !important; background-color: #f3f4f6 !important;
-                min-height: 100vh !important; width: 100vw !important;
-                display: flex !important; align-items: center !important; justify-content: center !important;
-                margin: 0 !important; padding: 2rem 1rem !important; box-sizing: border-box !important;
-            }
-            .card-pf {
-                background: transparent !important; border: none !important; box-shadow: none !important;
-                padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important;
-            }
-            #kc-header, #kc-page-title { display: none !important; }
-        </style>
+        <div class="iact-logo-area">
+            <img src="${url.resourcesPath}/img/logo.png" alt="iAct Logo" class="iact-logo">
+            <span class="iact-brand-name">iAct</span>
+            <span class="iact-brand-sub">Can Tho University</span>
+        </div>
 
-        <div class="w-full max-w-lg mx-auto p-8 sm:p-10 bg-white rounded-3xl shadow-2xl animate-fade-in">
-
-            <#-- LOGO -->
-            <div class="flex justify-center mb-6">
-                <img src="${url.resourcesPath}/img/logo.png" alt="Logo" class="h-20 object-contain">
-            </div>
-
-            <#-- ICON CẢNH BÁO/THỜI GIAN -->
-            <div class="flex justify-center mb-6">
-                <div class="h-20 w-20 rounded-full bg-orange-50 flex items-center justify-center border-4 border-orange-100 shadow-sm">
-                    <svg class="h-10 w-10 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <div class="iact-page-header">
+            <div class="iact-status-icon-wrap">
+                <div class="iact-status-icon iact-status-icon-warning iact-animate-float">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
                     </svg>
                 </div>
             </div>
-
-            <#-- TIÊU ĐỀ -->
-            <div class="text-center mb-8">
-                <h2 class="text-2xl font-extrabold text-gray-800 mb-2">Phiên làm việc hết hạn</h2>
-                <p class="text-gray-500 text-sm font-medium">
-                    Yêu cầu trước đó của bạn đã được xử lý hoặc đã hết thời gian chờ. Vui lòng chọn thao tác bên dưới.
-                </p>
-            </div>
-
-            <#-- 2 NÚT BẤM THAY CHO 2 LINK MẶC ĐỊNH -->
-            <div class="space-y-4">
-                <#-- Nút: Restart Login (Màu xanh nổi bật) -->
-                <a id="loginRestartLink" href="${url.loginRestartFlowUrl}" class="block w-full text-center px-8 py-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700 hover:text-white font-bold shadow-lg hover:shadow-blue-200 transition-all text-lg tracking-wide">
-                    Quay lại trang Đăng nhập
-                </a>
-
-                <#-- Nút: Continue Login (Màu xám nhạt) -->
-                <a id="loginContinueLink" href="${url.loginAction}" class="block w-full text-center px-8 py-4 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900 font-bold shadow transition-all text-base">
-                    Tiếp tục hành động hiện tại
-                </a>
-            </div>
-
+            <h1 class="iact-page-title">Phien lam viec het han</h1>
+            <p class="iact-page-desc">
+                Phien dang nhap cua ban da het han hoac da duoc xu ly.
+                Vui long dang nhap lai de tiep tuc.
+            </p>
         </div>
+
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+            <a href="${url.loginRestartFlowUrl}" class="iact-btn iact-btn-primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                    <polyline points="10 17 15 12 10 7"/>
+                    <line x1="15" y1="12" x2="3" y2="12"/>
+                </svg>
+                Dang nhap lai
+            </a>
+
+            <a href="${url.loginAction}" class="iact-btn iact-btn-ghost">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                Tiep tuc hanh dong cu
+            </a>
+        </div>
+
     </#if>
 </@layout.registrationLayout>

@@ -1,74 +1,86 @@
 <#import "template.ftl" as layout>
 <@layout.registrationLayout displayMessage=false; section>
+
     <#if section = "header">
-    <#-- Để trống -->
     <#elseif section = "form">
-        <script src="https://cdn.tailwindcss.com"></script>
 
-        <style>
-            body, .login-pf-page {
-                background-image: url('${url.resourcesPath}/img/bg.jpg') !important;
-                background-size: cover !important; background-position: center !important;
-                background-attachment: fixed !important; background-color: #f3f4f6 !important;
-                min-height: 100vh !important; width: 100vw !important;
-                display: flex !important; align-items: center !important; justify-content: center !important;
-                margin: 0 !important; padding: 2rem 1rem !important; box-sizing: border-box !important;
-            }
-            .card-pf {
-                background: transparent !important; border: none !important; box-shadow: none !important;
-                padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important;
-            }
-            #kc-header, #kc-page-title { display: none !important; }
-        </style>
+        <div class="iact-logo-area">
+            <img src="${url.resourcesPath}/img/logo.png" alt="iAct Logo" class="iact-logo">
+            <span class="iact-brand-name">iAct</span>
+            <span class="iact-brand-sub">Can Tho University</span>
+        </div>
 
-        <div class="w-full max-w-lg mx-auto p-8 sm:p-10 bg-white rounded-3xl shadow-2xl animate-fade-in">
-
-            <#-- LOGO -->
-            <div class="flex justify-center mb-6">
-                <img src="${url.resourcesPath}/img/logo.png" alt="Logo" class="h-20 object-contain">
-            </div>
-
-            <#-- ICON -->
-            <div class="flex justify-center mb-6">
-                <div class="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center border-4 border-blue-100 shadow-sm">
-                    <svg class="h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <div class="iact-page-header">
+            <div class="iact-status-icon-wrap">
+                <div class="iact-status-icon iact-status-icon-primary">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
                     </svg>
                 </div>
             </div>
-
-            <#-- THÔNG BÁO -->
-            <div class="text-center mb-8">
-                <h2 class="text-xl font-bold text-gray-800 leading-relaxed mb-4">
-                    ${message.summary}
-                </h2>
-                <#if requiredActions??>
-                    <#list requiredActions as reqAction>
-                        <p class="text-sm font-semibold text-red-500">${msg("requiredAction.${reqAction}")}</p>
-                    </#list>
-                </#if>
-            </div>
-
-            <#-- NÚT BẤM (ĐÃ SỬA HOVER CHO NÚT MÀU XANH) -->
-            <div class="space-y-4">
-                <#if skipLink??>
-                <#else>
-                    <#if pageRedirectUri?has_content>
-                        <p class="text-center text-sm text-gray-500 font-medium mb-3 animate-pulse">Đang tự động chuyển hướng...</p>
-                        <a href="${pageRedirectUri}" class="block w-full text-center px-8 py-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700 hover:text-white font-bold shadow-lg transition-all text-lg">
-                            ${kcSanitize(msg("backToApplication"))?no_esc}
-                        </a>
-                    <#elseif actionUri?has_content>
-                        <a href="${actionUri}" class="block w-full text-center px-8 py-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700 hover:text-white font-bold shadow-lg hover:shadow-blue-200 transition-all text-lg tracking-wide">
-                            ${kcSanitize(msg("proceedWithAction"))?no_esc}
-                        </a>
-                    <#elseif (client.baseUrl)?has_content>
-                        <a href="${client.baseUrl}" class="block w-full text-center px-8 py-4 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold shadow transition-all text-lg">
-                            ${kcSanitize(msg("backToApplication"))?no_esc}
-                        </a>
-                    </#if>
-                </#if>
-            </div>
+            <h1 class="iact-page-title">Thong bao</h1>
+            <p class="iact-page-desc">${message.summary}</p>
         </div>
+
+        <#if requiredActions?? && (requiredActions?size > 0)>
+            <div class="iact-alert iact-alert-warning iact-mb-8">
+                <span class="iact-alert-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </span>
+                <div>
+                    <strong>Hanh dong bat buoc:</strong>
+                    <#list requiredActions as reqAction>
+                        <div>${msg("requiredAction.${reqAction}")}</div>
+                    </#list>
+                </div>
+            </div>
+        </#if>
+
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+            <#if skipLink??>
+            <#else>
+                <#if pageRedirectUri?has_content>
+                    <p class="iact-alert iact-alert-info iact-mb-6" style="animation:pulse 2s ease-in-out infinite;">
+                        Dang tu dong chuyen huong...
+                    </p>
+                    <a href="${pageRedirectUri}" class="iact-btn iact-btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                            <polyline points="12 5 19 12 12 19"/>
+                        </svg>
+                        ${kcSanitize(msg("backToApplication"))?no_esc}
+                    </a>
+                <#elseif actionUri?has_content>
+                    <a href="${actionUri}" class="iact-btn iact-btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        ${kcSanitize(msg("proceedWithAction"))?no_esc}
+                    </a>
+                <#elseif (client.baseUrl)?has_content>
+                    <a href="${client.baseUrl}" class="iact-btn iact-btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                        ${kcSanitize(msg("backToApplication"))?no_esc}
+                    </a>
+                </#if>
+            </#if>
+
+            <a href="${url.loginUrl}" class="iact-btn iact-btn-ghost">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+                Quay lai dang nhap
+            </a>
+        </div>
+
     </#if>
 </@layout.registrationLayout>

@@ -34,15 +34,10 @@ build/
 
 ### VS Code ###
 .vscode/
-
+/plans/
 node_modules/
-
 .mvn
-
 .env
-
 todoList.txt
-
 *.log
-
 helper.txt

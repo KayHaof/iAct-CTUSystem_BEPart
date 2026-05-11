@@ -91,21 +91,7 @@
     "realmRoles" : [ "default-roles-myrealm", "other" ],
     "notBefore" : 0,
     "groups" : [ "/others" ]
-  }, {
-    "id" : "67ed1596-c0e6-45be-94eb-00b209396810",
-    "username" : "service-account-myclient123@",
-    "emailVerified" : false,
-    "createdTimestamp" : 1768894826076,
-    "enabled" : true,
-    "totp" : false,
-    "serviceAccountClientId" : "myclient123@",
-    "credentials" : [ ],
-    "disableableCredentialTypes" : [ ],
-    "requiredActions" : [ ],
-    "realmRoles" : [ "default-roles-myrealm" ],
-    "notBefore" : 0,
-    "groups" : [ ]
-  }, {
+  },   {
     "id" : "64591e82-ef99-44de-9e40-1107808a8f84",
     "username" : "user1",
     "firstName" : "Nguyen Van",

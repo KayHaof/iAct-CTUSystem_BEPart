@@ -4,16 +4,17 @@ services:
     container_name: mysql_database
     restart: always
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-password1}
+      - MYSQL_USER=${MYSQL_USER:-database}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password1}
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./database:/docker-entrypoint-initdb.d
+      - ./database/init-multiple-db.sql:/docker-entrypoint-initdb.d/init.sql
     command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - microservices-net
 
   keycloak:
     container_name: baeldung-keycloak.openid-provider
@@ -30,12 +31,12 @@ services:
       - ./keycloak/themes/iAct-themes:/opt/keycloak/themes/iAct-themes
     environment:
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-myKeycloak123@}
 
       KC_DB: mysql
-      KC_DB_URL: jdbc:mysql://mysql_database:3306/${MYSQL_DATABASE}
-      KC_DB_USERNAME: ${MYSQL_USER}
-      KC_DB_PASSWORD: ${MYSQL_PASSWORD}
+      KC_DB_URL: jdbc:mysql://mysql_database:3306/keycloak?createDatabaseIfNotExist=true
+      KC_DB_USERNAME: ${MYSQL_USER:-database}
+      KC_DB_PASSWORD: ${MYSQL_PASSWORD:-password1}
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HOSTNAME_URL: http://localhost:8088
@@ -50,6 +51,8 @@ services:
       KC_SPI_THEME_STATIC_MAX_AGE: "-1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - microservices-net
 
   redis:
     image: redis:latest
@@ -62,9 +65,31 @@ services:
     restart: always
     networks:
       - microservices-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: my-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@my-kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://my-kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - microservices-net
 volumes:
   mysql_data:
   redis_data:
+  kafka_apache_data:
+    driver: local
 
 networks:
   microservices-net:
