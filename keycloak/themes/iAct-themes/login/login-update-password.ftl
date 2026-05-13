@@ -18,8 +18,8 @@
                     </svg>
                 </div>
             </div>
-            <h1 class="iact-page-title">Doi mat khau</h1>
-            <p class="iact-page-desc">Tao mat khau moi cho tai khoan cua ban</p>
+            <h1 class="iact-page-title">Đổi mật khẩu</h1>
+            <p class="iact-page-desc">Thiết lập mật khẩu mới an toàn hơn cho tài khoản của bạn.</p>
         </div>
 
         <#if message?has_content && message.type == 'error'>
@@ -36,16 +36,15 @@
         </#if>
 
         <form action="${url.loginAction}" method="post" novalidate>
-
             <div class="iact-field">
                 <label for="password-new" class="iact-label">
-                    Mat khau moi
+                    Mật khẩu mới
                 </label>
                 <div class="iact-input-wrap">
                     <input type="password" id="password-new" name="password-new" class="iact-input"
-                        placeholder="Nhap mat khau moi"
+                        placeholder="Nhập mật khẩu mới"
                         autocomplete="new-password">
-                    <button type="button" class="iact-toggle-password" data-target="password-new" aria-label="Hien thi mat khau">
+                    <button type="button" class="iact-toggle-password" data-target="password-new" aria-label="Hiển thị mật khẩu">
                         <svg class="iact-eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                             <circle cx="12" cy="12" r="3"/>
@@ -68,19 +67,19 @@
                 <div class="iact-pw-requirements">
                     <span class="iact-pw-req" data-req="length">
                         <svg class="iact-pw-req-check" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        It nhat 8 ky tu
+                        Ít nhất 8 ký tự
                     </span>
                     <span class="iact-pw-req" data-req="uppercase">
                         <svg class="iact-pw-req-check" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        Chu hoa (A-Z)
+                        Có chữ in hoa
                     </span>
                     <span class="iact-pw-req" data-req="number">
                         <svg class="iact-pw-req-check" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        Chu so (0-9)
+                        Có chữ số
                     </span>
                     <span class="iact-pw-req" data-req="special">
                         <svg class="iact-pw-req-check" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        Ky tu dac biet
+                        Có ký tự đặc biệt
                     </span>
                 </div>
                 <span class="iact-error"></span>
@@ -88,13 +87,13 @@
 
             <div class="iact-field">
                 <label for="password-confirm" class="iact-label">
-                    Xac nhan mat khau moi
+                    Xác nhận mật khẩu mới
                 </label>
                 <div class="iact-input-wrap">
                     <input type="password" id="password-confirm" name="password-confirm" class="iact-input"
-                        placeholder="Nhap lai mat khau moi"
+                        placeholder="Nhập lại mật khẩu mới"
                         autocomplete="new-password">
-                    <button type="button" class="iact-toggle-password" data-target="password-confirm" aria-label="Hien thi mat khau">
+                    <button type="button" class="iact-toggle-password" data-target="password-confirm" aria-label="Hiển thị mật khẩu">
                         <svg class="iact-eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                             <circle cx="12" cy="12" r="3"/>
@@ -108,19 +107,15 @@
                 <div class="iact-pw-requirements">
                     <span class="iact-pw-req" data-req="match">
                         <svg class="iact-pw-req-check" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        Mat khau khop nhau
+                        Mật khẩu khớp nhau
                     </span>
                 </div>
                 <span class="iact-error"></span>
             </div>
 
             <button type="submit" class="iact-btn iact-btn-primary iact-mt-6">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                Cap nhat mat khau
+                Cập nhật mật khẩu
             </button>
-
         </form>
     </#if>
 </@layout.registrationLayout>

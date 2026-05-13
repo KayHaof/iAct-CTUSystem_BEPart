@@ -19,8 +19,8 @@
                     </svg>
                 </div>
             </div>
-            <h1 class="iact-page-title">Quen mat khau?</h1>
-            <p class="iact-page-desc">Nhap email hoac ten dang nhap de nhan lien ket khoi phuc mat khau</p>
+            <h1 class="iact-page-title">Quên mật khẩu?</h1>
+            <p class="iact-page-desc">Nhập email hoặc tên đăng nhập để nhận hướng dẫn đặt lại mật khẩu.</p>
         </div>
 
         <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
@@ -39,10 +39,9 @@
         </#if>
 
         <form id="kc-reset-password-form" action="${url.loginAction}" method="post" novalidate>
-
             <div class="iact-field">
                 <label for="username" class="iact-label">
-                    <#if !realm.loginWithEmailAllowed>Ten dang nhap<#elseif !realm.registrationEmailAsUsername>Ten dang nhap hoac Email<#else>Email</#if>
+                    <#if !realm.loginWithEmailAllowed>Tên đăng nhập<#elseif !realm.registrationEmailAsUsername>Tên đăng nhập hoặc email<#else>Email</#if>
                 </label>
                 <div class="iact-input-wrap">
                     <span class="iact-input-icon">
@@ -61,23 +60,14 @@
             </div>
 
             <button type="submit" class="iact-btn iact-btn-primary iact-mt-4">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="22" y1="2" x2="11" y2="13"/>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
-                Gui yeu cau khoi phuc
+                Gửi yêu cầu khôi phục
             </button>
 
             <div class="iact-footer-simple">
                 <a href="${url.loginUrl}" class="iact-footer-link">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="19" y1="12" x2="5" y2="12"/>
-                        <polyline points="12 19 5 12 12 5"/>
-                    </svg>
-                    Quay lai dang nhap
+                    Quay lại đăng nhập
                 </a>
             </div>
-
         </form>
 
     <#elseif section = "info">

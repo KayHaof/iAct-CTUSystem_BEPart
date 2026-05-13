@@ -12,10 +12,10 @@
 
         <div class="iact-page-header">
             <h1 class="iact-page-title">
-                <#if usernameEditDisabled??>Xac thuc tai khoan<#else>Dang nhap he thong</#if>
+                <#if usernameEditDisabled??>Xác thực tài khoản<#else>Đăng nhập hệ thống</#if>
             </h1>
             <p class="iact-page-desc">
-                <#if usernameEditDisabled??>Vui long nhap mat khau de xac thuc<#else>San sang tham gia hoat dong cung iAct</#if>
+                <#if usernameEditDisabled??>Vui lòng nhập mật khẩu để tiếp tục xác thực.<#else>Chào mừng bạn quay lại với không gian hoạt động của iAct.</#if>
             </p>
         </div>
 
@@ -40,7 +40,7 @@
 
             <div class="iact-field">
                 <label for="username" class="iact-label">
-                    <#if !realm.loginWithEmailAllowed>Ten dang nhap<#elseif !realm.registrationEmailAsUsername>Ten dang nhap hoac Email<#else>Email</#if>
+                    <#if !realm.loginWithEmailAllowed>Tên đăng nhập<#elseif !realm.registrationEmailAsUsername>Tên đăng nhập hoặc email<#else>Email</#if>
                 </label>
                 <div class="iact-input-wrap">
                     <span class="iact-input-icon">
@@ -56,7 +56,7 @@
                     <#else>
                         <input tabindex="1" id="username" name="username" value="${(login.username!'')}"
                             type="text" class="iact-input has-icon" autocomplete="username"
-                            placeholder="Nhap tai khoan..." autofocus>
+                            placeholder="Nhập tài khoản hoặc email" autofocus>
                     </#if>
                 </div>
                 <span class="iact-error"></span>
@@ -64,16 +64,16 @@
 
             <div class="iact-field">
                 <label for="password" class="iact-label">
-                    Mat khau
+                    Mật khẩu
                     <#if realm.resetPasswordAllowed>
-                        <a tabindex="5" href="${url.loginResetCredentialsUrl}" class="iact-label-link">Quen mat khau?</a>
+                        <a tabindex="5" href="${url.loginResetCredentialsUrl}" class="iact-label-link">Quên mật khẩu?</a>
                     </#if>
                 </label>
                 <div class="iact-input-wrap">
                     <input tabindex="2" id="password" name="password" type="password"
-                        class="iact-input has-icon" autocomplete="current-password"
-                        placeholder="Nhap mat khau...">
-                    <button type="button" class="iact-toggle-password" data-target="password" aria-label="Hien thi mat khau">
+                        class="iact-input" autocomplete="current-password"
+                        placeholder="Nhập mật khẩu">
+                    <button type="button" class="iact-toggle-password" data-target="password" aria-label="Hiển thị mật khẩu">
                         <svg class="iact-eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                             <circle cx="12" cy="12" r="3"/>
@@ -91,22 +91,13 @@
                 <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>/>
 
             <button tabindex="4" name="login" id="kc-login" type="submit" class="iact-btn iact-btn-primary iact-mt-4">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-                    <polyline points="10 17 15 12 10 7"/>
-                    <line x1="15" y1="12" x2="3" y2="12"/>
-                </svg>
-                <#if usernameEditDisabled??>Xac thuc mat khau<#else>Dang nhap</#if>
+                <#if usernameEditDisabled??>Xác thực mật khẩu<#else>Đăng nhập</#if>
             </button>
 
             <#if usernameEditDisabled??>
                 <div class="iact-footer-simple iact-mt-4">
                     <a href="${url.loginAction?replace('authenticate', 'cancel')}" class="iact-footer-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="19" y1="12" x2="5" y2="12"/>
-                            <polyline points="12 19 5 12 12 5"/>
-                        </svg>
-                        Huy bo, quay lai
+                        Quay lại
                     </a>
                 </div>
             </#if>
@@ -115,8 +106,8 @@
 
         <#if realm.password && realm.registrationAllowed && !registrationDisabled?? && !usernameEditDisabled??>
             <div class="iact-footer">
-                <span class="iact-footer-text">Ban chua co tai khoan? </span>
-                <a tabindex="6" href="${url.registrationUrl}" class="iact-footer-link">Dang ky ngay</a>
+                <span class="iact-footer-text">Bạn chưa có tài khoản?</span>
+                <a tabindex="6" href="${url.registrationUrl}" class="iact-footer-link">Đăng ký ngay</a>
             </div>
         </#if>
 

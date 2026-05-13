@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping("/api/v1/user-profiles")
 @RequiredArgsConstructor
 public class UserProfileController {
 

@@ -19,8 +19,8 @@
                     </svg>
                 </div>
             </div>
-            <h1 class="iact-page-title">Xac thuc Email</h1>
-            <p class="iact-page-desc">Vui long kiem tra email de xac thuc tai khoan</p>
+            <h1 class="iact-page-title">Xác thực email</h1>
+            <p class="iact-page-desc">Vui lòng kiểm tra hộp thư để hoàn tất xác thực tài khoản iAct.</p>
         </div>
 
         <div class="iact-alert iact-alert-warning iact-mb-8">
@@ -42,24 +42,16 @@
                     <line x1="12" y1="8" x2="12.01" y2="8"/>
                 </svg>
             </span>
-            <span>Kiem tra hop thu spam neu khong thay email trong inbox.</span>
+            <span>Nếu chưa thấy email trong hộp thư đến, hãy kiểm tra cả thư rác hoặc thư quảng cáo.</span>
         </div>
 
-        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+        <div class="iact-step-actions">
             <a href="${url.loginAction}" class="iact-btn iact-btn-primary">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                </svg>
-                Gui lai email xac nhan
+                Gửi lại email xác nhận
             </a>
 
             <a href="${url.loginUrl}" class="iact-btn iact-btn-ghost">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="19" y1="12" x2="5" y2="12"/>
-                    <polyline points="12 19 5 12 12 5"/>
-                </svg>
-                Quay lai dang nhap
+                Quay lại đăng nhập
             </a>
         </div>
 
