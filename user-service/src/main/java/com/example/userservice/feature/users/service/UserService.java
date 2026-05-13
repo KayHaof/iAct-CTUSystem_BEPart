@@ -5,6 +5,7 @@ import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.service.BaseRedisService;
 import com.example.userservice.feature.user_profile.dto.ProfileDto;
+import com.example.userservice.feature.user_profile.dto.UserUpdateRequest;
 import com.example.userservice.feature.user_profile.service.UserProfileService;
 import com.example.userservice.feature.users.dto.ChangePasswordRequest;
 import com.example.userservice.feature.users.dto.UserResponse;
@@ -126,6 +127,12 @@ public class UserService {
     public UserResponse getUserByEmail(String email) {
         Users user = userRepository.findByEmail(email).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         return getUserById(user.getId());
+    }
+
+    @Transactional
+    public void updateUserProfile(Long id, UserUpdateRequest request) {
+        userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        userProfileService.updateUserProfile(id, request);
     }
 
     public UserResponse getUserByUsername(String username) {

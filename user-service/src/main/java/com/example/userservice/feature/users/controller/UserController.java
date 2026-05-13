@@ -2,6 +2,7 @@ package com.example.userservice.feature.users.controller;
 
 import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
+import com.example.userservice.feature.user_profile.dto.UserUpdateRequest;
 import com.example.userservice.feature.users.dto.UserResponse;
 import com.example.userservice.feature.users.dto.ChangePasswordRequest;
 import com.example.userservice.feature.users.dto.ImportResultDto;
@@ -41,6 +42,17 @@ public class UserController {
     @GetMapping("/{id}")
     public ApiResponse<UserResponse> getUserById(@PathVariable Long id) {
         return ApiResponse.success(userService.getUserById(id));
+    }
+
+    @PutMapping("/{id}")
+    public ApiResponse<Void> updateUserProfile(
+            @PathVariable Long id,
+            @RequestBody UserUpdateRequest request) {
+        userService.updateUserProfile(id, request);
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Cập nhật thành công")
+                .build();
     }
 
     @DeleteMapping("/{id}")
