@@ -128,7 +128,7 @@ CREATE TABLE `department_profiles` (
     `full_name` VARCHAR(255),
     `phone` VARCHAR(20),
     `avatar_url` VARCHAR(500),
-    `position` VARCHAR(100),
+    `address` VARCHAR(100),
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`user_id`),

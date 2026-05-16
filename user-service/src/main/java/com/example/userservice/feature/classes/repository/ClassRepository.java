@@ -12,9 +12,11 @@ public interface ClassRepository extends JpaRepository<Clazzes, Long> {
     List<Long> findClassIdsByDepartmentId(@Param("departmentId") Long departmentId);
 
     @Query("SELECT c FROM Clazzes c WHERE c.major.id = :majorId AND (:academicYear IS NULL OR c.academicYear = :academicYear)")
-    List<Clazzes> findClassesByMajorAndYear(@Param("majorId") Long majorId, @Param("academicYear") Integer academicYear);
+    List<Clazzes> findClassesByMajorAndYear(@Param("majorId") Long majorId, @Param("academicYear") String academicYear);
 
     boolean existsByClassCode(String classCode);
+
+    boolean existsByMajorId(Long majorId);
 
     List<Clazzes> findByClassCodeIn(Set<String> classCodes);
 }

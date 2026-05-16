@@ -11,7 +11,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     show-sql: true
     open-in-view: false
 
@@ -39,7 +39,7 @@ eureka:
 app:
   keycloak:
     token-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/token
-keycloak-admin-password: ${KEYCLOAK_ADMIN_PASSWORD:myKeycloak123@}
+keycloak-admin-password: ${KEYCLOAK_ADMIN_PASSWORD:123456}
 
 cloudinary:
   cloud-name: dhjamvg6j

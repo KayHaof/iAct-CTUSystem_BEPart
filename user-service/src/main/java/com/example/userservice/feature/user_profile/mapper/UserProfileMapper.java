@@ -22,6 +22,7 @@ public interface UserProfileMapper {
     // 2. Map cho Khoa
     @Mapping(target = "departmentId", source = "department.id")
     @Mapping(target = "departmentName", source = "department.name")
+    @Mapping(target = "address", source = "address")
     @Mapping(target = "studentCode", ignore = true)
     @Mapping(target = "birthday", ignore = true)
     @Mapping(target = "classId", ignore = true)

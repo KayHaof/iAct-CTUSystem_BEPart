@@ -12,7 +12,7 @@ public class ClassRequest {
     @NotBlank(message = "Tên lớp không được để trống")
     private String name;
 
-    private Integer academicYear;
+    private String academicYear;
 
     @NotNull(message = "ID Chuyên ngành không được để trống")
     private Long majorId;

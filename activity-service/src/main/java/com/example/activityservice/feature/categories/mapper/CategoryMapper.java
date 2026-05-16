@@ -9,9 +9,8 @@ import org.mapstruct.Named;
 @Mapper(componentModel = "spring")
 public interface CategoryMapper {
 
-    @Named("toTree")
     @Mapping(source = "parent.id", target = "parentId")
-    @Mapping(source = "subCategories", target = "children", qualifiedByName = "toTree")
+    @Mapping(target = "children", ignore = true)
     CategoryResponse toResponse(Categories category);
 
     @Named("toFlat")

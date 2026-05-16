@@ -1,6 +1,7 @@
 package com.example.activityservice.feature.activities.model;
 
 import com.example.activityservice.feature.activitySchedule.model.ActivitySchedule;
+import com.example.activityservice.feature.categories.model.Categories;
 import com.example.activityservice.feature.organizers.model.Organizers;
 import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.users.model.Users;
@@ -95,6 +96,10 @@ public class Activities {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "semester_id")
     private Semesters semester;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Categories category;
 
     public void addSchedule(ActivitySchedule schedule) {
         schedules.add(schedule);

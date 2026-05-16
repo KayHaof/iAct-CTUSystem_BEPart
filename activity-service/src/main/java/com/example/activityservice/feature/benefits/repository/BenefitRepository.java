@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface BenefitRepository extends JpaRepository<Benefits, Long> {
     List<Benefits> findByActivityId(Long activityId);
+    boolean existsByCategoryId(Long categoryId);
 }

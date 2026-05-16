@@ -1,6 +1,8 @@
 package com.example.activityservice.feature.categories.dto;
 
 import lombok.*;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -13,5 +15,7 @@ public class CategoryResponse {
     private String name;
     private Integer maxPoint;
     private Long parentId;
+    private Boolean isActive;
+    private LocalDateTime createdAt;
     private List<CategoryResponse> children;
 }

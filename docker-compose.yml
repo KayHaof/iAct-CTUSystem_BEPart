@@ -31,7 +31,7 @@ services:
       - ./keycloak/themes/iAct-themes:/opt/keycloak/themes/iAct-themes
     environment:
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-myKeycloak123@}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-123456@}
 
       KC_DB: mysql
       KC_DB_URL: jdbc:mysql://mysql_database:3306/keycloak?createDatabaseIfNotExist=true

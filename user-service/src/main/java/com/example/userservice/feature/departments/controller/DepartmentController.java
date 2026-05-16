@@ -5,9 +5,12 @@ import com.example.dto.PageDTO;
 import com.example.userservice.feature.departments.dto.DepartmentRequest;
 import com.example.userservice.feature.departments.dto.DepartmentResponse;
 import com.example.userservice.feature.departments.service.DepartmentService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/departments")
@@ -17,39 +20,47 @@ public class DepartmentController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<DepartmentResponse> create(@RequestBody DepartmentRequest request) {
-        return ApiResponse.<DepartmentResponse>builder()
-                .result(departmentService.createDepartment(request))
-                .message("Tạo khoa/phòng ban thành công")
-                .build();
+    public ApiResponse<DepartmentResponse> create(@RequestBody @Valid DepartmentRequest request) {
+        return ApiResponse.success(departmentService.createDepartment(request));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<DepartmentResponse> update(
             @PathVariable Long id,
-            @RequestBody DepartmentRequest request) {
-        return ApiResponse.<DepartmentResponse>builder()
-                .result(departmentService.updateDepartment(id, request))
-                .message("Cập nhật khoa/phòng ban thành công")
-                .build();
+            @RequestBody @Valid DepartmentRequest request) {
+        return ApiResponse.success(departmentService.updateDepartment(id, request));
+    }
+
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<DepartmentResponse> activate(@PathVariable Long id) {
+        return ApiResponse.success(departmentService.activateDepartment(id));
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<DepartmentResponse> deactivate(@PathVariable Long id) {
+        return ApiResponse.success(departmentService.deactivateDepartment(id));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         departmentService.deleteDepartment(id);
-        return ApiResponse.<Void>builder()
-                .message("Xóa khoa/phòng ban thành công")
-                .build();
+        return ApiResponse.success(null);
+    }
+
+    @GetMapping("/options")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<List<DepartmentResponse>> getOptions(@RequestParam(required = false) Boolean active) {
+        return ApiResponse.success(departmentService.getDepartmentOptions(active));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<DepartmentResponse> getById(@PathVariable Long id) {
-        return ApiResponse.<DepartmentResponse>builder()
-                .result(departmentService.getDepartmentById(id))
-                .build();
+        return ApiResponse.success(departmentService.getDepartmentById(id));
     }
 
     @GetMapping
@@ -57,10 +68,8 @@ public class DepartmentController {
     public ApiResponse<PageDTO<DepartmentResponse>> getAll(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String keyword) {
-
-        return ApiResponse.<PageDTO<DepartmentResponse>>builder()
-                .result(departmentService.getDepartments(page, size, keyword))
-                .build();
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean active) {
+        return ApiResponse.success(departmentService.getDepartments(page, size, keyword, active));
     }
 }

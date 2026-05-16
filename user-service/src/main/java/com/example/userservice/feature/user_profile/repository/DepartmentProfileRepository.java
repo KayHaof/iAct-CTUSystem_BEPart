@@ -1,15 +1,30 @@
 package com.example.userservice.feature.user_profile.repository;
 
 import com.example.userservice.feature.user_profile.model.DepartmentProfile;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DepartmentProfileRepository extends JpaRepository<DepartmentProfile, Long> {
+
+    @Override
+    @EntityGraph(attributePaths = "department")
+    Optional<DepartmentProfile> findById(Long userId);
+
+    @EntityGraph(attributePaths = "department")
+    List<DepartmentProfile> findByUserIdIn(Collection<Long> userIds);
+
+    @EntityGraph(attributePaths = "department")
+    Optional<DepartmentProfile> findFirstByDepartmentId(Long departmentId);
+
+    List<DepartmentProfile> findByDepartmentId(Long departmentId);
 
     @Query("SELECT d.userId FROM DepartmentProfile d WHERE " +
             "(:keyword IS NULL OR LOWER(d.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))")

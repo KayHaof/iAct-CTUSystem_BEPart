@@ -22,10 +22,10 @@ public class Semesters {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "semester_name")
-    private String semesterName;
+    @Column(name = "name", nullable = false, length = 100)
+    private String name;
 
-    @Column(name = "academic_year")
+    @Column(name = "academic_year", nullable = false, length = 20)
     private String academicYear;
 
     @Column(name = "start_date")

@@ -9,7 +9,7 @@ public class ClassResponse {
     private Long id;
     private String classCode;
     private String name;
-    private Integer academicYear;
+    private String academicYear;
     private Long majorId;
     private String majorName;
     private Long departmentId;

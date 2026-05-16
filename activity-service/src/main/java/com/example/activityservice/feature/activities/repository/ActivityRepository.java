@@ -13,4 +13,6 @@ public interface ActivityRepository extends JpaRepository<Activities, Long>, Jpa
     List<Activities> findByStatusAndUpdatedAtBefore(Integer status, LocalDateTime cutoffDate);
     List<Activities> findByStatus(Integer status);
     long countByStatus(Integer status);
+    boolean existsBySemesterId(Long semesterId);
+    boolean existsByCategoryId(Long categoryId);
 }

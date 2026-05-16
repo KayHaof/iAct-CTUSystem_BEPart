@@ -1,6 +1,7 @@
 package com.example.userservice.feature.major.controller;
 
 import com.example.dto.ApiResponse;
+import com.example.dto.PageDTO;
 import com.example.userservice.feature.major.dto.MajorRequest;
 import com.example.userservice.feature.major.dto.MajorResponse;
 import com.example.userservice.feature.major.service.MajorService;
@@ -19,36 +20,59 @@ public class MajorController {
     private final MajorService majorService;
 
     @GetMapping
-    public ApiResponse<List<MajorResponse>> getMajors(@RequestParam(required = false) Long departmentId) {
-        return ApiResponse.<List<MajorResponse>>builder()
-                .result(majorService.getMajors(departmentId))
-                .build();
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<List<MajorResponse>> getMajors(
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) Boolean active) {
+        return ApiResponse.success(majorService.getMajors(departmentId, active));
+    }
+
+    @GetMapping("/page")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<PageDTO<MajorResponse>> getMajorPage(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String programType) {
+        return ApiResponse.success(majorService.getMajorPage(page, size, keyword, departmentId, active, programType));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<MajorResponse> getMajorById(@PathVariable Long id) {
+        return ApiResponse.success(majorService.getMajorById(id));
     }
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<MajorResponse> createMajor(@RequestBody @Valid MajorRequest request) {
-        return ApiResponse.<MajorResponse>builder()
-                .result(majorService.createMajor(request))
-                .message("Tạo chuyên ngành thành công")
-                .build();
+        return ApiResponse.success(majorService.createMajor(request));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<MajorResponse> updateMajor(@PathVariable Long id, @RequestBody @Valid MajorRequest request) {
-        return ApiResponse.<MajorResponse>builder()
-                .result(majorService.updateMajor(id, request))
-                .message("Cập nhật chuyên ngành thành công")
-                .build();
+        return ApiResponse.success(majorService.updateMajor(id, request));
+    }
+
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<MajorResponse> activateMajor(@PathVariable Long id) {
+        return ApiResponse.success(majorService.activateMajor(id));
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<MajorResponse> deactivateMajor(@PathVariable Long id) {
+        return ApiResponse.success(majorService.deactivateMajor(id));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<String> deleteMajor(@PathVariable Long id) {
+    public ApiResponse<Void> deleteMajor(@PathVariable Long id) {
         majorService.deleteMajor(id);
-        return ApiResponse.<String>builder()
-                .message("Xóa chuyên ngành thành công")
-                .build();
+        return ApiResponse.success(null);
     }
 }
