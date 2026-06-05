@@ -13,6 +13,11 @@ public interface NotificationMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "isRead", constant = "false")
     @Mapping(target = "createdAt", ignore = true)
+    @Mapping(source = "userId", target = "userId")
+    @Mapping(source = "activityId", target = "activityId")
+    @Mapping(source = "message", target = "message")
+    @Mapping(source = "title", target = "title")
+    @Mapping(source = "type", target = "type")
     Notifications toEntity(NotificationRequest request);
 
     // 2. ENTITY -> RESPONSE
@@ -23,7 +28,5 @@ public interface NotificationMapper {
     @Mapping(source = "isRead", target = "isRead")
     @Mapping(source = "createdAt", target = "createdAt")
     @Mapping(source = "activityId", target = "activityId")
-    @Mapping(target = "activityTitle", ignore = true)
-    @Mapping(target = "activityThumbnail", ignore = true)
     NotificationResponse toResponse(Notifications entity);
 }

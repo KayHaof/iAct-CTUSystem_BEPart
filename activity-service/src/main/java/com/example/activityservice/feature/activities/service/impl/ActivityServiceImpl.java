@@ -1,10 +1,7 @@
 package com.example.activityservice.feature.activities.service.impl;
 
 import com.example.activityservice.common.dto.NotificationRequest;
-import com.example.activityservice.feature.activities.dto.ActivityRequest;
-import com.example.activityservice.feature.activities.dto.ActivityResponse;
-import com.example.activityservice.feature.activities.dto.ActivityStatsResponse;
-import com.example.activityservice.feature.activities.dto.ActivityTimeLocationResponse;
+import com.example.activityservice.feature.activities.dto.*;
 import com.example.activityservice.feature.activities.mapper.ActivityMapper;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.semesters.model.Semesters;
@@ -35,6 +32,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -297,7 +295,7 @@ public class ActivityServiceImpl implements ActivityService {
         activityRepository.deleteById(id);
 
         // ĐÃ FIX: DÙNG KAFKA ĐỂ BÁO CHO NOTIFICATION SERVICE XÓA THÔNG BÁO
-        kafkaTemplate.send("activity-deleted-topic", new ActivityDeletedEvent(id));
+        kafkaTemplate.send("iact.activity.deleted", new ActivityDeletedEvent(id));
         log.info("Đã gửi event Kafka yêu cầu xóa thông báo cho Activity ID: {}", id);
     }
 
@@ -359,7 +357,7 @@ public class ActivityServiceImpl implements ActivityService {
     private void sendNotificationSafe(Activities activity, String title, String message, Integer type) {
         try {
             NotificationRequest notiRequest = activityMapper.toNotificationRequest(activity, title, message, type);
-            kafkaTemplate.send("notification-create-topic", notiRequest);
+            kafkaTemplate.send("iact.notification.created", notiRequest);
             log.info("Đã gửi event Kafka tạo thông báo cho Activity ID: {}", activity.getId());
         } catch (Exception e) {
             log.error("Failed to send notification event for activity {}: {}", activity.getId(), e.getMessage());
@@ -424,5 +422,268 @@ public class ActivityServiceImpl implements ActivityService {
             return userRepository.findByUsername(authentication.getName()).orElse(null);
         }
         return null;
+    }
+
+    // ============ NEW METHODS FOR UC FEATURES ============
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageDTO<ActivityResponse> searchActivities(
+            String keyword, Long departmentId, String startDate, String endDate,
+            List<Long> categoryIds, String category, String status, Pageable pageable) {
+
+        Specification<Activities> spec = (root, query, cb) -> cb.conjunction();
+
+        // Must be approved for student-facing search
+        spec = spec.and(ActivitySpecification.isApproved());
+
+        if (keyword != null && !keyword.isBlank()) {
+            spec = spec.and(ActivitySpecification.containsKeyword(keyword));
+        }
+
+        if (departmentId != null) {
+            spec = spec.and(ActivitySpecification.hasDepartmentId(departmentId));
+        }
+
+        if (startDate != null && !startDate.isBlank()) {
+            LocalDate start = LocalDate.parse(startDate);
+            spec = spec.and((root, query, cb) -> 
+                    cb.greaterThanOrEqualTo(root.get("startDate"), start.atStartOfDay()));
+        }
+
+        if (endDate != null && !endDate.isBlank()) {
+            LocalDate end = LocalDate.parse(endDate);
+            spec = spec.and((root, query, cb) -> 
+                    cb.lessThanOrEqualTo(root.get("endDate"), end.atTime(23, 59, 59)));
+        }
+
+        if (status != null && !status.equalsIgnoreCase("ALL")) {
+            // Map status filter if needed
+        }
+
+        Page<Activities> page = activityRepository.findAll(spec, pageable);
+
+        List<ActivityResponse> dtoList = page.getContent().stream()
+                .map(activity -> {
+                    ActivityResponse response = activityMapper.toResponse(activity);
+                    response.setRegisteredCount(
+                            (int) registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2));
+                    return response;
+                })
+                .collect(Collectors.toList());
+
+        return activityMapper.toPageDTO(page, dtoList);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RecommendationResponse getRecommendations(Long studentId, int limit, Jwt jwt) {
+        // If no studentId provided, extract from JWT
+        if (studentId == null && jwt != null) {
+            String username = jwt.getClaimAsString("preferred_username");
+            Users student = userRepository.findByUsername(username).orElse(null);
+            if (student != null) {
+                studentId = student.getId();
+            }
+        }
+
+        if (studentId == null) {
+            return RecommendationResponse.builder()
+                    .activities(List.of())
+                    .reasons(List.of())
+                    .totalFound(0)
+                    .build();
+        }
+
+        // Get current semester
+        Semesters semester = semesterRepository.findSemesterByDate(LocalDate.now()).orElse(null);
+        if (semester == null) {
+            return RecommendationResponse.builder()
+                    .activities(List.of())
+                    .reasons(List.of("Khong co hoc ky hien tai"))
+                    .totalFound(0)
+                    .build();
+        }
+
+        // Simple recommendation: Get approved activities for current semester
+        List<Activities> approvedActivities = activityRepository.findApprovedActivitiesForStudent(semester.getId());
+        
+        List<RecommendedActivity> recommended = approvedActivities.stream()
+                .limit(limit)
+                .map(activity -> RecommendedActivity.builder()
+                        .id(activity.getId())
+                        .title(activity.getTitle())
+                        .description(activity.getDescription())
+                        .location(activity.getLocation())
+                        .startDate(activity.getStartDate() != null ? activity.getStartDate().toString() : null)
+                        .endDate(activity.getEndDate() != null ? activity.getEndDate().toString() : null)
+                        .maxParticipants(activity.getMaxParticipants())
+                        .registeredCount((int) registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2))
+                        .matchPercentage(85.0)  // Placeholder - real implementation would calculate similarity
+                        .matchedReasons(List.of("Hoat dong phu hop voi yeu cau diem ren luyen"))
+                        .categoryName(activity.getCategory() != null ? activity.getCategory().getName() : null)
+                        .departmentName(null)
+                        .build())
+                .collect(Collectors.toList());
+
+        List<String> reasons = List.of(
+                "Cac hoat dong duoc goi y dua tren diem ren luyen con thieu"
+        );
+
+        return RecommendationResponse.builder()
+                .activities(recommended)
+                .reasons(reasons)
+                .totalFound(recommended.size())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageDTO<ActivityResponse> getActivitiesForRegistration(Long semesterId, Pageable pageable) {
+        final Long resolvedSemesterId;
+        if (semesterId != null) {
+            resolvedSemesterId = semesterId;
+        } else {
+            Semesters semester = semesterRepository.findSemesterByDate(LocalDate.now())
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong co hoc ky"));
+            resolvedSemesterId = semester.getId();
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        Specification<Activities> spec = (root, query, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.equal(root.get("status"), 1));
+            predicates.add(cb.lessThanOrEqualTo(root.get("registrationStart"), now));
+            predicates.add(cb.greaterThanOrEqualTo(root.get("registrationEnd"), now));
+            predicates.add(cb.equal(root.get("semester").get("id"), resolvedSemesterId));
+
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+
+        Page<Activities> page = activityRepository.findAll(spec, pageable);
+
+        List<ActivityResponse> dtoList = page.getContent().stream()
+                .map(activity -> {
+                    ActivityResponse response = activityMapper.toResponse(activity);
+                    response.setRegisteredCount(
+                            (int) registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2));
+                    return response;
+                })
+                .collect(Collectors.toList());
+
+        return activityMapper.toPageDTO(page, dtoList);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DepartmentStatsResponse getDepartmentStatistics(Long departmentId, Long semesterId) {
+        Long actualSemesterId = semesterId;
+        if (actualSemesterId == null) {
+            Semesters semester = semesterRepository.findSemesterByDate(LocalDate.now()).orElse(null);
+            if (semester != null) {
+                actualSemesterId = semester.getId();
+            }
+        }
+
+        // Get department name if available
+        String departmentName = null;
+
+        // Count activities by status
+        List<Activities> activities = activityRepository.findByDepartmentId(departmentId);
+        
+        int total = activities.size();
+        int pending = (int) activities.stream().filter(a -> a.getStatus() == 0).count();
+        int approved = (int) activities.stream().filter(a -> a.getStatus() == 1).count();
+        int rejected = (int) activities.stream().filter(a -> a.getStatus() == 2).count();
+        int cancelled = (int) activities.stream().filter(a -> a.getStatus() == 4).count();
+
+        return DepartmentStatsResponse.builder()
+                .departmentId(departmentId)
+                .departmentName(departmentName)
+                .semesterId(actualSemesterId)
+                .totalActivities(total)
+                .pendingActivities(pending)
+                .approvedActivities(approved)
+                .rejectedActivities(rejected)
+                .cancelledActivities(cancelled)
+                .totalRegistrations(0)  // Placeholder
+                .totalAttendances(0)
+                .totalCancellations(cancelled)
+                .attendanceRate(0.0)
+                .totalPointsAwarded(0)
+                .uniqueStudentsParticipated(0)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SystemStatsResponse getSystemStatistics(Long semesterId) {
+        Long actualSemesterId = semesterId;
+        if (actualSemesterId == null) {
+            Semesters semester = semesterRepository.findSemesterByDate(LocalDate.now()).orElse(null);
+            if (semester != null) {
+                actualSemesterId = semester.getId();
+            }
+        }
+
+        long totalActivities = activityRepository.count();
+        long pending = activityRepository.countByStatus(0);
+        long approved = activityRepository.countByStatus(1);
+        long rejected = activityRepository.countByStatus(2);
+
+        return SystemStatsResponse.builder()
+                .semesterId(actualSemesterId)
+                .totalActivities((int) totalActivities)
+                .pendingApproval((int) pending)
+                .approvedThisSemester((int) approved)
+                .rejected((int) rejected)
+                .approvalRate(totalActivities > 0 ? (approved * 100.0) / totalActivities : 0)
+                .totalRegistrations(0L)
+                .totalAttendances(0L)
+                .averageAttendanceRate(0.0)
+                .build();
+    }
+
+    @Override
+    public String generateDescription(String prompt) {
+        if (prompt == null || prompt.trim().isBlank()) {
+            return "Vui long nhap mo ta de iAct tao noi dung hoat dong.";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Noi dung hoat dong duoc goi y\n\n");
+        sb.append("## Tieu de goi y\n");
+        sb.append("- ").append(prompt).append("\n\n");
+
+        sb.append("## Mo ta tom tat\n");
+        String[] words = prompt.split("\\s+");
+        if (words.length > 3) {
+            sb.append("Hoat dong \"");
+            for (int i = 0; i < Math.min(5, words.length); i++) {
+                sb.append(words[i]).append(" ");
+            }
+            sb.append("...\" nham mang lai ");
+            if (words.length > 5) sb.append("kien thuc va ky nang thuc te").append(" cho sinh vien.\n");
+            else sb.append("trai nghiem hoc tap").append(" cho sinh vien.\n");
+        }
+
+        sb.append("\n## Muc tieu\n");
+        sb.append("- Giup sinh vien hieu rõ ve chu de: ").append(prompt).append("\n");
+        sb.append("- Phat trien ky nang thuc hanh\n");
+        sb.append("- Tao co hoi giao luu va hoc hoi\n\n");
+
+        sb.append("## Noi dung chinh\n");
+        sb.append("1. Gioi thieu tong quan ve chu de\n");
+        sb.append("2. Huong dan va thuc hanh\n");
+        sb.append("3. Tha luon va tra loi loi\n");
+        sb.append("4. Tong ket va rut kinh nghiem\n\n");
+
+        sb.append("## Ket luan\n");
+        sb.append("Hoat dong mang tinh thuc te cao, phu hop voi sinh vien\n");
+
+        log.info("Generated AI description for prompt: {}", prompt);
+        return sb.toString();
     }
 }

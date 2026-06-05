@@ -16,4 +16,6 @@ public class ClassRequest {
 
     @NotNull(message = "ID Chuyên ngành không được để trống")
     private Long majorId;
+
+    private Boolean isActive;
 }

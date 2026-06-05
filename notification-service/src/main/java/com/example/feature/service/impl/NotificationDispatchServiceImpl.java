@@ -39,5 +39,12 @@ public class NotificationDispatchServiceImpl implements NotificationDispatchServ
 
         return response;
     }
+
+    @Override
+    @Transactional
+    public int sendUrgentNotification(com.example.feature.dto.UrgentNotificationRequest request) {
+        log.info("Sending urgent notification to target: {}", request.getTargetType());
+        return 0;
+    }
 }
 

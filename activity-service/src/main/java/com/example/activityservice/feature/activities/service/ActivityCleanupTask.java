@@ -43,7 +43,7 @@ public class ActivityCleanupTask {
                 // ================= KAFKA: HÉT LÊN CHO CẢ LÀNG BIẾT =================
                 ActivityDeletedEvent event = new ActivityDeletedEvent(draftId);
                 // Bắn event xóa thông báo qua Kafka
-                kafkaTemplate.send("activity-deleted-topic", event);
+                kafkaTemplate.send("iact.activity.deleted", event);
                 // ===================================================================
             }
             log.info(">> Đã dọn dẹp thành công {} bản nháp quá hạn và bắn sự kiện dọn thông báo qua Kafka.", oldDrafts.size());

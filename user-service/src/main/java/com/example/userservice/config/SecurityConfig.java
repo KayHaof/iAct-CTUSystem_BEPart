@@ -1,56 +1,65 @@
 package com.example.userservice.config;
 
-import com.example.userservice.exception.CustomAccessDeniedHandler;
-import com.example.userservice.filter.UserStatusFilter;
+import com.example.dto.ApiResponse;
+import com.example.exception.ErrorCode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.*;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
-@Slf4j
 public class SecurityConfig {
-    private final CustomAccessDeniedHandler customAccessDeniedHandler;
-    private final UserStatusFilter userStatusFilter;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) {
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // Public endpoints - không cần authentication
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/api/v1/users/public/**").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Protected endpoints - yêu cầu authentication
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated())
+                        .requestMatchers("/api/v1/**").authenticated()
+                        .anyRequest().authenticated()
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                        .accessDeniedHandler(accessDeniedHandler())
+                )
+                .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) -> {
                             log.warn("Authentication error: {}", authException.getMessage());
-                            response.sendError(401);
+                            response.setStatus(401);
+                            response.setContentType("application/json");
+                            ApiResponse<Object> apiResponse = new ApiResponse<>();
+                            apiResponse.setCode(ErrorCode.UNAUTHENTICATED.getCode());
+                            apiResponse.setMessage("User Service: Token không hợp lệ hoặc hết hạn");
+                            response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
                         })
-                        .accessDeniedHandler(customAccessDeniedHandler))
-                .addFilterAfter(userStatusFilter, BearerTokenAuthenticationFilter.class);
+                );
+
         return http.build();
     }
 
-    @SuppressWarnings("unchecked")
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
@@ -62,13 +71,31 @@ public class SecurityConfig {
                 return Collections.emptyList();
             }
 
+            @SuppressWarnings("unchecked")
             Collection<String> roles = (Collection<String>) realmAccess.get("roles");
 
-            return roles.stream()
+            if (roles == null) {
+                return Collections.emptyList();
+            }
+
+            return new ArrayList<>(roles.stream()
                     .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
-                    .collect(Collectors.toList());
+                    .toList());
         });
 
         return jwtConverter;
+    }
+
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler() {
+        return (request, response, accessDeniedException) -> {
+            log.warn("Access denied: {}", accessDeniedException.getMessage());
+            response.setStatus(403);
+            response.setContentType("application/json");
+            ApiResponse<Object> apiResponse = new ApiResponse<>();
+            apiResponse.setCode(ErrorCode.FORBIDDEN.getCode());
+            apiResponse.setMessage("User Service: Bạn không có quyền truy cập tài nguyên này");
+            response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
+        };
     }
 }

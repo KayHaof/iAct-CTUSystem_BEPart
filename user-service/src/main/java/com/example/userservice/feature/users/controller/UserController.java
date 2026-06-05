@@ -26,8 +26,8 @@ public class UserController {
     private final UserService userService;
     private final UserImportService userImportService;
 
-    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<PageDTO<UserResponse>> getAllUsers(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -49,24 +49,21 @@ public class UserController {
             @PathVariable Long id,
             @RequestBody UserUpdateRequest request) {
         userService.updateUserProfile(id, request);
-        return ApiResponse.<Void>builder()
-                .code(200)
-                .message("Cập nhật thành công")
-                .build();
+        return ApiResponse.of(200, "Cap nhat thanh cong", null);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<String> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
-        return ApiResponse.success("Xóa hoặc vô hiệu người dùng thành công");
+        return ApiResponse.success("Xoa hoac vo hieu nguoi dung thanh cong");
     }
 
     @PutMapping("/{id}/active")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<String> activeUser(@PathVariable long id) {
         userService.activateUser(id);
-        return ApiResponse.success("Kích hoạt tài khoản thành công");
+        return ApiResponse.success("Kich hoat tai khoan thanh cong");
     }
 
     @GetMapping("/my-info")
@@ -79,29 +76,22 @@ public class UserController {
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody ChangePasswordRequest request) {
         userService.changePasswordViaKeycloak(bearerToken, request);
-        return ApiResponse.<Void>builder()
-                .code(200)
-                .message("Đổi mật khẩu thành công!")
-                .build();
+        return ApiResponse.of(200, "Doi mat khau thanh cong!", null);
     }
 
     @PostMapping("/sync")
     public ApiResponse<String> syncUser(@AuthenticationPrincipal Jwt jwt) {
         userService.syncUserFromKeycloak(jwt);
-        return ApiResponse.success("Đồng bộ người dùng thành công!");
+        return ApiResponse.success("Dong bo nguoi dung thanh cong!");
     }
 
     @GetMapping("/search")
     public ApiResponse<UserResponse> getUserByEmail(@RequestParam("email") String email) {
-        return ApiResponse.<UserResponse>builder()
-                .code(200)
-                .message("Tìm thấy người dùng thành công")
-                .result(userService.getUserByEmail(email))
-                .build();
+        return ApiResponse.success(userService.getUserByEmail(email), "Tim thay nguoi dung thanh cong");
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/counts")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Map<String, Long>> getUserCounts(@RequestParam(required = false) String keyword) {
         return ApiResponse.success(userService.countUsersByRole(keyword));
     }
@@ -110,10 +100,11 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<String> resetPassword(@PathVariable Long id) {
         userService.sendResetPasswordEmail(id);
-        return ApiResponse.success("Đã gửi email yêu cầu đặt lại mật khẩu thành công");
+        return ApiResponse.success("Da gui email yeu cau dat lai mat khau thanh cong");
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ImportResultDto> importUsersFromExcel(
             @RequestParam("file") MultipartFile file,
             @RequestParam("roleType") Integer roleType) {
@@ -123,8 +114,6 @@ public class UserController {
 
     @GetMapping("/username/{username}")
     public ApiResponse<UserResponse> getUserByUsername(@PathVariable String username) {
-        return ApiResponse.<UserResponse>builder()
-                .result(userService.getUserByUsername(username))
-                .build();
+        return ApiResponse.success(userService.getUserByUsername(username));
     }
 }

@@ -14,12 +14,12 @@ public class NotificationCreateListener {
 
     private final NotificationDispatchService notificationDispatchService;
 
-    @KafkaListener(topics = "notification-create-topic", groupId = "notification-create-group-v1")
+    @KafkaListener(topics = "iact.notification.created", groupId = "notification-create-group-v1")
     public void handleNotificationCreate(NotificationRequest request) {
         try {
             notificationDispatchService.createAndDispatch(request);
         } catch (Exception e) {
-            log.error("Failed to handle notification-create-topic message: {}", e.getMessage());
+            log.error("Failed to handle iact.notification.created message: {}", e.getMessage());
         }
     }
 }

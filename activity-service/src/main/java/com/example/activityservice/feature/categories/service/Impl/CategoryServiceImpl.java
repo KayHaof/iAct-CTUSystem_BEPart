@@ -11,8 +11,11 @@ import com.example.activityservice.feature.categories.repository.CategoryReposit
 import com.example.activityservice.feature.categories.service.CategoryService;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,6 +38,12 @@ public class CategoryServiceImpl implements CategoryService {
     private final BenefitRepository benefitRepository;
     private final AwardCriteriaRepository awardCriteriaRepository;
     private final CategoryMapper categoryMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
+
+    private static final String CACHE_KEY_ALL_TREE = "categories:tree";
+    private static final String CACHE_KEY_FLAT_PREFIX = "categories:flat:";
+    private static final long CACHE_TTL_MINUTES = 10;
 
     @Override
     @Transactional
@@ -45,21 +55,56 @@ public class CategoryServiceImpl implements CategoryService {
         applyRequest(category, request);
 
         Categories saved = categoryRepository.save(category);
+        evictAllCategoryCaches();
         return categoryMapper.toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> getAllCategoriesAsTree(Boolean active) {
+        String cacheKey = active == null ? CACHE_KEY_ALL_TREE : CACHE_KEY_ALL_TREE + ":" + active;
+
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null) {
+                log.debug("Cache hit for categories tree (active={})", active);
+                return objectMapper.convertValue(cached, new TypeReference<List<CategoryResponse>>() {});
+            }
+        } catch (Exception e) {
+            log.warn("Redis read failed for categories tree, falling back to DB: {}", e.getMessage());
+        }
+
         List<Categories> categories = active == null
                 ? categoryRepository.findAll()
                 : categoryRepository.findByIsActive(active);
-        return buildTree(categories);
+        List<CategoryResponse> result = buildTree(categories);
+
+        try {
+            redisTemplate.opsForValue().set(cacheKey, result, CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.warn("Redis write failed for categories tree: {}", e.getMessage());
+        }
+
+        return result;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> getAllCategoriesFlat(Boolean active, Long parentId) {
+        String cacheKey = CACHE_KEY_FLAT_PREFIX
+                + (active == null ? "all" : active)
+                + ":" + (parentId == null ? "root" : parentId);
+
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null) {
+                log.debug("Cache hit for categories flat (active={}, parentId={})", active, parentId);
+                return objectMapper.convertValue(cached, new TypeReference<List<CategoryResponse>>() {});
+            }
+        } catch (Exception e) {
+            log.warn("Redis read failed for categories flat, falling back to DB: {}", e.getMessage());
+        }
+
         List<Categories> categories;
         if (active != null && parentId != null) {
             categories = categoryRepository.findByParentIdAndIsActive(parentId, active);
@@ -71,9 +116,17 @@ public class CategoryServiceImpl implements CategoryService {
             categories = categoryRepository.findAll();
         }
 
-        return categories.stream()
+        List<CategoryResponse> result = categories.stream()
                 .map(categoryMapper::toFlatResponse)
                 .collect(Collectors.toList());
+
+        try {
+            redisTemplate.opsForValue().set(cacheKey, result, CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.warn("Redis write failed for categories flat: {}", e.getMessage());
+        }
+
+        return result;
     }
 
     @Override
@@ -97,6 +150,7 @@ public class CategoryServiceImpl implements CategoryService {
         applyRequest(category, request);
 
         Categories updated = categoryRepository.save(category);
+        evictAllCategoryCaches();
         return categoryMapper.toResponse(updated);
     }
 
@@ -105,7 +159,9 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryResponse activateCategory(Long id) {
         Categories category = findCategoryOrThrow(id);
         category.setIsActive(true);
-        return categoryMapper.toResponse(categoryRepository.save(category));
+        CategoryResponse response = categoryMapper.toResponse(categoryRepository.save(category));
+        evictAllCategoryCaches();
+        return response;
     }
 
     @Override
@@ -113,7 +169,9 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryResponse deactivateCategory(Long id) {
         Categories category = findCategoryOrThrow(id);
         category.setIsActive(false);
-        return categoryMapper.toResponse(categoryRepository.save(category));
+        CategoryResponse response = categoryMapper.toResponse(categoryRepository.save(category));
+        evictAllCategoryCaches();
+        return response;
     }
 
     @Override
@@ -126,10 +184,12 @@ public class CategoryServiceImpl implements CategoryService {
             category.setIsActive(false);
             categoryRepository.save(category);
             log.info("Category ID {} has references and was deactivated instead of deleted", id);
+            evictAllCategoryCaches();
             return;
         }
 
         categoryRepository.delete(category);
+        evictAllCategoryCaches();
     }
 
     private void applyRequest(Categories category, CategoryRequest request) {
@@ -236,5 +296,20 @@ public class CategoryServiceImpl implements CategoryService {
             return null;
         }
         return code.trim();
+    }
+
+    private void evictAllCategoryCaches() {
+        try {
+            Set<String> keys = redisTemplate.keys(CACHE_KEY_FLAT_PREFIX + "*");
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+            redisTemplate.delete(CACHE_KEY_ALL_TREE);
+            redisTemplate.delete(CACHE_KEY_ALL_TREE + ":true");
+            redisTemplate.delete(CACHE_KEY_ALL_TREE + ":false");
+            log.info("Category caches evicted");
+        } catch (Exception e) {
+            log.warn("Failed to evict category caches: {}", e.getMessage());
+        }
     }
 }

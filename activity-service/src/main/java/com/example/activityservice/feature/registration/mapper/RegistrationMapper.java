@@ -5,39 +5,50 @@ import com.example.activityservice.feature.activitySchedule.model.ActivitySchedu
 import com.example.activityservice.feature.registration.dto.RegistrationResponse;
 import com.example.activityservice.feature.registration.model.Registrations;
 import com.example.activityservice.feature.users.model.Users;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Mapper(componentModel = "spring", imports = {Collectors.class, ArrayList.class})
-public interface RegistrationMapper {
+@Component
+public class RegistrationMapper {
 
-    // [ĐÃ SỬA]: Lấy studentId từ Object student (entity.student.id)
-    @Mapping(target = "studentId", source = "entity.student.id")
-    @Mapping(target = "studentName", ignore = true)
-    @Mapping(target = "avatarUrl", ignore = true)
-    @Mapping(target = "studentCode", ignore = true)
-    @Mapping(target = "activityId", source = "entity.activity.id")
-    @Mapping(target = "activityTitle", source = "entity.activity.title")
-    @Mapping(target = "isAttended", expression = "java(entity.getAttendance() != null)")
-    @Mapping(target = "attendedAt", source = "entity.attendance.checkinTime")
-    @Mapping(target = "scheduleIds", expression = "java( entity.getRegisteredSchedules() != null ? entity.getRegisteredSchedules().stream().map(s -> s.getId()).collect(Collectors.toList()) : new ArrayList<Long>() )")
-    @Mapping(target = "proofStatus", source = "proofStatus")
-    @Mapping(target = "point", ignore = true)
-    RegistrationResponse toResponseWithProof(Registrations entity, Integer proofStatus);
+    public RegistrationResponse toResponseWithProof(Registrations entity, Integer proofStatus) {
+        if (entity == null) return null;
 
-    default RegistrationResponse toResponse(Registrations entity) {
+        RegistrationResponse res = new RegistrationResponse();
+        res.setId(entity.getId());
+        res.setStudentId(entity.getStudent() != null ? entity.getStudent().getId() : null);
+        res.setActivityId(entity.getActivity() != null ? entity.getActivity().getId() : null);
+        res.setActivityTitle(entity.getActivity() != null ? entity.getActivity().getTitle() : null);
+        res.setRegisteredAt(entity.getRegisteredAt());
+        res.setStatus(entity.getStatus());
+        res.setCancelReason(entity.getCancelReason());
+        res.setIsAttended(entity.getAttendance() != null);
+        res.setAttendedAt(entity.getAttendance() != null ? entity.getAttendance().getCheckinTime() : null);
+        res.setProofStatus(proofStatus);
+
+        if (entity.getRegisteredSchedules() != null) {
+            List<Long> scheduleIds = entity.getRegisteredSchedules().stream()
+                    .map(ActivitySchedule::getId)
+                    .collect(Collectors.toList());
+            res.setScheduleIds(scheduleIds);
+        } else {
+            res.setScheduleIds(new ArrayList<>());
+        }
+
+        return res;
+    }
+
+    public RegistrationResponse toResponse(Registrations entity) {
         return toResponseWithProof(entity, 0);
     }
 
-    // [ĐÃ SỬA]: Đổi tham số thành Object `Users` và dùng `setStudent` thay vì `setStudentId`
-    default Registrations toNewEntity(Users student, Activities activity, List<ActivitySchedule> schedules) {
+    public Registrations toNewEntity(Users student, Activities activity, List<ActivitySchedule> schedules) {
         Registrations reg = new Registrations();
-        reg.setStudent(student); // Gán nguyên Object Users lấy từ DB/Lazy Sync
+        reg.setStudent(student);
         reg.setActivity(activity);
         reg.setRegisteredSchedules(schedules != null ? schedules : new ArrayList<>());
         reg.setStatus(0);
@@ -45,14 +56,14 @@ public interface RegistrationMapper {
         return reg;
     }
 
-    default void reRegisterEntity(Registrations entity, List<ActivitySchedule> schedules) {
+    public void reRegisterEntity(Registrations entity, List<ActivitySchedule> schedules) {
         entity.setStatus(0);
         entity.setCancelReason(null);
         entity.setRegisteredAt(LocalDateTime.now());
         entity.setRegisteredSchedules(schedules != null ? schedules : new ArrayList<>());
     }
 
-    default void cancelEntity(Registrations entity, String reason) {
+    public void cancelEntity(Registrations entity, String reason) {
         entity.setStatus(2);
         entity.setCancelReason(reason);
         if (entity.getRegisteredSchedules() != null) {

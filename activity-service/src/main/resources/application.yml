@@ -7,6 +7,8 @@ spring:
   devtools:
     restart:
       enabled: false
+    livereload:
+      enabled: false
 
   datasource:
     url: jdbc:mysql://localhost:3306/activity_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
@@ -39,6 +41,14 @@ spring:
       storage:
         enabled: false
 
+  mvc:
+    cors:
+      allowed-origin-patterns: "*"
+      allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+      max-age: 3600
+
 eureka:
   client:
     service-url:
@@ -51,4 +61,4 @@ eureka:
 cloudinary:
   cloud-name: dhjamvg6j
   api-key: 237733137343564
-  api-secret: ${api_secret:changeme}
+  api-secret: ${api_secret:xzojOJkKQH9R6mcX9M8LMPPFlcw}

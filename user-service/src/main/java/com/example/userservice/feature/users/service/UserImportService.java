@@ -177,7 +177,7 @@ public class UserImportService {
                         payload.put("username", u.getUsername());
                         payload.put("email", u.getEmail());
                         try {
-                            kafkaTemplate.send("user-created-topic", objectMapper.writeValueAsString(payload));
+                            kafkaTemplate.send("iact.identity.user.created", objectMapper.writeValueAsString(payload));
                         } catch (Exception ignored) {}
                     }
                 }

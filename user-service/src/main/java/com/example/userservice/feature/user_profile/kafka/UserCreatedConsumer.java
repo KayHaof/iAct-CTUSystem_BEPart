@@ -19,7 +19,7 @@ public class UserCreatedConsumer {
     private final StudentProfileRepository studentRepo;
     private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = "user-created-topic", groupId = "profile-group-v1")
+    @KafkaListener(topics = "iact.identity.user.created", groupId = "profile-group-v1")
     public void consumeUserCreated(String message) {
         try {
             log.info("📥 [PROFILE] TIN NHẮN TẠO USER BAY TỚI: {}", message);

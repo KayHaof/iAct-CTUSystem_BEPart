@@ -5,5 +5,7 @@ import com.example.feature.dto.NotificationResponse;
 
 public interface NotificationDispatchService {
     NotificationResponse createAndDispatch(NotificationRequest request);
+
+    int sendUrgentNotification(com.example.feature.dto.UrgentNotificationRequest request);
 }
 
