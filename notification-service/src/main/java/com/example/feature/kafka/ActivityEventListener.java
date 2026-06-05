@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityEventListener {
     private final NotificationRepository notificationRepository;
 
-    @KafkaListener(topics = "activity-deleted-topic", groupId = "notification-group")
+    @KafkaListener(topics = "iact.activity.deleted", groupId = "notification-group")
     @Transactional
     public void handleActivityDeletedEvent(ActivityDeletedEvent event) {
         log.info("KAFKA NHẬN LỆNH: Yêu cầu xóa thông báo của Activity ID = {}", event.getActivityId());

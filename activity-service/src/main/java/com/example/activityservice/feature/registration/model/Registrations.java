@@ -2,11 +2,9 @@ package com.example.activityservice.feature.registration.model;
 
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activitySchedule.model.ActivitySchedule;
-
 import com.example.activityservice.feature.attendances.model.Attendances;
 import com.example.activityservice.feature.users.model.Users;
 import jakarta.persistence.*;
-import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -14,8 +12,8 @@ import java.util.List;
 
 @Entity
 @Table(name = "registrations")
-@Data
 public class Registrations {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -31,7 +29,7 @@ public class Registrations {
     @Column(name = "registered_at")
     private LocalDateTime registeredAt;
 
-    private Integer status; // 0=registered, 1=attended, 2=cancelled
+    private Integer status;
 
     @Column(columnDefinition = "TEXT")
     private String cancelReason;
@@ -46,4 +44,23 @@ public class Registrations {
             inverseJoinColumns = @JoinColumn(name = "schedule_id")
     )
     private List<ActivitySchedule> registeredSchedules = new ArrayList<>();
+
+    public Registrations() {}
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public Users getStudent() { return student; }
+    public void setStudent(Users student) { this.student = student; }
+    public Activities getActivity() { return activity; }
+    public void setActivity(Activities activity) { this.activity = activity; }
+    public LocalDateTime getRegisteredAt() { return registeredAt; }
+    public void setRegisteredAt(LocalDateTime registeredAt) { this.registeredAt = registeredAt; }
+    public Integer getStatus() { return status; }
+    public void setStatus(Integer status) { this.status = status; }
+    public String getCancelReason() { return cancelReason; }
+    public void setCancelReason(String cancelReason) { this.cancelReason = cancelReason; }
+    public Attendances getAttendance() { return attendance; }
+    public void setAttendance(Attendances attendance) { this.attendance = attendance; }
+    public List<ActivitySchedule> getRegisteredSchedules() { return registeredSchedules; }
+    public void setRegisteredSchedules(List<ActivitySchedule> registeredSchedules) { this.registeredSchedules = registeredSchedules; }
 }

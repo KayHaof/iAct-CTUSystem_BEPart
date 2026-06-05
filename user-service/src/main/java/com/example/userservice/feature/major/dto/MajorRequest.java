@@ -6,11 +6,15 @@ import lombok.Data;
 
 @Data
 public class MajorRequest {
-    @NotBlank(message = "Tên chuyên ngành không được để trống")
+    @NotBlank(message = "Major name is required")
     private String name;
+
+    private String code;
 
     private String programType;
 
-    @NotNull(message = "ID Khoa/Đơn vị không được để trống")
+    @NotNull(message = "Department id is required")
     private Long departmentId;
+
+    private Boolean isActive;
 }

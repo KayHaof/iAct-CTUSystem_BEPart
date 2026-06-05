@@ -277,7 +277,7 @@ public class UserService {
 
             try {
                 String jsonString = objectMapper.writeValueAsString(payload);
-                kafkaTemplate.send("user-created-topic", jsonString);
+                kafkaTemplate.send("iact.identity.user.created", jsonString);
                 log.info("Đã bắn Kafka báo tạo user mới: {}", newUser.getId());
             } catch (Exception e) {
                 log.error("Lỗi parse JSON khi gửi Kafka: {}", e.getMessage());

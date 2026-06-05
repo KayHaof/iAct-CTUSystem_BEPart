@@ -30,7 +30,7 @@ public class ActivityNotificationListener {
                     event.getType()
             );
 
-            kafkaTemplate.send("notification-create-topic", request);
+            kafkaTemplate.send("iact.notification.created", request);
 
             log.info("Bắn event thông báo vào Kafka thành công!");
         } catch (Exception e) {

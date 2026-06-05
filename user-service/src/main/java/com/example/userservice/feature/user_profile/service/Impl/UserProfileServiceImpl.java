@@ -1,5 +1,7 @@
 package com.example.userservice.feature.user_profile.service.Impl;
 
+import com.example.exception.AppException;
+import com.example.exception.ErrorCode;
 import com.example.userservice.feature.classes.model.Clazzes;
 import com.example.userservice.feature.classes.repository.ClassRepository;
 import com.example.userservice.feature.departments.model.Departments;
@@ -52,15 +54,15 @@ public class UserProfileServiceImpl implements UserProfileService {
             log.info("Đã tạo StudentProfile cho User ID: {}", dto.getUserId());
 
         } else if (dto.getRoleType() == 2) {
-            Departments newDept = new Departments();
-            newDept.setName(dto.getFullName());
-            newDept.setDescription(dto.getDescription());
-            newDept = departmentsRepo.save(newDept);
+            Departments department = resolveDepartmentForProfile(dto);
 
             DepartmentProfile deptProfile = DepartmentProfile.builder()
                     .userId(dto.getUserId())
-                    .department(newDept)
+                    .department(department)
                     .fullName(dto.getFullName())
+                    .phone(dto.getPhone())
+                    .address(dto.getAddress())
+                    .avatarUrl(dto.getAvatarUrl())
                     .build();
             departmentProfileRepo.save(deptProfile);
             log.info("Đã tạo DepartmentProfile cho User ID: {}", dto.getUserId());
@@ -80,6 +82,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Map<Long, ProfileDto> getProfilesBatch(List<Long> userIds) {
         Map<Long, ProfileDto> resultMap = new HashMap<>();
         if (userIds == null || userIds.isEmpty())
@@ -90,7 +93,7 @@ public class UserProfileServiceImpl implements UserProfileService {
             resultMap.put(s.getUserId(), profileMapper.toDto(s));
         }
 
-        List<DepartmentProfile> depts = departmentProfileRepo.findAllById(userIds);
+        List<DepartmentProfile> depts = departmentProfileRepo.findByUserIdIn(userIds);
         for (DepartmentProfile d : depts) {
             resultMap.put(d.getUserId(), profileMapper.toDto(d));
         }
@@ -134,9 +137,26 @@ public class UserProfileServiceImpl implements UserProfileService {
         if (deptOpt.isPresent()) {
             DepartmentProfile d = deptOpt.get();
             profileMapper.updateDepartment(request, d);
+            if (request.getDepartmentId() != null) {
+                Departments department = departmentsRepo.findById(request.getDepartmentId())
+                        .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Department not found"));
+                d.setDepartment(department);
+            }
             departmentProfileRepo.save(d);
             log.info("Đã cập nhật DepartmentProfile cho User ID: {}", userId);
         }
+    }
+
+    private Departments resolveDepartmentForProfile(CreateProfileDto dto) {
+        if (dto.getDepartmentId() != null) {
+            return departmentsRepo.findById(dto.getDepartmentId())
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Department not found"));
+        }
+
+        Departments department = new Departments();
+        department.setName(dto.getFullName());
+        department.setDescription(dto.getDescription());
+        return departmentsRepo.save(department);
     }
 
     @Override

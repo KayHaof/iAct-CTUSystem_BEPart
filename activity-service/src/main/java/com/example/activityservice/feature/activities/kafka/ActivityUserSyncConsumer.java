@@ -19,7 +19,7 @@ public class ActivityUserSyncConsumer {
     private final UserRepository localUserRepository;
     private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = "user-created-topic", groupId = "activity-group-v1")
+    @KafkaListener(topics = "iact.identity.user.created", groupId = "activity-group-v1")
     public void consumeUserCreated(String message) {
         try {
             Map<String, Object> data = objectMapper.readValue(message, new TypeReference<>() {});

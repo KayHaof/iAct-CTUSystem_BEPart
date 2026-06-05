@@ -4,24 +4,31 @@ import com.example.activityservice.feature.attendances.dto.AttendanceResponse;
 import com.example.activityservice.feature.attendances.dto.CheckInRequest;
 import com.example.activityservice.feature.attendances.model.Attendances;
 import com.example.activityservice.feature.registration.model.Registrations;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
+import org.springframework.stereotype.Component;
 
-@Mapper(componentModel = "spring")
-public interface AttendanceMapper {
+import java.time.LocalDateTime;
 
-    // 1. Chuyển Request + Registration thành Entity
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "checkoutTime", ignore = true)
-    @Mapping(target = "registration", source = "registration")
-    @Mapping(target = "checkinTime", expression = "java(java.time.LocalDateTime.now())")
-    @Mapping(target = "method", source = "request.method")
-    @Mapping(target = "latitude", source = "request.latitude")
-    @Mapping(target = "longitude", source = "request.longitude")
-    Attendances toEntity(CheckInRequest request, Registrations registration);
+@Component
+public class AttendanceMapper {
 
-    // 2. Chuyển Entity thành Response
-    @Mapping(target = "registrationId", source = "entity.registration.id")
-    @Mapping(target = "message", source = "message")
-    AttendanceResponse toResponse(Attendances entity, String message);
+    public Attendances toEntity(CheckInRequest request, Registrations registration) {
+        Attendances entity = new Attendances();
+        entity.setCheckinTime(LocalDateTime.now());
+        entity.setMethod(request.getMethod());
+        entity.setLatitude(request.getLatitude());
+        entity.setLongitude(request.getLongitude());
+        entity.setRegistration(registration);
+        return entity;
+    }
+
+    public AttendanceResponse toResponse(Attendances entity, String message) {
+        if (entity == null) return null;
+        return AttendanceResponse.builder()
+                .id(entity.getId())
+                .registrationId(entity.getRegistration() != null ? entity.getRegistration().getId() : null)
+                .checkinTime(entity.getCheckinTime())
+                .method(entity.getMethod())
+                .message(message)
+                .build();
+    }
 }

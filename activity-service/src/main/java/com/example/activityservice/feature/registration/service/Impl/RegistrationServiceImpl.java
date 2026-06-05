@@ -4,8 +4,10 @@ import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.proofs.model.Proofs;
 import com.example.activityservice.feature.proofs.repository.ProofRepository;
+import com.example.activityservice.feature.registration.dto.RegistrationQRResponse;
 import com.example.activityservice.feature.registration.dto.RegistrationRequest;
 import com.example.activityservice.feature.registration.dto.RegistrationResponse;
+import com.example.activityservice.feature.registration.kafka.RegistrationKafkaProducer;
 import com.example.activityservice.feature.registration.mapper.RegistrationMapper;
 import com.example.activityservice.feature.registration.model.Registrations;
 import com.example.activityservice.feature.users.model.Users;
@@ -18,6 +20,7 @@ import com.example.activityservice.feature.activitySchedule.repository.ActivityS
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import com.example.activityservice.feature.registration.service.RegistrationService;
 import com.example.activityservice.service.ExcelExportService;
+import com.example.activityservice.service.QRCodeService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +52,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final RegistrationMapper registrationMapper;
     private final ExcelExportService excelExportService;
     private final ProofRepository proofRepository;
+    private final QRCodeService qrCodeService;
+    private final RegistrationKafkaProducer registrationKafkaProducer;
 
     // --- Lấy sinh viên đang đăng nhập ---
     public Users getCurrentStudent() {
@@ -153,7 +158,17 @@ public class RegistrationServiceImpl implements RegistrationService {
             regToSave = registrationMapper.toNewEntity(student, activity, selectedSchedules);
         }
 
-        return registrationMapper.toResponse(registrationRepository.save(regToSave));
+        Registrations saved = registrationRepository.save(regToSave);
+
+        // Gui Kafka notification
+        registrationKafkaProducer.sendRegistrationSuccess(
+                student.getId(),
+                activity.getId(),
+                activity.getTitle(),
+                null
+        );
+
+        return registrationMapper.toResponse(saved);
     }
 
     @Override
@@ -177,9 +192,18 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (reg.getStatus() == 1) throw new AppException(ErrorCode.INVALID_ACTION, "Không được hủy khi đã điểm danh!");
         if (reg.getStatus() == 2) throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã hủy đăng ký trước đó rồi!");
 
+        Long studentId = reg.getStudent().getId();
+        Long activityId = reg.getActivity().getId();
+        String activityTitle = reg.getActivity().getTitle();
+
         registrationMapper.cancelEntity(reg, reason);
 
-        return registrationMapper.toResponse(registrationRepository.save(reg));
+        Registrations saved = registrationRepository.save(reg);
+
+        // Gui Kafka notification
+        registrationKafkaProducer.sendCancellationSuccess(studentId, activityId, activityTitle, reason);
+
+        return registrationMapper.toResponse(saved);
     }
 
     @Override
@@ -303,5 +327,96 @@ public class RegistrationServiceImpl implements RegistrationService {
         populateProfileData(responseList);
 
         return responseList;
+    }
+
+    // ============ NEW METHODS FOR UC FEATURES ============
+
+    @Override
+    @Transactional(readOnly = true)
+    public RegistrationQRResponse getQRCode(Long registrationId) {
+        Users student = getCurrentStudent();
+        
+        Registrations registration = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dang ky"));
+
+        // Verify ownership
+        if (!registration.getStudent().getId().equals(student.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen truy cap");
+        }
+
+        Activities activity = registration.getActivity();
+
+        // Generate QR data
+        String qrData = generateQRData(registration, student, activity);
+        String checkInCode = generateCheckInCode(registration.getId());
+
+        // Calculate validity (30 mins before to 30 mins after)
+        LocalDateTime validUntil = activity.getEndDate().plusMinutes(30);
+
+        RegistrationQRResponse.SessionInfo sessionInfo = null;
+        if (registration.getRegisteredSchedules() != null && !registration.getRegisteredSchedules().isEmpty()) {
+            ActivitySchedule firstSession = registration.getRegisteredSchedules().iterator().next();
+            sessionInfo = RegistrationQRResponse.SessionInfo.builder()
+                    .sessionId(firstSession.getId())
+                    .sessionName(firstSession.getTitle())
+                    .checkInTime(firstSession.getStartTime())
+                    .checkOutTime(firstSession.getEndTime())
+                    .build();
+        }
+
+        return RegistrationQRResponse.builder()
+                .registrationId(registration.getId())
+                .activityId(activity.getId())
+                .activityTitle(activity.getTitle())
+                .qrData(qrData)
+                .checkInCode(checkInCode)
+                .validUntil(validUntil.toLocalDate().toEpochDay() * 86400 + validUntil.toLocalTime().toSecondOfDay())
+                .sessionInfo(sessionInfo)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public RegistrationResponse updateSessions(Long registrationId, List<Long> sessionIds) {
+        Users student = getCurrentStudent();
+
+        Registrations registration = registrationRepository.findById(registrationId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dang ky"));
+
+        // Verify ownership
+        if (!registration.getStudent().getId().equals(student.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen chinh sua");
+        }
+
+        // Cannot update if already attended
+        if (registration.getStatus() == 1) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Khong the dieu chinh khi da diem danh");
+        }
+
+        // Update registered sessions
+        List<ActivitySchedule> newSchedules = scheduleRepository.findAllById(sessionIds);
+        if (newSchedules.size() != sessionIds.size()) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Danh sach buoi khong hop le");
+        }
+
+        registration.setRegisteredSchedules(newSchedules);
+        registration = registrationRepository.save(registration);
+
+        return registrationMapper.toResponse(registration);
+    }
+
+    private String generateQRData(Registrations registration, Users student, Activities activity) {
+        String rawData = String.format(
+                "{\"regId\":%d,\"studentId\":\"%s\",\"activityId\":%d,\"timestamp\":%d}",
+                registration.getId(),
+                student.getStudentCode(),
+                activity.getId(),
+                System.currentTimeMillis()
+        );
+        return qrCodeService.generateQRCodeBase64(rawData, 300, 300);
+    }
+
+    private String generateCheckInCode(Long registrationId) {
+        return "CK" + String.format("%06d", registrationId);
     }
 }

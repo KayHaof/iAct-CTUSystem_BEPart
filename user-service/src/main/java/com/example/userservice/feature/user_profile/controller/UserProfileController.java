@@ -22,55 +22,40 @@ public class UserProfileController {
     private final UserProfileService profileService;
     private final StudentProfileRepository studentProfileRepository;
 
-    // 1. Tạo profile mới
     @PostMapping
     public ApiResponse<Void> createProfile(@RequestBody CreateProfileDto dto) {
         profileService.createProfile(dto);
-        return ApiResponse.<Void>builder().message("Tạo profile thành công").build();
+        return ApiResponse.of(201, "Tao profile thanh cong", null);
     }
 
-    // 2. Lấy profile theo userId
     @GetMapping("/{userId}")
-            public ApiResponse<ProfileDto> getProfileByUserId(@PathVariable Long userId) {
+    public ApiResponse<ProfileDto> getProfileByUserId(@PathVariable Long userId) {
         ProfileDto result = profileService.getProfileByUserId(userId);
-         System.out.println("===> DỮ LIỆU TỪ SERVICE TRẢ VỀ: " + result);
-
-        return ApiResponse.<ProfileDto>builder()
-                .result(result)
-                .build();
+        return ApiResponse.success(result);
     }
 
-    // 3. Lấy nhiều profile cùng lúc
     @PostMapping("/batch")
     public ApiResponse<Map<Long, ProfileDto>> getProfilesBatch(@RequestBody List<Long> userIds) {
-        return ApiResponse.<Map<Long, ProfileDto>>builder()
-                .result(profileService.getProfilesBatch(userIds))
-                .build();
+        return ApiResponse.success(profileService.getProfilesBatch(userIds));
     }
 
-    // 4. Tìm kiếm ID theo điều kiện
     @GetMapping("/search-ids")
     public ApiResponse<Set<Long>> searchUserIdsByCriteria(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Integer roleType,
-            @RequestParam(required = false) Long classId)
-    {
-        return ApiResponse.<Set<Long>>builder()
-                .result(profileService.searchUserIds(keyword, departmentId, roleType, classId))
-                .build();
+            @RequestParam(required = false) Long classId) {
+        return ApiResponse.success(profileService.searchUserIds(keyword, departmentId, roleType, classId));
     }
 
-    // 5. Cập nhật profile
     @PutMapping("/{userId}")
     public ApiResponse<Void> updateUserProfile(
             @PathVariable Long userId,
             @RequestBody UserUpdateRequest request) {
         profileService.updateUserProfile(userId, request);
-        return ApiResponse.<Void>builder().message("Cập nhật thành công").build();
+        return ApiResponse.of(200, "Cap nhat thanh cong", null);
     }
 
-    // 6. Import hàng loạt users
     @PostMapping("/batch-create")
     public ApiResponse<Void> createProfilesBatch(@RequestBody List<CreateProfileDto> profiles) {
         profileService.createProfilesBatch(profiles);

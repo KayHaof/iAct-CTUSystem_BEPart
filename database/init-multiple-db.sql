@@ -128,13 +128,29 @@ CREATE TABLE `department_profiles` (
     `full_name` VARCHAR(255),
     `phone` VARCHAR(20),
     `avatar_url` VARCHAR(500),
-    `position` VARCHAR(100),
+    `address` VARCHAR(100),
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`user_id`),
     KEY `fk_dept_profile_dept` (`department_id`),
     CONSTRAINT `fk_dept_profile_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_dept_profile_dept` FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `student_preferences`;
+CREATE TABLE `student_preferences` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `user_id` BIGINT NOT NULL,
+    `category_ratings` JSON,
+    `category_enabled` JSON,
+    `preferred_category_ids` JSON,
+    `notification_settings` JSON,
+    `excluded_categories` JSON,
+    `ai_recommendation_enabled` TINYINT DEFAULT 1,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Use activity_db and create tables

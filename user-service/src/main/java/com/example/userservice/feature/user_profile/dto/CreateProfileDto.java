@@ -12,9 +12,13 @@ import lombok.NoArgsConstructor;
 public class CreateProfileDto {
     private Long userId;
     private String fullName;
-    private Integer roleType;     // 1: SV, 2: Khoa
-    private String studentCode;   // Chỉ dùng cho SV
+    private Integer roleType;
+    private String studentCode;
+    private Long departmentId;
     private Long classId;
-    private String classCode;// Chỉ dùng cho SV
+    private String classCode;
     private String description;
+    private String phone;
+    private String address;
+    private String avatarUrl;
 }

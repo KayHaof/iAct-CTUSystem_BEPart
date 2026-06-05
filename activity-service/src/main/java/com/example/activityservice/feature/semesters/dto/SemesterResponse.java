@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 @Data
 public class SemesterResponse {
     private Long id;
+    private String name;
     private String semesterName;
     private String academicYear;
     private LocalDate startDate;

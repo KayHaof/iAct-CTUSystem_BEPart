@@ -5,12 +5,19 @@ import com.example.activityservice.feature.activities.service.ActivityService;
 import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -59,11 +66,7 @@ public class ActivityController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<ActivityTimeLocationResponse>> getActivityTimesAndLocation(@PathVariable Long id) {
         ActivityTimeLocationResponse timeResponse = activityService.getActivityTimesAndLocation(id);
-        return ResponseEntity.ok(ApiResponse.<ActivityTimeLocationResponse>builder()
-                .code(200)
-                .message("Lấy thời gian hoạt động thành công")
-                .result(timeResponse)
-                .build());
+        return ResponseEntity.ok(ApiResponse.success(timeResponse, "Lấy thời gian hoạt động thành công"));
     }
 
     // --- UPDATE ---
@@ -125,5 +128,88 @@ public class ActivityController {
     public ResponseEntity<ApiResponse<ActivityStatsResponse>> getActivityStats() {
         ActivityStatsResponse stats = activityService.getActivityStats();
         return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
+    // ============ NEW ENDPOINTS FOR UC FEATURES ============
+
+    // UC04: Search activities with advanced filters
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageDTO<ActivityResponse>>> searchActivities(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) String startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) String endDate,
+            @RequestParam(required = false) List<Long> categoryIds,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false, defaultValue = "ALL") String status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        
+        int pageNumber = page > 0 ? page - 1 : 0;
+        Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "startDate"));
+        
+        return ResponseEntity.ok(ApiResponse.success(
+                activityService.searchActivities(keyword, departmentId, startDate, endDate, categoryIds, category, status, pageable)
+        ));
+    }
+
+    // UC09: Get AI recommendations for student
+    @GetMapping("/recommendations")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<RecommendationResponse>> getRecommendations(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Long studentId,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        return ResponseEntity.ok(ApiResponse.success(
+                activityService.getRecommendations(studentId, limit, jwt)
+        ));
+    }
+
+    // UC03: Get activities open for registration (APPROVED + registration open)
+    @GetMapping("/for-registration")
+    public ResponseEntity<ApiResponse<PageDTO<ActivityResponse>>> getActivitiesForRegistration(
+            @RequestParam(required = false) Long semesterId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        
+        int pageNumber = page > 0 ? page - 1 : 0;
+        Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.ASC, "startDate"));
+        
+        return ResponseEntity.ok(ApiResponse.success(
+                activityService.getActivitiesForRegistration(semesterId, pageable)
+        ));
+    }
+
+    // UC12: Get department statistics
+    @GetMapping("/statistics/department")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
+    public ResponseEntity<ApiResponse<DepartmentStatsResponse>> getDepartmentStats(
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) Long semesterId) {
+        
+        return ResponseEntity.ok(ApiResponse.success(
+                activityService.getDepartmentStatistics(departmentId, semesterId)
+        ));
+    }
+
+    // UC26: Get system-wide statistics (Admin only)
+    @GetMapping("/statistics/system")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<SystemStatsResponse>> getSystemStats(
+            @RequestParam(required = false) Long semesterId) {
+
+        return ResponseEntity.ok(ApiResponse.success(
+                activityService.getSystemStatistics(semesterId)
+        ));
+    }
+
+    // UC13/14: Generate activity content with AI
+    @PostMapping("/ai-generate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT', 'OTHER')")
+    public ResponseEntity<ApiResponse<String>> generateWithAI(@RequestBody Map<String, String> request) {
+        String prompt = request.get("prompt");
+        String description = activityService.generateDescription(prompt);
+        return ResponseEntity.ok(ApiResponse.success(description));
     }
 }

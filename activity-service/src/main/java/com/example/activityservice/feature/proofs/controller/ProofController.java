@@ -18,9 +18,6 @@ public class ProofController {
     @PostMapping("/submit")
     @PreAuthorize("hasRole('STUDENT')")
     public ApiResponse<ProofResponse> submitProof(@RequestBody @Valid ProofSubmissionRequest request) {
-        return ApiResponse.<ProofResponse>builder()
-                .result(proofService.submitProof(request))
-                .message("Nộp minh chứng thành công! Đang chờ BTC duyệt.")
-                .build();
+        return ApiResponse.success(proofService.submitProof(request), "Nop minh chung thanh cong! Dang cho BTC duyet.");
     }
 }

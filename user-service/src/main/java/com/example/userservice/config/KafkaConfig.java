@@ -20,8 +20,18 @@ import java.util.Map;
 public class KafkaConfig {
 
     @Bean
-    public NewTopic profileUpdatedTopic() {
-        return TopicBuilder.name("profile-updated-topic").partitions(1).replicas(1).build();
+    public NewTopic userCreatedTopic() {
+        return TopicBuilder.name("iact.identity.user.created").partitions(1).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic activityDeletedTopic() {
+        return TopicBuilder.name("iact.activity.deleted").partitions(1).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic notificationCreatedTopic() {
+        return TopicBuilder.name("iact.notification.created").partitions(1).replicas(1).build();
     }
 
     @Bean

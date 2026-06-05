@@ -19,6 +19,8 @@ public interface ClassMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "major", ignore = true)
+    @Mapping(target = "isActive", ignore = true)
+    @Mapping(target = "academicYear", ignore = true)
     Clazzes toEntity(ClassRequest request);
 
     @Mapping(target = "id", ignore = true)

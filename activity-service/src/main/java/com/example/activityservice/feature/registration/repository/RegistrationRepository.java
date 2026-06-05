@@ -3,6 +3,7 @@ package com.example.activityservice.feature.registration.repository;
 import com.example.activityservice.feature.registration.model.Registrations;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -18,4 +19,7 @@ public interface RegistrationRepository extends JpaRepository<Registrations, Lon
     long countByActivityIdAndStatusNot(Long activityId, Integer status);
 
     List<Registrations> findAllByActivityId(Long activityId);
+
+    @Query("SELECT COUNT(DISTINCT r.student.id) FROM Registrations r")
+    long countDistinctStudentIds();
 }

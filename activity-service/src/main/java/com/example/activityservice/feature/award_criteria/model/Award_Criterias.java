@@ -3,12 +3,11 @@ package com.example.activityservice.feature.award_criteria.model;
 import com.example.activityservice.feature.awards.model.Awards;
 import com.example.activityservice.feature.categories.model.Categories;
 import jakarta.persistence.*;
-import lombok.Data;
 
 @Entity
 @Table(name = "award_criteria")
-@Data
 public class Award_Criterias {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -23,4 +22,15 @@ public class Award_Criterias {
 
     @Column(name = "min_point_required")
     private Integer minPointRequired;
+
+    public Award_Criterias() {}
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public Awards getAward() { return award; }
+    public void setAward(Awards award) { this.award = award; }
+    public Categories getCategory() { return category; }
+    public void setCategory(Categories category) { this.category = category; }
+    public Integer getMinPointRequired() { return minPointRequired; }
+    public void setMinPointRequired(Integer minPointRequired) { this.minPointRequired = minPointRequired; }
 }

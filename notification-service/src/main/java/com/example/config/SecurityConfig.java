@@ -14,10 +14,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/ws/**").permitAll()
-                        .requestMatchers("/api/notifications/**").permitAll()
+                        .requestMatchers("/api/notifications/**").authenticated()
                         .requestMatchers("/internal/**").authenticated()
                         .anyRequest().authenticated()
                 )

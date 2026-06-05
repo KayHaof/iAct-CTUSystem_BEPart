@@ -11,16 +11,29 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface SemesterMapper {
 
-    // Map ra Response (Dùng cho hàm GET)
+    @Mapping(target = "semesterName", source = "name")
     SemesterResponse toResponse(Semesters semester);
 
-    // Map ngược từ Request vào Entity (Dùng cho hàm CREATE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "activities", ignore = true)
+    @Mapping(target = "complaints", ignore = true)
+    @Mapping(target = "studentAwards", ignore = true)
+    @Mapping(target = "name", expression = "java(resolveName(request))")
     Semesters toEntity(SemesterRequest request);
 
-    // Đắp dữ liệu từ Request đè lên Entity có sẵn (Dùng cho hàm UPDATE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "activities", ignore = true)
+    @Mapping(target = "complaints", ignore = true)
+    @Mapping(target = "studentAwards", ignore = true)
+    @Mapping(target = "name", expression = "java(resolveName(request))")
     void updateEntityFromRequest(SemesterRequest request, @MappingTarget Semesters semester);
+
+    default String resolveName(SemesterRequest request) {
+        if (request == null) {
+            return null;
+        }
+        return request.getName() != null ? request.getName() : request.getSemesterName();
+    }
 }

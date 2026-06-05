@@ -1,5 +1,6 @@
 package com.example.activityservice.feature.registration.service;
 
+import com.example.activityservice.feature.registration.dto.RegistrationQRResponse;
 import com.example.activityservice.feature.registration.dto.RegistrationRequest;
 import com.example.activityservice.feature.registration.dto.RegistrationResponse;
 import com.example.dto.PageDTO;
@@ -21,7 +22,9 @@ public interface RegistrationService {
 
     RegistrationResponse cancel(Long registrationId, String reason);
 
-//    List<RegistrationResponse> getByActivity(Long activityId);
+    RegistrationQRResponse getQRCode(Long registrationId);
+
+    RegistrationResponse updateSessions(Long registrationId, List<Long> sessionIds);
 
     void exportToExcel(Long activityId, String keyword, String status, OutputStream outputStream);
 

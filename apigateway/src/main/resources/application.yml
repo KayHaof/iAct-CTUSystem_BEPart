@@ -10,89 +10,63 @@ spring:
 
   cloud:
     gateway:
-      server:
-        webflux:
-          globalcors:
-            cors-configurations:
-              '[/**]':
-                allowedOriginPatterns: "http://localhost:4200"
-                allowedMethods: "*"
-                allowedHeaders: "*"
-                allowCredentials: true
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "*"
+              - "http://localhost:4200"
+              - "http://localhost:4201"
+              - "http://localhost:4202"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+              - HEAD
+            allowedHeaders: "*"
+            exposedHeaders:
+              - Authorization
+              - Content-Disposition
+              - X-Total-Count
+            allowCredentials: true
+            maxAge: 3600
+      discovery:
+        locator:
+          enabled: false
 
-          # Cấu hình Routing
-          routes:
-            # 1. Notification Service (WebSocket)
-            - id: notification-websocket
-              uri: lb:ws://NOTIFICATION-SERVICE
-              predicates:
-                - Path=/internal/notifications/ws/**
-              filters:
-                - StripPrefix=2
-                - PreserveHostHeader
-
-            # 2. Notification Service (REST API)
-            - id: notification-service
-              uri: lb://NOTIFICATION-SERVICE
-              predicates:
-                - Path=/internal/notifications/**
-
-            # 3. User Service
-            - id: user-service
-              uri: lb://USER-SERVICE
-              predicates:
-                - Path=/user/**
-              filters:
-                - RewritePath=/user/(?<segment>.*), /$\{segment}
-
-            # 4. Activity Service
-            - id: activity-service
-              uri: lb://ACTIVITY-SERVICE
-              predicates:
-                - Path=/activity/**
-              filters:
-                - RewritePath=/activity/(?<segment>.*), /$\{segment}
-
-          # Cấu hình Timeout
-          httpclient:
-            connect-timeout: 5000
-            response-timeout: 10s
-            websocket:
-              max-frame-payload-length: 1048576
-
-  # Cấu hình Security & Keycloak
   security:
     oauth2:
-      client:
-        provider:
-          keycloak:
-            issuer-uri: http://localhost:8088/realms/myRealm
-        registration:
-          myClient:
-            provider: keycloak
-            client-id: "myClient"
-            client-secret: ${client_secret}
-            authorization-grant-type: authorization_code
-            scope: openid, profile
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8088/realms/myRealm
           jwk-set-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/certs
-
-  # Cấu hình Redis (Rate limiting / Caching)
-  data:
-    redis:
-      host: localhost
-      port: 6379
 
 eureka:
   client:
+    enabled: true
     service-url:
       defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
   instance:
     prefer-ip-address: true
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
 
-cloudinary:
-  cloud-name: dhjamvg6j
-  api-key: "237733137343564"
-  api-secret: ${api_secret}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: gateway,health,info
+  endpoint:
+    gateway:
+      enabled: true
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.loadbalancer: DEBUG

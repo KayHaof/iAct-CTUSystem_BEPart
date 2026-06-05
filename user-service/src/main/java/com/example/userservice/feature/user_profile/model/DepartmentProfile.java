@@ -28,4 +28,7 @@ public class DepartmentProfile {
 
     @Column(name = "avatar_url")
     private String avatarUrl;
+
+    @Column(name = "address")
+    private String address;
 }
