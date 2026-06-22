@@ -303,7 +303,7 @@ public class RegistrationServiceImpl implements RegistrationService {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("student").get("id"), student.getId()));
             if (semesterId != null) {
-                predicates.add(cb.equal(root.get("activity").get("semesterId"), semesterId));
+                predicates.add(cb.equal(root.get("activity").get("semester").get("id"), semesterId));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };

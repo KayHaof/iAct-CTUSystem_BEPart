@@ -18,7 +18,8 @@ public enum ErrorCode {
     ACCOUNT_LOCKED(1009,"This account is blocked or inactive. Please contact admin to describe problem and resolve", HttpStatus.LOCKED ),
     VALUE_EXISTED(1010, "This value already exists", HttpStatus.BAD_REQUEST),
     INCORRECT_VALUE(1011, "This value is incorrect or unapproval", HttpStatus.BAD_REQUEST),
-    INVALID_ACTION(1012, "This action is not allowed", HttpStatus.BAD_REQUEST)
+    INVALID_ACTION(1012, "This action is not allowed", HttpStatus.BAD_REQUEST),
+    DEPENDENCY_UNAVAILABLE(1013, "Dependent service unavailable", HttpStatus.SERVICE_UNAVAILABLE)
     ;
 
     private final int code;

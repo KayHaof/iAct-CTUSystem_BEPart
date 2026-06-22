@@ -3,10 +3,10 @@ package com.example.userservice.config;
 import com.example.dto.ApiResponse;
 import com.example.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -23,20 +23,37 @@ import java.util.*;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Order(1)
+    public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
+                .securityMatcher("/auth/**", "/error", "/actuator/**", "/api/v1/departments/count", "/api/v1/majors/count")
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - không cần authentication
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        // Protected endpoints - yêu cầu authentication
+                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/api/v1/departments/count").permitAll()
+                        .requestMatchers("/api/v1/majors/count").permitAll()
+                        .anyRequest().authenticated()
+                );
+
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain protectedFilterChain(HttpSecurity http) throws Exception {
+        http
+                .cors(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                .securityMatcher("/api/v1/**", "/api/admin/**")
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().authenticated()
@@ -52,7 +69,7 @@ public class SecurityConfig {
                             response.setContentType("application/json");
                             ApiResponse<Object> apiResponse = new ApiResponse<>();
                             apiResponse.setCode(ErrorCode.UNAUTHENTICATED.getCode());
-                            apiResponse.setMessage("User Service: Token không hợp lệ hoặc hết hạn");
+                            apiResponse.setMessage("User Service: Token khong hop le hoac het han");
                             response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
                         })
                 );
@@ -94,7 +111,7 @@ public class SecurityConfig {
             response.setContentType("application/json");
             ApiResponse<Object> apiResponse = new ApiResponse<>();
             apiResponse.setCode(ErrorCode.FORBIDDEN.getCode());
-            apiResponse.setMessage("User Service: Bạn không có quyền truy cập tài nguyên này");
+            apiResponse.setMessage("User Service: Ban khong co quyen truy cap tai nguyen nay");
             response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
         };
     }

@@ -5,7 +5,6 @@ import com.example.userservice.feature.users.dto.ImportResultDto;
 import com.example.userservice.feature.users.model.Users;
 import com.example.userservice.feature.users.repository.UserRepository;
 import com.example.userservice.feature.user_profile.service.UserProfileService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -13,7 +12,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,15 +29,14 @@ public class UserImportService {
     private final UserProfileService userProfileService;
     private final Keycloak keycloak;
     private final String realm = "myRealm";
-    private final ObjectMapper objectMapper;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final UserProjectionPublisher userProjectionPublisher;
 
     @Transactional(rollbackFor = Exception.class)
     public ImportResultDto importUsers(MultipartFile file, Integer roleType) {
         ImportResultDto result = new ImportResultDto();
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream());
-             Workbook errorWorkbook = new XSSFWorkbook()) {
+                Workbook errorWorkbook = new XSSFWorkbook()) {
 
             Sheet sheet = workbook.getSheetAt(0);
             Sheet errorSheet = errorWorkbook.createSheet("Lỗi Import");
@@ -57,7 +54,8 @@ public class UserImportService {
 
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
-                if (row == null) continue;
+                if (row == null)
+                    continue;
 
                 excelUsernames.add(getCellValue(row, 0));
                 excelEmails.add(getCellValue(row, 1));
@@ -92,10 +90,14 @@ public class UserImportService {
 
                 StringBuilder error = new StringBuilder();
 
-                if (existingUsernames.contains(username)) error.append("Username đã tồn tại. ");
-                if (existingEmails.contains(email)) error.append("Email đã tồn tại. ");
-                if (existingMssvs.contains(mssv)) error.append("MSSV đã tồn tại trong hồ sơ Profile. ");
-                if (username.isEmpty() || email.isEmpty() || password.isEmpty() || mssv.isEmpty()) error.append("Thiếu dữ liệu bắt buộc. ");
+                if (existingUsernames.contains(username))
+                    error.append("Username đã tồn tại. ");
+                if (existingEmails.contains(email))
+                    error.append("Email đã tồn tại. ");
+                if (existingMssvs.contains(mssv))
+                    error.append("MSSV đã tồn tại trong hồ sơ Profile. ");
+                if (username.isEmpty() || email.isEmpty() || password.isEmpty() || mssv.isEmpty())
+                    error.append("Thiếu dữ liệu bắt buộc. ");
 
                 if (!error.isEmpty()) {
                     writeError(errorSheet, row, errorRowIdx++, error.toString());
@@ -109,7 +111,8 @@ public class UserImportService {
 
                 String[] nameParts = fullName.trim().split(" ", 2);
                 userRep.setFirstName(nameParts[0]);
-                if (nameParts.length > 1) userRep.setLastName(nameParts[1]);
+                if (nameParts.length > 1)
+                    userRep.setLastName(nameParts[1]);
 
                 userRep.setEnabled(true);
                 userRep.setEmailVerified(true);
@@ -172,19 +175,16 @@ public class UserImportService {
                     userProfileService.createProfilesBatch(profilesToSync);
 
                     for (Users u : usersToSave) {
-                        Map<String, Object> payload = new HashMap<>();
-                        payload.put("userId", u.getId());
-                        payload.put("username", u.getUsername());
-                        payload.put("email", u.getEmail());
-                        try {
-                            kafkaTemplate.send("iact.identity.user.created", objectMapper.writeValueAsString(payload));
-                        } catch (Exception ignored) {}
+                        userProjectionPublisher.publishById(u.getId());
                     }
                 }
             } catch (Exception dbException) {
                 log.error("Lỗi khi lưu DB/Profile, tiến hành rollback Keycloak...", dbException);
                 for (String kid : createdKeycloakIds) {
-                    try { keycloak.realm(realm).users().get(kid).remove(); } catch (Exception ignored) {}
+                    try {
+                        keycloak.realm(realm).users().get(kid).remove();
+                    } catch (Exception ignored) {
+                    }
                 }
                 throw new RuntimeException("Lỗi hệ thống khi lưu dữ liệu, đã hoàn tác.");
             }
@@ -216,7 +216,8 @@ public class UserImportService {
 
     private String getCellValue(Row row, int cellIndex) {
         Cell cell = row.getCell(cellIndex);
-        if (cell == null) return "";
+        if (cell == null)
+            return "";
         DataFormatter formatter = new DataFormatter();
         return formatter.formatCellValue(cell).trim();
     }

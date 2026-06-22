@@ -7,17 +7,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-@Repository
 public interface NotificationRepository extends JpaRepository<Notifications, Long> {
 
     List<Notifications> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     Page<Notifications> findByUserId(Long userId, Pageable pageable);
-    
+
     Page<Notifications> findByUserIdAndIsRead(Long userId, Boolean isRead, Pageable pageable);
 
     long countByUserIdAndIsReadFalse(Long userId);
@@ -30,7 +28,7 @@ public interface NotificationRepository extends JpaRepository<Notifications, Lon
     @Modifying
     @Query("DELETE FROM Notifications n WHERE n.activityId = :activityId")
     void deleteByActivityId(@Param("activityId") Long activityId);
-    
+
     @Modifying
     @Query("UPDATE Notifications n SET n.isRead = true WHERE n.userId = :userId AND n.isRead = false")
     void markAllAsRead(@Param("userId") Long userId);

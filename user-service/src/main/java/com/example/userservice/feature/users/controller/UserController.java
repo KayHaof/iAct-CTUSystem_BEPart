@@ -7,6 +7,7 @@ import com.example.userservice.feature.users.dto.UserResponse;
 import com.example.userservice.feature.users.dto.ChangePasswordRequest;
 import com.example.userservice.feature.users.dto.ImportResultDto;
 import com.example.userservice.feature.users.service.UserImportService;
+import com.example.userservice.feature.users.service.UserProjectionReplayService;
 import com.example.userservice.feature.users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -25,6 +26,7 @@ public class UserController {
 
     private final UserService userService;
     private final UserImportService userImportService;
+    private final UserProjectionReplayService userProjectionReplayService;
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -115,5 +117,13 @@ public class UserController {
     @GetMapping("/username/{username}")
     public ApiResponse<UserResponse> getUserByUsername(@PathVariable String username) {
         return ApiResponse.success(userService.getUserByUsername(username));
+    }
+
+    @PostMapping("/projections/replay")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<Long> replayUserProjections() {
+        return ApiResponse.success(
+                userProjectionReplayService.replayAll(),
+                "Đã lên lịch đồng bộ lại user projection");
     }
 }

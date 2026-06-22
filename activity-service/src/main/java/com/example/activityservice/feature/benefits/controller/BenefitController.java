@@ -4,6 +4,7 @@ import com.example.activityservice.feature.benefits.dto.BenefitRequest;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
 import com.example.activityservice.feature.benefits.service.BenefitService;
 import com.example.dto.ApiResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +23,7 @@ public class BenefitController {
     // --- TẠO MỚI ---
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
-    public ResponseEntity<ApiResponse<BenefitResponse>> createBenefit(@RequestBody BenefitRequest request) {
+    public ResponseEntity<ApiResponse<BenefitResponse>> createBenefit(@RequestBody @Valid BenefitRequest request) {
         return new ResponseEntity<>(
                 ApiResponse.success(benefitService.createBenefit(request)),
                 HttpStatus.CREATED
@@ -48,7 +49,7 @@ public class BenefitController {
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<BenefitResponse>> updateBenefit(
             @PathVariable Long id,
-            @RequestBody BenefitRequest request) {
+            @RequestBody @Valid BenefitRequest request) {
         return ResponseEntity.ok(ApiResponse.success(benefitService.updateBenefit(id, request)));
     }
 

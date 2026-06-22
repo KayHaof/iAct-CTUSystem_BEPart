@@ -9,6 +9,8 @@ import com.example.userservice.feature.departments.mapper.DepartmentMapper;
 import com.example.userservice.feature.departments.model.Departments;
 import com.example.userservice.feature.departments.repository.DepartmentRepository;
 import com.example.userservice.feature.departments.service.DepartmentService;
+import com.example.userservice.feature.keycloak.service.KeycloakUserProvisionRequest;
+import com.example.userservice.feature.keycloak.service.KeycloakUserProvisionService;
 import com.example.userservice.feature.major.repository.MajorRepository;
 import com.example.userservice.feature.user_profile.model.DepartmentProfile;
 import com.example.userservice.feature.user_profile.repository.DepartmentProfileRepository;
@@ -34,13 +36,16 @@ import java.util.stream.Collectors;
 public class DepartmentServiceImpl implements DepartmentService {
 
     private static final int ROLE_DEPARTMENT = 2;
-    private static final String LOCAL_DEPARTMENT_KEYCLOAK_PREFIX = "local-department-";
+    private static final String DEPARTMENT_ROLE_NAME = "department";
+    private static final String DEPARTMENT_EMAIL_DOMAIN = "@iact.com";
+    private static final String DEPARTMENT_DEFAULT_PASSWORD = "Departmentiact123@";
 
     private final DepartmentRepository departmentRepository;
     private final MajorRepository majorRepository;
     private final DepartmentProfileRepository departmentProfileRepository;
     private final UserRepository userRepository;
     private final DepartmentMapper departmentMapper;
+    private final KeycloakUserProvisionService keycloakUserProvisionService;
 
     @Override
     @Transactional
@@ -50,9 +55,23 @@ public class DepartmentServiceImpl implements DepartmentService {
         Departments department = new Departments();
         applyRequest(department, request);
         Departments savedDepartment = departmentRepository.save(department);
-        ensureDepartmentProfile(savedDepartment, request);
 
-        return toResponse(savedDepartment);
+        String createdKeycloakId = null;
+        try {
+            DepartmentAccountPayload accountPayload = buildDepartmentAccountPayload(savedDepartment);
+            createdKeycloakId = keycloakUserProvisionService.createUser(buildKeycloakRequest(savedDepartment, accountPayload));
+
+            Users user = createDepartmentUser(savedDepartment, accountPayload, createdKeycloakId);
+            DepartmentProfile profile = buildDepartmentProfile(savedDepartment, user, request);
+            departmentProfileRepository.save(profile);
+
+            return toResponse(savedDepartment);
+        } catch (Exception exception) {
+            if (createdKeycloakId != null) {
+                keycloakUserProvisionService.deleteUser(createdKeycloakId);
+            }
+            throw exception;
+        }
     }
 
     @Override
@@ -63,8 +82,22 @@ public class DepartmentServiceImpl implements DepartmentService {
         applyRequest(department, request);
 
         Departments savedDepartment = departmentRepository.save(department);
-        ensureDepartmentProfile(savedDepartment, request);
-        syncDepartmentUserStatus(savedDepartment.getId(), savedDepartment.getIsActive());
+        DepartmentProfile profile = departmentProfileRepository.findFirstByDepartmentId(savedDepartment.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Department profile not found"));
+        Users user = userRepository.findById(profile.getUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Department user not found"));
+
+        DepartmentAccountPayload accountPayload = buildDepartmentAccountPayload(savedDepartment);
+        validateDepartmentAccountUnique(accountPayload.username(), accountPayload.email(), user.getId());
+        keycloakUserProvisionService.updateUser(user.getKeycloakId(), buildKeycloakRequest(savedDepartment, accountPayload));
+
+        user.setUsername(accountPayload.username());
+        user.setEmail(accountPayload.email());
+        user.setStatus(Boolean.FALSE.equals(savedDepartment.getIsActive()) ? 0 : 1);
+        userRepository.save(user);
+
+        updateDepartmentProfile(profile, savedDepartment, request);
+        departmentProfileRepository.save(profile);
 
         return toResponse(savedDepartment);
     }
@@ -80,7 +113,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             return;
         }
 
-        deleteInternalDepartmentProfiles(id);
+        deleteDepartmentProfiles(id);
         departmentRepository.delete(department);
     }
 
@@ -90,7 +123,6 @@ public class DepartmentServiceImpl implements DepartmentService {
         Departments department = findDepartmentOrThrow(id);
         department.setIsActive(true);
         Departments savedDepartment = departmentRepository.save(department);
-        ensureDepartmentProfile(savedDepartment, null);
         syncDepartmentUserStatus(id, true);
         return toResponse(savedDepartment);
     }
@@ -181,36 +213,35 @@ public class DepartmentServiceImpl implements DepartmentService {
         return response;
     }
 
-    private void ensureDepartmentProfile(Departments department, DepartmentRequest request) {
-        DepartmentProfile profile = departmentProfileRepository.findFirstByDepartmentId(department.getId())
-                .orElseGet(() -> DepartmentProfile.builder()
-                        .userId(createInternalDepartmentUser(department).getId())
-                        .department(department)
-                        .build());
-
-        profile.setDepartment(department);
-        profile.setFullName(department.getName());
-        if (request != null) {
-            profile.setPhone(normalizeNullableText(request.getPhone()));
-            profile.setAddress(normalizeNullableText(request.getAddress()));
-            profile.setAvatarUrl(normalizeNullableText(request.getAvatarUrl()));
-        }
-        departmentProfileRepository.save(profile);
-    }
-
-    private Users createInternalDepartmentUser(Departments department) {
-        String identity = getDepartmentIdentity(department);
-        String username = buildUniqueUsername("dept_" + identity.toLowerCase(Locale.ROOT), department.getId());
-        String email = buildUniqueEmail(username, department.getId());
-
+    private Users createDepartmentUser(Departments department, DepartmentAccountPayload accountPayload, String keycloakId) {
+        validateDepartmentAccountUnique(accountPayload.username(), accountPayload.email(), null);
         Users user = Users.builder()
-                .keycloakId(LOCAL_DEPARTMENT_KEYCLOAK_PREFIX + department.getId())
-                .username(username)
-                .email(email)
+                .keycloakId(keycloakId)
+                .username(accountPayload.username())
+                .email(accountPayload.email())
                 .roleType(ROLE_DEPARTMENT)
                 .status(Boolean.FALSE.equals(department.getIsActive()) ? 0 : 1)
                 .build();
         return userRepository.save(user);
+    }
+
+    private DepartmentProfile buildDepartmentProfile(Departments department, Users user, DepartmentRequest request) {
+        return DepartmentProfile.builder()
+                .userId(user.getId())
+                .department(department)
+                .fullName(department.getName())
+                .phone(normalizeNullableText(request.getPhone()))
+                .address(normalizeNullableText(request.getAddress()))
+                .avatarUrl(normalizeNullableText(request.getAvatarUrl()))
+                .build();
+    }
+
+    private void updateDepartmentProfile(DepartmentProfile profile, Departments department, DepartmentRequest request) {
+        profile.setDepartment(department);
+        profile.setFullName(department.getName());
+        profile.setPhone(normalizeNullableText(request.getPhone()));
+        profile.setAddress(normalizeNullableText(request.getAddress()));
+        profile.setAvatarUrl(normalizeNullableText(request.getAvatarUrl()));
     }
 
     private void syncDepartmentUserStatus(Long departmentId, Boolean isActive) {
@@ -218,20 +249,18 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .flatMap(profile -> userRepository.findById(profile.getUserId()))
                 .ifPresent(user -> {
                     user.setStatus(Boolean.FALSE.equals(isActive) ? 0 : 1);
+                    keycloakUserProvisionService.updateUserEnabled(user.getKeycloakId(), !Boolean.FALSE.equals(isActive));
                     userRepository.save(user);
                 });
     }
 
-    private void deleteInternalDepartmentProfiles(Long departmentId) {
+    private void deleteDepartmentProfiles(Long departmentId) {
         List<DepartmentProfile> profiles = departmentProfileRepository.findByDepartmentId(departmentId);
         for (DepartmentProfile profile : profiles) {
             userRepository.findById(profile.getUserId()).ifPresent(user -> {
-                if (isInternalDepartmentUser(user)) {
-                    userRepository.delete(user);
-                } else {
-                    profile.setDepartment(null);
-                    departmentProfileRepository.save(profile);
-                }
+                keycloakUserProvisionService.deleteUser(user.getKeycloakId());
+                departmentProfileRepository.delete(profile);
+                userRepository.delete(user);
             });
         }
     }
@@ -257,27 +286,44 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
     }
 
+    private void validateDepartmentAccountUnique(String username, String email, Long currentUserId) {
+        userRepository.findByUsername(username)
+                .filter(user -> currentUserId == null || !user.getId().equals(currentUserId))
+                .ifPresent(user -> {
+                    throw new AppException(ErrorCode.VALUE_EXISTED, "Department username already exists");
+                });
+
+        userRepository.findByEmail(email)
+                .filter(user -> currentUserId == null || !user.getId().equals(currentUserId))
+                .ifPresent(user -> {
+                    throw new AppException(ErrorCode.VALUE_EXISTED, "Department email already exists");
+                });
+    }
+
     private Departments findDepartmentOrThrow(Long id) {
         return departmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Department not found"));
     }
 
-    private String buildUniqueUsername(String baseUsername, Long departmentId) {
-        String username = sanitizeIdentifier(baseUsername);
-        if (!userRepository.existsByUsername(username)) {
-            return username;
+    private DepartmentAccountPayload buildDepartmentAccountPayload(Departments department) {
+        String identity = getDepartmentIdentity(department);
+        String username = sanitizeIdentifier("dept_" + identity.toLowerCase(Locale.ROOT));
+        if (username == null || username.isBlank()) {
+            throw new AppException(ErrorCode.INCORRECT_VALUE, "Department code is invalid for account provisioning");
         }
-
-        return sanitizeIdentifier(username + "_" + departmentId);
+        return new DepartmentAccountPayload(username, username + DEPARTMENT_EMAIL_DOMAIN);
     }
 
-    private String buildUniqueEmail(String username, Long departmentId) {
-        String email = username + "@iact.local";
-        if (!userRepository.existsByEmail(email)) {
-            return email;
-        }
-
-        return username + "_" + departmentId + "@iact.local";
+    private KeycloakUserProvisionRequest buildKeycloakRequest(Departments department, DepartmentAccountPayload accountPayload) {
+        return KeycloakUserProvisionRequest.builder()
+                .username(accountPayload.username())
+                .email(accountPayload.email())
+                .firstName(department.getName())
+                .lastName("")
+                .password(DEPARTMENT_DEFAULT_PASSWORD)
+                .roleName(DEPARTMENT_ROLE_NAME)
+                .enabled(!Boolean.FALSE.equals(department.getIsActive()))
+                .build();
     }
 
     private String getDepartmentIdentity(Departments department) {
@@ -285,11 +331,6 @@ public class DepartmentServiceImpl implements DepartmentService {
             return department.getCode();
         }
         return String.valueOf(department.getId());
-    }
-
-    private boolean isInternalDepartmentUser(Users user) {
-        return user.getKeycloakId() != null
-                && user.getKeycloakId().startsWith(LOCAL_DEPARTMENT_KEYCLOAK_PREFIX);
     }
 
     private String sanitizeIdentifier(String value) {
@@ -312,5 +353,8 @@ public class DepartmentServiceImpl implements DepartmentService {
             return null;
         }
         return value.trim();
+    }
+
+    private record DepartmentAccountPayload(String username, String email) {
     }
 }

@@ -21,7 +21,6 @@ import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -29,7 +28,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.*;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -52,8 +50,7 @@ public class UserService {
     private final ApplicationEventPublisher eventPublisher;
 
     private final String realm = "myRealm";
-    private final ObjectMapper objectMapper;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final UserProjectionPublisher userProjectionPublisher;
 
     public UserResponse getMyInfo() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -133,6 +130,7 @@ public class UserService {
     public void updateUserProfile(Long id, UserUpdateRequest request) {
         userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         userProfileService.updateUserProfile(id, request);
+        userProjectionPublisher.publishById(id);
     }
 
     public UserResponse getUserByUsername(String username) {
@@ -269,19 +267,7 @@ public class UserService {
                     .email(jwt.getClaimAsString("email"))
                     .roleType(1).status(1).build());
 
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("userId", newUser.getId());
-            payload.put("fullName", jwt.getClaimAsString("name"));
-            payload.put("username", newUser.getUsername());
-            payload.put("email", newUser.getEmail());
-
-            try {
-                String jsonString = objectMapper.writeValueAsString(payload);
-                kafkaTemplate.send("iact.identity.user.created", jsonString);
-                log.info("Đã bắn Kafka báo tạo user mới: {}", newUser.getId());
-            } catch (Exception e) {
-                log.error("Lỗi parse JSON khi gửi Kafka: {}", e.getMessage());
-            }
+            userProjectionPublisher.publishById(newUser.getId());
         }
     }
 

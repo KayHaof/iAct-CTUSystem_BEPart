@@ -4,6 +4,7 @@ import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import com.example.userservice.feature.departments.dto.DepartmentRequest;
 import com.example.userservice.feature.departments.dto.DepartmentResponse;
+import com.example.userservice.feature.departments.repository.DepartmentRepository;
 import com.example.userservice.feature.departments.service.DepartmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DepartmentController {
     private final DepartmentService departmentService;
+    private final DepartmentRepository departmentRepository;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -71,5 +73,11 @@ public class DepartmentController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean active) {
         return ApiResponse.success(departmentService.getDepartments(page, size, keyword, active));
+    }
+
+    @GetMapping("/count")
+    public ApiResponse<Long> countDepartments() {
+        long count = departmentRepository.countByIsActiveTrue();
+        return ApiResponse.success(count);
     }
 }

@@ -5,11 +5,9 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-@Repository
 public interface CategoryRepository extends JpaRepository<Categories, Long> {
     boolean existsByCode(String code);
 
@@ -28,6 +26,8 @@ public interface CategoryRepository extends JpaRepository<Categories, Long> {
     List<Categories> findByParentIdAndIsActive(Long parentId, Boolean isActive);
 
     boolean existsByParentId(Long parentId);
+
+    boolean existsByParentIdAndIsActive(Long parentId, Boolean isActive);
 
     @Query("SELECT COALESCE(SUM(c.maxPoint), 0) FROM Categories c WHERE c.parent IS NULL")
     Integer sumMaxPointBySemesterId(@Param("semesterId") Long semesterId);
