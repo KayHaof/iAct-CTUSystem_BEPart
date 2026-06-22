@@ -25,6 +25,11 @@ public class KafkaConfig {
     }
 
     @Bean
+    public NewTopic userSnapshotTopic() {
+        return TopicBuilder.name("iact.identity.user.snapshot").partitions(1).replicas(1).build();
+    }
+
+    @Bean
     public NewTopic activityDeletedTopic() {
         return TopicBuilder.name("iact.activity.deleted").partitions(1).replicas(1).build();
     }

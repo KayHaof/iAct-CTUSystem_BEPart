@@ -4,6 +4,7 @@ import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import com.example.userservice.feature.major.dto.MajorRequest;
 import com.example.userservice.feature.major.dto.MajorResponse;
+import com.example.userservice.feature.major.repository.MajorRepository;
 import com.example.userservice.feature.major.service.MajorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import java.util.List;
 public class MajorController {
 
     private final MajorService majorService;
+    private final MajorRepository majorRepository;
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -74,5 +76,11 @@ public class MajorController {
     public ApiResponse<Void> deleteMajor(@PathVariable Long id) {
         majorService.deleteMajor(id);
         return ApiResponse.success(null);
+    }
+
+    @GetMapping("/count")
+    public ApiResponse<Long> countMajors() {
+        long count = majorRepository.countByIsActiveTrue();
+        return ApiResponse.success(count);
     }
 }

@@ -8,12 +8,20 @@ import java.util.List;
 
 @Entity
 @Table(name = "organizers")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Organizers {
 
     @Id
-    @Column(name = "user_id")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Long id;
+
+    @Column(name = "user_id", nullable = false, unique = true)
+    private Long userId;
 
     private String name;
 

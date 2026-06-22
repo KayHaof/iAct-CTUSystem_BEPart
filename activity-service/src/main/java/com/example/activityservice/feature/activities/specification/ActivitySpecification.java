@@ -27,7 +27,8 @@ public class ActivitySpecification {
 
     public static Specification<Activities> hasLevel(String level, Long studentDeptId) {
         return (root, query, cb) -> {
-            // 1. CẤP TRƯỜNG: isExternal = false VÀ (isFaculty = false HOẶC isFaculty = null)
+            // 1. CẤP TRƯỜNG: isExternal = false VÀ (isFaculty = false HOẶC isFaculty =
+            // null)
             if ("UNIVERSITY".equals(level)) {
                 Predicate isNotExternal = cb.isFalse(root.get("isExternal"));
 
@@ -74,8 +75,7 @@ public class ActivitySpecification {
                     // Student: Chỉ xem "Đã duyệt" VÀ "Chưa hết hạn đăng ký"
                     return cb.and(
                             cb.equal(root.get("status"), 1),
-                            cb.greaterThanOrEqualTo(root.get("registrationEnd"), now)
-                    );
+                            cb.greaterThanOrEqualTo(root.get("registrationEnd"), now));
                 }
             }
 
@@ -100,8 +100,7 @@ public class ActivitySpecification {
             if ("OPEN".equals(status)) {
                 Predicate timeValid = cb.and(
                         cb.lessThanOrEqualTo(root.get("registrationStart"), now),
-                        cb.greaterThanOrEqualTo(root.get("registrationEnd"), now)
-                );
+                        cb.greaterThanOrEqualTo(root.get("registrationEnd"), now));
 
                 Subquery<Long> countQuery = query.subquery(Long.class);
                 Root<Registrations> regRoot = countQuery.from(Registrations.class);
@@ -110,7 +109,7 @@ public class ActivitySpecification {
                         .where(cb.and(
                                 cb.equal(regRoot.get("activity"), root),
                                 cb.notEqual(regRoot.get("status"), 2) // status 2 = rejected registration
-                        ));
+                ));
 
                 Predicate notFull = cb.greaterThan(root.get("maxParticipants").as(Long.class), countQuery);
                 Predicate openCondition = cb.and(timeValid, notFull);
@@ -142,14 +141,12 @@ public class ActivitySpecification {
 
     public static Specification<Activities> isOwnedByOrOrganizedBy(Long userId) {
         return (root, query, criteriaBuilder) -> {
-            if (userId == null) return criteriaBuilder.conjunction();
+            if (userId == null)
+                return criteriaBuilder.conjunction();
 
-            // [FIX LỖI MỚI NHẤT]:
-            // organizer là Object Entity -> Phải get("organizer").get("id")
             Predicate conditionOrganizer = criteriaBuilder.equal(root.get("organizer").get("id"), userId);
 
-            // createdBy là Long nguyên thủy -> get thẳng tên biến
-            Predicate conditionCreator = criteriaBuilder.equal(root.get("createdBy"), userId);
+            Predicate conditionCreator = criteriaBuilder.equal(root.get("createdBy").get("id"), userId);
 
             return criteriaBuilder.or(conditionOrganizer, conditionCreator);
         };
@@ -157,8 +154,8 @@ public class ActivitySpecification {
 
     public static Specification<Activities> hasDepartmentId(Long departmentId) {
         return (root, query, cb) -> {
-            if (departmentId == null) return null;
-            // Chọc thẳng vào biến departmentId (Long)
+            if (departmentId == null)
+                return null;
             return cb.equal(root.get("departmentId"), departmentId);
         };
     }

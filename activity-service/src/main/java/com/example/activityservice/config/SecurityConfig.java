@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -24,30 +26,42 @@ import java.util.*;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Order(1)
+    public SecurityFilterChain publicFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
+                .securityMatcher("/auth/**", "/error", "/actuator/**", "/api/v1/dashboard/**", "/api/v1/activities/public/**")
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - không cần authentication
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/activities/public/**").permitAll()
+                        .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        // Protected endpoints - yêu cầu authentication
+                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/api/v1/dashboard/**").permitAll()
+                        .requestMatchers("/api/v1/activities/public/**").permitAll()
+                        .anyRequest().authenticated()
+                );
+
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain protectedFilterChain(HttpSecurity http) throws Exception {
+        http
+                .cors(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                .securityMatcher("/api/v1/**", "/api/admin/**")
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/**").authenticated()
-                        .anyRequest().authenticated())
+                        .anyRequest().authenticated()
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                        .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            log.warn("Access denied: {}", accessDeniedException.getMessage());
-                            response.setStatus(403);
-                            response.setContentType("application/json");
-                            ApiResponse<Object> apiResponse = new ApiResponse<>();
-                            apiResponse.setCode(ErrorCode.FORBIDDEN.getCode());
-                            apiResponse.setMessage("Activity Service: Bạn không có quyền truy cập tài nguyên này");
-                            response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
-                        }))
+                        .accessDeniedHandler(accessDeniedHandler())
+                )
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) -> {
                             log.warn("Authentication error: {}", authException.getMessage());
@@ -55,16 +69,31 @@ public class SecurityConfig {
                             response.setContentType("application/json");
                             ApiResponse<Object> apiResponse = new ApiResponse<>();
                             apiResponse.setCode(ErrorCode.UNAUTHENTICATED.getCode());
-                            apiResponse.setMessage("Activity Service: Token không hợp lệ hoặc hết hạn");
+                            apiResponse.setMessage("Activity Service: Token khong hop le hoac het han");
                             response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
-                        }));
+                        })
+                );
 
         return http.build();
     }
 
     @Bean
+    public AccessDeniedHandler accessDeniedHandler() {
+        return (request, response, accessDeniedException) -> {
+            log.warn("Access denied: {}", accessDeniedException.getMessage());
+            response.setStatus(403);
+            response.setContentType("application/json");
+            ApiResponse<Object> apiResponse = new ApiResponse<>();
+            apiResponse.setCode(ErrorCode.FORBIDDEN.getCode());
+            apiResponse.setMessage("Activity Service: Ban khong co quyen truy cap tai nguyen nay");
+            response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
+        };
+    }
+
+    @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
+        jwtConverter.setPrincipalClaimName("preferred_username");
 
         jwtConverter.setJwtGrantedAuthoritiesConverter(jwt -> {
             Map<String, Object> realmAccess = jwt.getClaim("realm_access");

@@ -49,7 +49,8 @@ public interface ActivityMapper {
     // --- LẤY THỜI GIAN HOẠT ĐỘNG ---
     ActivityTimeLocationResponse toTimeResponse(Activities entity);
 
-    @Mapping(target = "id", source = "id")
+    // Keep the public organizer ID compatible with the User ID selected by clients.
+    @Mapping(target = "id", source = "userId")
     @Mapping(target = "name", source = "name")
     @Mapping(target = "departmentId", source = "departmentId")
     OrganizerResponse toOrganizerResponse(Organizers organizer);

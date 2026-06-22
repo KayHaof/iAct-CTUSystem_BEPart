@@ -8,11 +8,11 @@ import com.example.activityservice.feature.benefits.dto.BenefitResponse;
 import com.example.activityservice.feature.benefits.mapper.BenefitMapper;
 import com.example.activityservice.feature.benefits.model.Benefits;
 import com.example.activityservice.feature.categories.model.Categories;
-import com.example.activityservice.feature.categories.repository.CategoryRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
 import com.example.activityservice.feature.benefits.service.BenefitService;
+import com.example.activityservice.feature.benefits.service.BenefitValidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,20 +28,20 @@ public class BenefitServiceImpl implements BenefitService {
 
     private final BenefitRepository benefitRepository;
     private final ActivityRepository localActivityRepository;
-    private final CategoryRepository categoryRepository;
     private final BenefitMapper benefitMapper;
+    private final BenefitValidationService benefitValidationService;
 
     @Override
     @Transactional
     public BenefitResponse createBenefit(BenefitRequest request) {
+        if (request.getActivityId() == null) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn hoạt động cho quyền lợi!");
+        }
         Activities activity = localActivityRepository.findById(request.getActivityId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy thông tin hoạt động trong hệ thống!"));
 
-        Categories category = null;
-        if (request.getCategoryId() != null) {
-            category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy danh mục tiêu chí!"));
-        }
+        Categories category = benefitValidationService.validateAndGetCategory(
+                request.getCategoryId(), request.getPoint(), request.getType());
 
         Benefits benefit = Benefits.builder()
                 .activity(activity)
@@ -81,13 +81,9 @@ public class BenefitServiceImpl implements BenefitService {
             benefit.setActivity(activity);
         }
 
-        if (request.getCategoryId() != null) {
-            Categories category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy danh mục tiêu chí!"));
-            benefit.setCategory(category);
-        } else {
-            benefit.setCategory(null);
-        }
+        Categories category = benefitValidationService.validateAndGetCategory(
+                request.getCategoryId(), request.getPoint(), request.getType());
+        benefit.setCategory(category);
 
         benefit.setType(request.getType());
         benefit.setPoint(request.getPoint());

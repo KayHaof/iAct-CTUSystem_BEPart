@@ -8,6 +8,7 @@ import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.semesters.repository.SemesterRepository;
 import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.repository.UserRepository;
+import com.example.activityservice.feature.users.service.LocalUserResolver;
 import com.example.dto.PageDTO;
 import com.example.event.ActivityDeletedEvent;
 import com.example.exception.AppException;
@@ -17,6 +18,12 @@ import com.example.activityservice.feature.activities.service.ActivityService;
 import com.example.activityservice.feature.activities.specification.ActivitySpecification;
 import com.example.activityservice.feature.activitySchedule.mapper.ActivityScheduleMapper;
 import com.example.activityservice.feature.activitySchedule.model.ActivitySchedule;
+import com.example.activityservice.feature.benefits.dto.BenefitResponse;
+import com.example.activityservice.feature.benefits.mapper.BenefitMapper;
+import com.example.activityservice.feature.benefits.model.Benefits;
+import com.example.activityservice.feature.benefits.repository.BenefitRepository;
+import com.example.activityservice.feature.benefits.service.BenefitValidationService;
+import com.example.activityservice.feature.categories.model.Categories;
 import com.example.activityservice.feature.organizers.model.Organizers;
 import com.example.activityservice.feature.organizers.repository.OrganizerRepository;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
@@ -53,10 +60,14 @@ public class ActivityServiceImpl implements ActivityService {
     private final SemesterRepository semesterRepository;
     private final OrganizerRepository organizerRepository;
     private final UserRepository userRepository;
+    private final LocalUserResolver localUserResolver;
     private final RegistrationRepository registrationRepository;
+    private final BenefitRepository benefitRepository;
 
     private final ActivityMapper activityMapper;
     private final ActivityScheduleMapper scheduleMapper;
+    private final BenefitMapper benefitMapper;
+    private final BenefitValidationService benefitValidationService;
 
     private final CloudinaryService cloudinaryService;
     private final QRCodeService qrCodeService;
@@ -68,44 +79,42 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     @Transactional
     public ActivityResponse createActivity(ActivityRequest request) {
-        Semesters semester;
+        boolean isDraft = Integer.valueOf(3).equals(request.getStatus());
+        Semesters semester = null;
         if (request.getStartDate() != null) {
             LocalDate activityDate = request.getStartDate().toLocalDate();
-            semester = semesterRepository.findSemesterByDate(activityDate)
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
+            Optional<Semesters> matchedSemester = semesterRepository.findSemesterByDate(activityDate);
+            semester = isDraft
+                    ? matchedSemester.orElse(null)
+                    : matchedSemester.orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
                             "Ngày bắt đầu tổ chức (" + activityDate
                                     + ") không thuộc bất kỳ Học kỳ nào đang được cấu hình!"));
-        } else {
+        } else if (!isDraft) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn Ngày bắt đầu tổ chức!");
         }
 
         Organizers organizer = null;
         if (request.getOrganizerId() != null) {
             Long userId = request.getOrganizerId();
-            Users user = userRepository.findById(userId)
-                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED,
-                            "Không tìm thấy User với ID: " + userId));
+            Users user = localUserResolver.resolveById(userId);
             organizer = getOrCreateOrganizer(user);
         }
 
         Activities activity = activityMapper.toEntity(request, organizer);
-        activity.setSemester(semester);
+        if (semester != null) {
+            activity.setSemester(semester);
+        }
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()) {
             String currentUsername = authentication.getName();
-            Users currentUser = userRepository.findByUsername(currentUsername)
-                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+            Users currentUser = localUserResolver.resolveByUsername(currentUsername);
 
             activity.setCreatedBy(currentUser);
             activity.setCreatedByUsername(currentUsername);
 
             // ĐÃ FIX: Lấy departmentId trực tiếp từ local Users
             activity.setDepartmentId(currentUser.getDepartmentId());
-        }
-
-        if (request.getBenefits() != null && !request.getBenefits().isEmpty()) {
-            log.info("TODO KAFKA: Sẽ gửi danh sách Benefits qua Credit Service qua topic 'activity-created'");
         }
 
         if (request.getSchedules() != null && !request.getSchedules().isEmpty()) {
@@ -115,6 +124,7 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         Activities savedActivity = activityRepository.save(activity);
+        List<BenefitResponse> savedBenefits = replaceActivityBenefits(savedActivity, request.getBenefits());
 
         if (savedActivity.getStatus() != 3) {
             log.info("Hoạt động đã được tạo và gửi duyệt thành công!");
@@ -122,7 +132,9 @@ public class ActivityServiceImpl implements ActivityService {
             log.info("Bản nháp hoạt động đã được lưu thành công!");
         }
 
-        return activityMapper.toResponse(savedActivity);
+        ActivityResponse response = activityMapper.toResponse(savedActivity);
+        response.setBenefits(savedBenefits);
+        return response;
     }
 
     // --- READ DETAILS ---
@@ -133,6 +145,7 @@ public class ActivityServiceImpl implements ActivityService {
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động"));
 
         ActivityResponse response = activityMapper.toResponse(activity);
+        response.setBenefits(getActivityBenefits(activity.getId()));
         long count = registrationRepository.countByActivityIdAndStatusNot(id, 2);
         response.setRegisteredCount((int) count);
         return response;
@@ -251,9 +264,8 @@ public class ActivityServiceImpl implements ActivityService {
 
         if (request.getOrganizerId() != null &&
                 (existingActivity.getOrganizer() == null
-                        || !existingActivity.getOrganizer().getId().equals(request.getOrganizerId()))) {
-            Users user = userRepository.findById(request.getOrganizerId())
-                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "User not found"));
+                        || !Objects.equals(existingActivity.getOrganizer().getUserId(), request.getOrganizerId()))) {
+            Users user = localUserResolver.resolveById(request.getOrganizerId());
             Organizers newOrganizer = getOrCreateOrganizer(user);
             existingActivity.setOrganizer(newOrganizer);
         }
@@ -270,11 +282,52 @@ public class ActivityServiceImpl implements ActivityService {
         }
 
         Activities updatedActivity = activityRepository.save(existingActivity);
+        if (request.getBenefits() != null) {
+            replaceActivityBenefits(updatedActivity, request.getBenefits());
+        }
 
         sendNotificationSafe(updatedActivity, "Cập nhật hoạt động",
                 "Bạn vừa cập nhật thông tin cho hoạt động '" + updatedActivity.getTitle() + "'.", 2);
 
-        return activityMapper.toResponse(updatedActivity);
+        ActivityResponse response = activityMapper.toResponse(updatedActivity);
+        response.setBenefits(getActivityBenefits(updatedActivity.getId()));
+        return response;
+    }
+
+    private List<BenefitResponse> replaceActivityBenefits(
+            Activities activity,
+            List<BenefitResponse> requestedBenefits) {
+        if (activity.getId() == null) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không thể lưu quyền lợi khi hoạt động chưa tồn tại!");
+        }
+
+        benefitRepository.deleteByActivityId(activity.getId());
+        if (requestedBenefits == null || requestedBenefits.isEmpty()) {
+            return List.of();
+        }
+
+        List<Benefits> benefits = requestedBenefits.stream()
+                .map(request -> {
+                    Categories category = benefitValidationService.validateAndGetCategory(
+                            request.getCategoryId(), request.getPoint(), request.getType());
+                    return Benefits.builder()
+                            .activity(activity)
+                            .category(category)
+                            .type(request.getType())
+                            .point(request.getPoint())
+                            .build();
+                })
+                .toList();
+
+        return benefitRepository.saveAll(benefits).stream()
+                .map(benefitMapper::toResponse)
+                .toList();
+    }
+
+    private List<BenefitResponse> getActivityBenefits(Long activityId) {
+        return benefitRepository.findByActivityId(activityId).stream()
+                .map(benefitMapper::toResponse)
+                .toList();
     }
 
     // --- DELETE ---
@@ -365,18 +418,14 @@ public class ActivityServiceImpl implements ActivityService {
     }
 
     private Organizers getOrCreateOrganizer(Users user) {
-        return organizerRepository.findById(user.getId())
+        return organizerRepository.findByUserId(user.getId())
                 .orElseGet(() -> {
-                    // ĐÃ FIX: Dùng fullName từ entity local thay vì gọi API
                     String displayName = (user.getFullName() != null) ? user.getFullName() : user.getUsername();
                     Organizers newOrg = Organizers.builder()
-                            .id(user.getId())
+                            .userId(user.getId())
                             .name(displayName)
+                            .departmentId(user.getDepartmentId())
                             .build();
-
-                    if (user.getDepartmentId() != null) {
-                        newOrg.setDepartmentId(user.getDepartmentId());
-                    }
                     return organizerRepository.save(newOrg);
                 });
     }
@@ -447,14 +496,12 @@ public class ActivityServiceImpl implements ActivityService {
 
         if (startDate != null && !startDate.isBlank()) {
             LocalDate start = LocalDate.parse(startDate);
-            spec = spec.and((root, query, cb) -> 
-                    cb.greaterThanOrEqualTo(root.get("startDate"), start.atStartOfDay()));
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("startDate"), start.atStartOfDay()));
         }
 
         if (endDate != null && !endDate.isBlank()) {
             LocalDate end = LocalDate.parse(endDate);
-            spec = spec.and((root, query, cb) -> 
-                    cb.lessThanOrEqualTo(root.get("endDate"), end.atTime(23, 59, 59)));
+            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("endDate"), end.atTime(23, 59, 59)));
         }
 
         if (status != null && !status.equalsIgnoreCase("ALL")) {
@@ -507,7 +554,7 @@ public class ActivityServiceImpl implements ActivityService {
 
         // Simple recommendation: Get approved activities for current semester
         List<Activities> approvedActivities = activityRepository.findApprovedActivitiesForStudent(semester.getId());
-        
+
         List<RecommendedActivity> recommended = approvedActivities.stream()
                 .limit(limit)
                 .map(activity -> RecommendedActivity.builder()
@@ -518,8 +565,9 @@ public class ActivityServiceImpl implements ActivityService {
                         .startDate(activity.getStartDate() != null ? activity.getStartDate().toString() : null)
                         .endDate(activity.getEndDate() != null ? activity.getEndDate().toString() : null)
                         .maxParticipants(activity.getMaxParticipants())
-                        .registeredCount((int) registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2))
-                        .matchPercentage(85.0)  // Placeholder - real implementation would calculate similarity
+                        .registeredCount(
+                                (int) registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2))
+                        .matchPercentage(85.0) // Placeholder - real implementation would calculate similarity
                         .matchedReasons(List.of("Hoat dong phu hop voi yeu cau diem ren luyen"))
                         .categoryName(activity.getCategory() != null ? activity.getCategory().getName() : null)
                         .departmentName(null)
@@ -527,8 +575,7 @@ public class ActivityServiceImpl implements ActivityService {
                 .collect(Collectors.toList());
 
         List<String> reasons = List.of(
-                "Cac hoat dong duoc goi y dua tren diem ren luyen con thieu"
-        );
+                "Cac hoat dong duoc goi y dua tren diem ren luyen con thieu");
 
         return RecommendationResponse.builder()
                 .activities(recommended)
@@ -592,7 +639,7 @@ public class ActivityServiceImpl implements ActivityService {
 
         // Count activities by status
         List<Activities> activities = activityRepository.findByDepartmentId(departmentId);
-        
+
         int total = activities.size();
         int pending = (int) activities.stream().filter(a -> a.getStatus() == 0).count();
         int approved = (int) activities.stream().filter(a -> a.getStatus() == 1).count();
@@ -608,7 +655,7 @@ public class ActivityServiceImpl implements ActivityService {
                 .approvedActivities(approved)
                 .rejectedActivities(rejected)
                 .cancelledActivities(cancelled)
-                .totalRegistrations(0)  // Placeholder
+                .totalRegistrations(0) // Placeholder
                 .totalAttendances(0)
                 .totalCancellations(cancelled)
                 .attendanceRate(0.0)
@@ -646,6 +693,7 @@ public class ActivityServiceImpl implements ActivityService {
                 .build();
     }
 
+    // Temp
     @Override
     public String generateDescription(String prompt) {
         if (prompt == null || prompt.trim().isBlank()) {
@@ -665,8 +713,10 @@ public class ActivityServiceImpl implements ActivityService {
                 sb.append(words[i]).append(" ");
             }
             sb.append("...\" nham mang lai ");
-            if (words.length > 5) sb.append("kien thuc va ky nang thuc te").append(" cho sinh vien.\n");
-            else sb.append("trai nghiem hoc tap").append(" cho sinh vien.\n");
+            if (words.length > 5)
+                sb.append("kien thuc va ky nang thuc te").append(" cho sinh vien.\n");
+            else
+                sb.append("trai nghiem hoc tap").append(" cho sinh vien.\n");
         }
 
         sb.append("\n## Muc tieu\n");

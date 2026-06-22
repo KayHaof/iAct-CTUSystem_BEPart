@@ -5,6 +5,7 @@ import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.dashboard.dto.DashboardStatsResponse;
 import com.example.activityservice.feature.dashboard.dto.RecentActivityDto;
 import com.example.activityservice.feature.dashboard.service.DashboardService;
+import com.example.activityservice.feature.dashboard.service.StatsCacheService;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +22,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final ActivityRepository activityRepository;
     private final RegistrationRepository registrationRepository;
+    private final StatsCacheService statsCacheService;
 
     @Override
     @Transactional(readOnly = true)
@@ -29,7 +31,6 @@ public class DashboardServiceImpl implements DashboardService {
         long pendingActivities = activityRepository.countByStatus(0);
         long activeActivities = activityRepository.countByStatus(1);
 
-        // Use JPQL with JOIN FETCH to avoid LazyInitializationException
         List<Activities> recentActivitiesList = activityRepository.findRecentActivitiesWithOrganizer(
                 PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "updatedAt"))).getContent();
 
@@ -44,8 +45,8 @@ public class DashboardServiceImpl implements DashboardService {
                 .pendingActivities((int) pendingActivities)
                 .activeActivities((int) activeActivities)
                 .totalStudents((int) totalStudents)
-                .totalDepartments(0)
-                .totalMajors(0)
+                .totalDepartments((int) statsCacheService.getCachedDepartmentCount())
+                .totalMajors((int) statsCacheService.getCachedMajorCount())
                 .recentActivities(recentActivities)
                 .build();
     }
