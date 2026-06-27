@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,10 +36,7 @@ class UserProjectionPublisherTest {
                 .fullName("Khoa CNTT và TT")
                 .departmentId(1L)
                 .build();
-        when(kafkaTemplate.send(
-                eq(UserProjectionPublisher.USER_SNAPSHOT_TOPIC),
-                eq("4"),
-                contains("\"username\":\"dept_cict\"")))
+        when(kafkaTemplate.send(anyString(), eq("4"), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
         publisher.publish(user, profile);
@@ -47,5 +45,9 @@ class UserProjectionPublisherTest {
                 eq(UserProjectionPublisher.USER_SNAPSHOT_TOPIC),
                 eq("4"),
                 contains("\"departmentId\":1"));
+        verify(kafkaTemplate).send(
+                eq(UserProjectionPublisher.STANDARD_USER_SNAPSHOT_TOPIC),
+                eq("4"),
+                contains("\"eventType\":\"USER_SNAPSHOT\""));
     }
 }

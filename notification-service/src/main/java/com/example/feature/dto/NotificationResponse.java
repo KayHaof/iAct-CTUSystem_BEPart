@@ -19,5 +19,8 @@ public class NotificationResponse {
     private Integer type;
     private Long activityId;
     private Boolean isRead;
+    private LocalDateTime readAt;
     private LocalDateTime createdAt;
+    private String sourceEventId;
+    private String sourceTopic;
 }

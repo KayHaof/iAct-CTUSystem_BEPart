@@ -14,6 +14,7 @@ public class UserSnapshot {
     private String studentCode;
     private String avatarUrl;
     private Long departmentId;
+    private Integer status;
 
     public Long resolvedId() {
         return id != null ? id : userId;

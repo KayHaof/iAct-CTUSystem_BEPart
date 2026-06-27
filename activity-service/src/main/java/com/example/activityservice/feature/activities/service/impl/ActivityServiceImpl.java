@@ -1,7 +1,7 @@
 package com.example.activityservice.feature.activities.service.impl;
 
-import com.example.activityservice.common.dto.NotificationRequest;
 import com.example.activityservice.feature.activities.dto.*;
+import com.example.activityservice.feature.activities.kafka.ActivityEventProducer;
 import com.example.activityservice.feature.activities.mapper.ActivityMapper;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.semesters.model.Semesters;
@@ -74,6 +74,7 @@ public class ActivityServiceImpl implements ActivityService {
 
     // ĐÃ THÊM KAFKA TẠI ĐÂY
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ActivityEventProducer activityEventProducer;
 
     // --- CREATE ---
     @Override
@@ -134,6 +135,10 @@ public class ActivityServiceImpl implements ActivityService {
 
         ActivityResponse response = activityMapper.toResponse(savedActivity);
         response.setBenefits(savedBenefits);
+        activityEventProducer.publishCreated(savedActivity);
+        if (savedActivity.getStatus() != 3) {
+            activityEventProducer.publishSubmitted(savedActivity);
+        }
         return response;
     }
 
@@ -286,8 +291,7 @@ public class ActivityServiceImpl implements ActivityService {
             replaceActivityBenefits(updatedActivity, request.getBenefits());
         }
 
-        sendNotificationSafe(updatedActivity, "Cập nhật hoạt động",
-                "Bạn vừa cập nhật thông tin cho hoạt động '" + updatedActivity.getTitle() + "'.", 2);
+        activityEventProducer.publishUpdated(updatedActivity);
 
         ActivityResponse response = activityMapper.toResponse(updatedActivity);
         response.setBenefits(getActivityBenefits(updatedActivity.getId()));
@@ -349,6 +353,7 @@ public class ActivityServiceImpl implements ActivityService {
 
         // ĐÃ FIX: DÙNG KAFKA ĐỂ BÁO CHO NOTIFICATION SERVICE XÓA THÔNG BÁO
         kafkaTemplate.send("iact.activity.deleted", new ActivityDeletedEvent(id));
+        activityEventProducer.publishDeleted(id);
         log.info("Đã gửi event Kafka yêu cầu xóa thông báo cho Activity ID: {}", id);
     }
 
@@ -366,8 +371,7 @@ public class ActivityServiceImpl implements ActivityService {
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
 
-        sendNotificationSafe(savedActivity, "Hoạt động đã được duyệt",
-                "Hoạt động '" + savedActivity.getTitle() + "' đã được phê duyệt.", 1);
+        activityEventProducer.publishApproved(savedActivity);
     }
 
     // --- REJECT ---
@@ -385,7 +389,7 @@ public class ActivityServiceImpl implements ActivityService {
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
 
-        sendNotificationSafe(savedActivity, "Hoạt động bị từ chối", "Lý do: " + activity.getReason(), 3);
+        activityEventProducer.publishRejected(savedActivity);
     }
 
     // --- CANCEL ---
@@ -403,18 +407,7 @@ public class ActivityServiceImpl implements ActivityService {
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
 
-        sendNotificationSafe(savedActivity, "Hoạt động đã bị hủy", "Lý do: " + activity.getReason(), 3);
-    }
-
-    // ĐÃ FIX: DÙNG KAFKA ĐỂ TẠO THÔNG BÁO
-    private void sendNotificationSafe(Activities activity, String title, String message, Integer type) {
-        try {
-            NotificationRequest notiRequest = activityMapper.toNotificationRequest(activity, title, message, type);
-            kafkaTemplate.send("iact.notification.created", notiRequest);
-            log.info("Đã gửi event Kafka tạo thông báo cho Activity ID: {}", activity.getId());
-        } catch (Exception e) {
-            log.error("Failed to send notification event for activity {}: {}", activity.getId(), e.getMessage());
-        }
+        activityEventProducer.publishCancelled(savedActivity);
     }
 
     private Organizers getOrCreateOrganizer(Users user) {
@@ -423,7 +416,7 @@ public class ActivityServiceImpl implements ActivityService {
                     String displayName = (user.getFullName() != null) ? user.getFullName() : user.getUsername();
                     Organizers newOrg = Organizers.builder()
                             .userId(user.getId())
-                            .name(displayName)
+                            .fullName(displayName)
                             .departmentId(user.getDepartmentId())
                             .build();
                     return organizerRepository.save(newOrg);
@@ -492,6 +485,10 @@ public class ActivityServiceImpl implements ActivityService {
 
         if (departmentId != null) {
             spec = spec.and(ActivitySpecification.hasDepartmentId(departmentId));
+        }
+
+        if (categoryIds != null && !categoryIds.isEmpty()) {
+            spec = spec.and(ActivitySpecification.hasBenefitCategories(categoryIds));
         }
 
         if (startDate != null && !startDate.isBlank()) {
@@ -569,7 +566,7 @@ public class ActivityServiceImpl implements ActivityService {
                                 (int) registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2))
                         .matchPercentage(85.0) // Placeholder - real implementation would calculate similarity
                         .matchedReasons(List.of("Hoat dong phu hop voi yeu cau diem ren luyen"))
-                        .categoryName(activity.getCategory() != null ? activity.getCategory().getName() : null)
+                        .categoryName(getBenefitCategoryNames(activity.getId()))
                         .departmentName(null)
                         .build())
                 .collect(Collectors.toList());
@@ -735,5 +732,17 @@ public class ActivityServiceImpl implements ActivityService {
 
         log.info("Generated AI description for prompt: {}", prompt);
         return sb.toString();
+    }
+
+    private String getBenefitCategoryNames(Long activityId) {
+        List<String> categoryNames = benefitRepository.findByActivityId(activityId).stream()
+                .map(benefit -> benefit.getCategory())
+                .filter(Objects::nonNull)
+                .map(category -> category.getName())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        return categoryNames.isEmpty() ? null : String.join(", ", categoryNames);
     }
 }

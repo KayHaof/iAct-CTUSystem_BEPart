@@ -181,7 +181,7 @@ class ActivityServiceImplTest {
         verify(organizerRepository).save(captor.capture());
         assertNull(captor.getValue().getId());
         assertEquals(13L, captor.getValue().getUserId());
-        assertEquals("Sinh viên Một", captor.getValue().getName());
+        assertEquals("Sinh viên Một", captor.getValue().getFullName());
         assertEquals(2L, captor.getValue().getDepartmentId());
     }
 }

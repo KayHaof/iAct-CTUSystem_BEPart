@@ -2,9 +2,9 @@ package com.example.activityservice.feature.activities.event;
 
 import com.example.activityservice.common.dto.NotificationRequest;
 import com.example.activityservice.feature.activities.mapper.ActivityMapper;
+import com.example.activityservice.feature.notification.kafka.NotificationCommandProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -14,8 +14,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 @Slf4j
 public class ActivityNotificationListener {
-    private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ActivityMapper activityMapper;
+    private final NotificationCommandProducer notificationCommandProducer;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async
@@ -30,7 +30,7 @@ public class ActivityNotificationListener {
                     event.getType()
             );
 
-            kafkaTemplate.send("iact.notification.created", request);
+            notificationCommandProducer.publishCreated(request);
 
             log.info("Bắn event thông báo vào Kafka thành công!");
         } catch (Exception e) {

@@ -33,7 +33,7 @@ public class ActivityResponse {
     private Long semesterId;
     private OrganizerResponse organizer;
 
-    private Integer departmentId;
+    private Long departmentId;
     private String departmentName;
 
     private String qrCodeToken;

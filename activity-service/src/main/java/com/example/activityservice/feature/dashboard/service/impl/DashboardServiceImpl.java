@@ -53,8 +53,8 @@ public class DashboardServiceImpl implements DashboardService {
 
     private RecentActivityDto mapToRecentActivityDto(Activities activity) {
         String departmentName = "N/A";
-        if (activity.getOrganizer() != null && activity.getOrganizer().getName() != null) {
-            departmentName = activity.getOrganizer().getName();
+        if (activity.getOrganizer() != null && activity.getOrganizer().getFullName() != null) {
+            departmentName = activity.getOrganizer().getFullName();
         }
 
         String startDateStr = null;

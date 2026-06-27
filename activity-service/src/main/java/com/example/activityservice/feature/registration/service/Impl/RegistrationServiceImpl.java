@@ -73,12 +73,16 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (responses == null || responses.isEmpty()) return;
 
         List<Long> userIds = responses.stream()
-                .map(RegistrationResponse::getStudentId)
+                .filter(Objects::nonNull)
+                .map(res -> res.getStudentId())
+                .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
 
         List<Users> usersList = userRepository.findAllById(userIds);
-        Map<Long, Users> userMap = usersList.stream().collect(Collectors.toMap(Users::getId, u -> u));
+        Map<Long, Users> userMap = usersList.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(u -> u.getId(), u -> u));
 
         for (RegistrationResponse res : responses) {
             Users u = userMap.get(res.getStudentId());

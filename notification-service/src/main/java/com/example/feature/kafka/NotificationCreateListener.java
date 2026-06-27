@@ -19,7 +19,8 @@ public class NotificationCreateListener {
         try {
             notificationDispatchService.createAndDispatch(request);
         } catch (Exception e) {
-            log.error("Failed to handle iact.notification.created message: {}", e.getMessage());
+            log.error("Failed to handle iact.notification.created message: {}", e.getMessage(), e);
+            throw new IllegalStateException("Legacy notification command failed", e);
         }
     }
 }

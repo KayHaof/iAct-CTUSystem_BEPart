@@ -80,6 +80,14 @@ public class PublicNotificationController {
         return ApiResponse.of(200, "Da danh dau tat ca da doc", null);
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<Void> deleteNotification(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        Long userId = extractUserId(jwt);
+        notificationService.deleteNotification(id, userId);
+        return ApiResponse.of(200, "Da xoa thong bao", null);
+    }
+
     /**
      * UC19: Gui thong bao khan cap den sinh vien
      */
@@ -120,7 +128,10 @@ public class PublicNotificationController {
                 .type(notification.getType())
                 .activityId(notification.getActivityId())
                 .isRead(notification.getIsRead())
+                .readAt(notification.getReadAt())
                 .createdAt(notification.getCreatedAt())
+                .sourceEventId(notification.getSourceEventId())
+                .sourceTopic(notification.getSourceTopic())
                 .build();
     }
 }

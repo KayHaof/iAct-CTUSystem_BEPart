@@ -1,6 +1,5 @@
-package com.example.activityservice.feature.categories.service.impl;
+package com.example.activityservice.feature.categories.service.Impl;
 
-import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.award_criteria.repository.AwardCriteriaRepository;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
 import com.example.activityservice.feature.categories.dto.CategoryRequest;
@@ -34,7 +33,6 @@ import java.util.stream.Collectors;
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
-    private final ActivityRepository activityRepository;
     private final BenefitRepository benefitRepository;
     private final AwardCriteriaRepository awardCriteriaRepository;
     private final CategoryMapper categoryMapper;
@@ -247,7 +245,6 @@ public class CategoryServiceImpl implements CategoryService {
 
     private boolean hasBusinessReferences(Long categoryId) {
         return categoryRepository.existsByParentId(categoryId)
-                || activityRepository.existsByCategoryId(categoryId)
                 || benefitRepository.existsByCategoryId(categoryId)
                 || awardCriteriaRepository.existsByCategoryId(categoryId);
     }

@@ -2,11 +2,15 @@ package com.example.activityservice.feature.attendances.model;
 
 import com.example.activityservice.feature.registration.model.Registrations;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
+@Getter
+@Setter
 @Table(name = "attendances")
 public class Attendances {
 
@@ -29,21 +33,6 @@ public class Attendances {
     private Integer method;
 
     public Attendances() {}
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public Registrations getRegistration() { return registration; }
-    public void setRegistration(Registrations registration) { this.registration = registration; }
-    public LocalDateTime getCheckinTime() { return checkinTime; }
-    public void setCheckinTime(LocalDateTime checkinTime) { this.checkinTime = checkinTime; }
-    public LocalDateTime getCheckoutTime() { return checkoutTime; }
-    public void setCheckoutTime(LocalDateTime checkoutTime) { this.checkoutTime = checkoutTime; }
-    public BigDecimal getLatitude() { return latitude; }
-    public void setLatitude(BigDecimal latitude) { this.latitude = latitude; }
-    public BigDecimal getLongitude() { return longitude; }
-    public void setLongitude(BigDecimal longitude) { this.longitude = longitude; }
-    public Integer getMethod() { return method; }
-    public void setMethod(Integer method) { this.method = method; }
 
     public static AttendancesBuilder builder() { return new AttendancesBuilder(); }
 }

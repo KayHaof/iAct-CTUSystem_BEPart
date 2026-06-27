@@ -3,8 +3,12 @@ package com.example.activityservice.feature.benefits.model;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.categories.model.Categories;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
+@Getter
+@Setter
 @Table(name = "benefits")
 public class Benefits {
 
@@ -25,17 +29,6 @@ public class Benefits {
     private Integer point;
 
     public Benefits() {}
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public Activities getActivity() { return activity; }
-    public void setActivity(Activities activity) { this.activity = activity; }
-    public Integer getType() { return type; }
-    public void setType(Integer type) { this.type = type; }
-    public Categories getCategory() { return category; }
-    public void setCategory(Categories category) { this.category = category; }
-    public Integer getPoint() { return point; }
-    public void setPoint(Integer point) { this.point = point; }
 
     public static BenefitsBuilder builder() { return new BenefitsBuilder(); }
 

@@ -27,6 +27,7 @@ public class SecurityConfig {
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers("/error").permitAll()
                         .pathMatchers("/activity/api/v1/dashboard/**").permitAll()
+                        .pathMatchers("/user/auth/**").permitAll()
                         .pathMatchers("/user/api/v1/departments/count").permitAll()
                         .pathMatchers("/user/api/v1/majors/count").permitAll()
                         .pathMatchers("/user/api/v1/**").authenticated()

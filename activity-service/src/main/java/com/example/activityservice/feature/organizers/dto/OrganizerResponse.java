@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class OrganizerResponse {
     private Long id;
-    private String name;
+    private String fullName;
     private Long departmentId;
     private Long representativeId;
 }

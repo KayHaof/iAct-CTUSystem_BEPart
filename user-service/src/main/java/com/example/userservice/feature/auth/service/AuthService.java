@@ -3,12 +3,14 @@ package com.example.userservice.feature.auth.service;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.userservice.feature.user_profile.service.UserProfileService;
+import com.example.userservice.feature.kafka.UserDomainEventProducer;
 import com.example.userservice.feature.user_profile.dto.CreateProfileDto;
 import com.example.userservice.feature.auth.dto.LoginRequest;
 import com.example.userservice.feature.auth.dto.RegisterRequest;
 import com.example.userservice.feature.auth.mapper.AuthMapper;
 import com.example.userservice.feature.users.model.Users;
 import com.example.userservice.feature.users.repository.UserRepository;
+import com.example.userservice.feature.users.service.UserProjectionPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
@@ -37,6 +39,8 @@ public class AuthService {
     private final WebClient webClient;
     private final AuthMapper userMapper;
     private final UserProfileService userProfileService;
+    private final UserProjectionPublisher userProjectionPublisher;
+    private final UserDomainEventProducer userDomainEventProducer;
 
     @Value("${app.keycloak.token-uri}")
     private String tokenUrl;
@@ -115,6 +119,8 @@ public class AuthService {
                         .build();
 
                 userProfileService.createProfile(profileDto);
+                userDomainEventProducer.publishUserCreated(user.getId());
+                userProjectionPublisher.publishById(user.getId());
 
             } else if (response.getStatus() == 409) {
                 throw new AppException(ErrorCode.VALUE_EXISTED, "Username hoặc Email đã tồn tại trên Keycloak!");

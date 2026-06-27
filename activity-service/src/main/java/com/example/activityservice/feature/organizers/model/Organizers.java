@@ -23,7 +23,8 @@ public class Organizers {
     @Column(name = "user_id", nullable = false, unique = true)
     private Long userId;
 
-    private String name;
+    @Column(name = "full_name")
+    private String fullName;
 
     @Column(name = "department_id")
     private Long departmentId;

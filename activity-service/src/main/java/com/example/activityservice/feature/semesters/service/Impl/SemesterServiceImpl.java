@@ -1,4 +1,4 @@
-package com.example.activityservice.feature.semesters.service.impl;
+package com.example.activityservice.feature.semesters.service.Impl;
 
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.semesters.dto.SemesterRequest;

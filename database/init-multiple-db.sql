@@ -215,7 +215,7 @@ DROP TABLE IF EXISTS `organizers`;
 CREATE TABLE `organizers` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT NOT NULL,
-    `name` VARCHAR(255),
+    `full_name` VARCHAR(255),
     `department_id` BIGINT,
     `is_active` TINYINT DEFAULT 1,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -236,7 +236,6 @@ CREATE TABLE `activities` (
     `source_link` VARCHAR(500),
     `location` VARCHAR(255),
     `semester_id` BIGINT,
-    `category_id` BIGINT,
     `organizer_id` BIGINT,
     `department_id` BIGINT,
     `max_participants` INT,
@@ -254,17 +253,16 @@ CREATE TABLE `activities` (
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `handled_by` BIGINT,
     `handled_at` DATETIME(6),
-    `reject_reason` TEXT,
+    `created_by_username` VARCHAR(255),
+    `reason` TEXT,
     PRIMARY KEY (`id`),
     KEY `fk_activity_semester` (`semester_id`),
-    KEY `fk_activity_category` (`category_id`),
     KEY `fk_activity_organizer` (`organizer_id`),
     KEY `fk_activity_created_by` (`created_by`),
     KEY `fk_activity_handled_by` (`handled_by`),
     KEY `idx_activities_status` (`status`),
     KEY `idx_activities_date` (`start_date`, `end_date`),
     CONSTRAINT `fk_activity_semester` FOREIGN KEY (`semester_id`) REFERENCES `semesters`(`id`) ON DELETE SET NULL,
-    CONSTRAINT `fk_activity_category` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_activity_organizer` FOREIGN KEY (`organizer_id`) REFERENCES `organizers`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -407,20 +405,25 @@ USE `notification_db`;
 DROP TABLE IF EXISTS `notifications`;
 CREATE TABLE `notifications` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
+    `user_id` BIGINT,
     `title` VARCHAR(255) NOT NULL,
     `message` TEXT,
     `type` TINYINT NOT NULL,
+    `activity_id` BIGINT,
     `reference_id` BIGINT,
     `reference_type` VARCHAR(50),
+    `source_event_id` VARCHAR(100),
+    `source_topic` VARCHAR(150),
     `is_read` TINYINT DEFAULT 0,
     `read_at` DATETIME,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_notification_user` (`user_id`),
+    KEY `idx_notification_activity` (`activity_id`),
     KEY `idx_notification_type` (`type`),
     KEY `idx_notification_unread` (`user_id`, `is_read`),
-    KEY `idx_notifications_created` (`created_at`)
+    KEY `idx_notifications_created` (`created_at`),
+    UNIQUE KEY `uk_notification_source_event` (`source_event_id`, `source_topic`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `notification_preferences`;

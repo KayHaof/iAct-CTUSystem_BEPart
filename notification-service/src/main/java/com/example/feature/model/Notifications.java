@@ -22,9 +22,21 @@ public class Notifications {
     @Column(name = "activity_id")
     private Long activityId;
 
+    @Column(name = "reference_type")
+    private String referenceType;
+
+    @Column(name = "source_event_id")
+    private String sourceEventId;
+
+    @Column(name = "source_topic")
+    private String sourceTopic;
+
     @Column(name = "is_read")
     @Builder.Default
     private Boolean isRead = false;
+
+    @Column(name = "read_at")
+    private LocalDateTime readAt;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

@@ -62,19 +62,18 @@ class RegistrationServiceImplTest {
         Users student = new Users();
         student.setId(10L);
         doReturn(student).when(service).getCurrentStudent();
-        when(registrationRepository.findAll(any(Specification.class), any(Sort.class)))
+        when(registrationRepository.findAll(anySpecification(), any(Sort.class)))
                 .thenReturn(List.of());
 
         service.getMyRecords(1L);
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<Specification<Registrations>> specificationCaptor =
-                ArgumentCaptor.forClass(Specification.class);
+        ArgumentCaptor<Specification<Registrations>> specificationCaptor = ArgumentCaptor.forClass(Specification.class);
         verify(registrationRepository).findAll(specificationCaptor.capture(), any(Sort.class));
 
         @SuppressWarnings("unchecked")
         Root<Registrations> root = org.mockito.Mockito.mock(Root.class);
-        @SuppressWarnings("unchecked")
+
         CriteriaQuery<?> query = org.mockito.Mockito.mock(CriteriaQuery.class);
         CriteriaBuilder criteriaBuilder = org.mockito.Mockito.mock(CriteriaBuilder.class);
         Path<?> studentPath = org.mockito.Mockito.mock(Path.class);
@@ -94,5 +93,9 @@ class RegistrationServiceImplTest {
         verify(activityPath).get("semester");
         verify(semesterPath).get("id");
         verify(criteriaBuilder).equal(semesterIdPath, 1L);
+    }
+
+    private static Specification<Registrations> anySpecification() {
+        return any();
     }
 }

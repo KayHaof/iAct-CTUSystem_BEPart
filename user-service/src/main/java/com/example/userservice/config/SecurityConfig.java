@@ -31,7 +31,8 @@ public class SecurityConfig {
         http
                 .cors(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
-                .securityMatcher("/auth/**", "/error", "/actuator/**", "/api/v1/departments/count", "/api/v1/majors/count")
+                .securityMatcher("/auth/**", "/error", "/actuator/**", "/api/v1/departments/count",
+                        "/api/v1/majors/count")
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
@@ -39,8 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/v1/departments/count").permitAll()
                         .requestMatchers("/api/v1/majors/count").permitAll()
-                        .anyRequest().authenticated()
-                );
+                        .anyRequest().authenticated());
 
         return http.build();
     }
@@ -56,12 +56,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/**").authenticated()
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-                        .accessDeniedHandler(accessDeniedHandler())
-                )
+                        .accessDeniedHandler(accessDeniedHandler()))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) -> {
                             log.warn("Authentication error: {}", authException.getMessage());
@@ -71,8 +69,7 @@ public class SecurityConfig {
                             apiResponse.setCode(ErrorCode.UNAUTHENTICATED.getCode());
                             apiResponse.setMessage("User Service: Token khong hop le hoac het han");
                             response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
-                        })
-                );
+                        }));
 
         return http.build();
     }

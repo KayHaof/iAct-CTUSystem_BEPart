@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notifications, Long> {
 
@@ -20,6 +21,10 @@ public interface NotificationRepository extends JpaRepository<Notifications, Lon
 
     long countByUserIdAndIsReadFalse(Long userId);
 
+    List<Notifications> findByUserIdAndIsReadFalse(Long userId);
+
+    Optional<Notifications> findBySourceEventIdAndSourceTopic(String sourceEventId, String sourceTopic);
+
     @Query("SELECT n FROM Notifications n WHERE n.userId = :userId ORDER BY n.createdAt DESC")
     List<Notifications> findAllByUserIdFetched(@Param("userId") Long userId);
 
@@ -30,6 +35,6 @@ public interface NotificationRepository extends JpaRepository<Notifications, Lon
     void deleteByActivityId(@Param("activityId") Long activityId);
 
     @Modifying
-    @Query("UPDATE Notifications n SET n.isRead = true WHERE n.userId = :userId AND n.isRead = false")
+    @Query("UPDATE Notifications n SET n.isRead = true, n.readAt = CURRENT_TIMESTAMP WHERE n.userId = :userId AND n.isRead = false")
     void markAllAsRead(@Param("userId") Long userId);
 }

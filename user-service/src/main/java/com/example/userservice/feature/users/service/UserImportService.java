@@ -1,6 +1,7 @@
 package com.example.userservice.feature.users.service;
 
 import com.example.userservice.feature.user_profile.dto.CreateProfileDto;
+import com.example.userservice.feature.kafka.UserDomainEventProducer;
 import com.example.userservice.feature.users.dto.ImportResultDto;
 import com.example.userservice.feature.users.model.Users;
 import com.example.userservice.feature.users.repository.UserRepository;
@@ -30,6 +31,7 @@ public class UserImportService {
     private final Keycloak keycloak;
     private final String realm = "myRealm";
     private final UserProjectionPublisher userProjectionPublisher;
+    private final UserDomainEventProducer userDomainEventProducer;
 
     @Transactional(rollbackFor = Exception.class)
     public ImportResultDto importUsers(MultipartFile file, Integer roleType) {
@@ -175,6 +177,7 @@ public class UserImportService {
                     userProfileService.createProfilesBatch(profilesToSync);
 
                     for (Users u : usersToSave) {
+                        userDomainEventProducer.publishUserCreated(u.getId());
                         userProjectionPublisher.publishById(u.getId());
                     }
                 }

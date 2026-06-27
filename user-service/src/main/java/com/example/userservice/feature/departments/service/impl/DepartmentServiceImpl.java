@@ -12,10 +12,12 @@ import com.example.userservice.feature.departments.service.DepartmentService;
 import com.example.userservice.feature.keycloak.service.KeycloakUserProvisionRequest;
 import com.example.userservice.feature.keycloak.service.KeycloakUserProvisionService;
 import com.example.userservice.feature.major.repository.MajorRepository;
+import com.example.userservice.feature.kafka.UserDomainEventProducer;
 import com.example.userservice.feature.user_profile.model.DepartmentProfile;
 import com.example.userservice.feature.user_profile.repository.DepartmentProfileRepository;
 import com.example.userservice.feature.users.model.Users;
 import com.example.userservice.feature.users.repository.UserRepository;
+import com.example.userservice.feature.users.service.UserProjectionPublisher;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -46,6 +48,8 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final UserRepository userRepository;
     private final DepartmentMapper departmentMapper;
     private final KeycloakUserProvisionService keycloakUserProvisionService;
+    private final UserProjectionPublisher userProjectionPublisher;
+    private final UserDomainEventProducer userDomainEventProducer;
 
     @Override
     @Transactional
@@ -64,6 +68,8 @@ public class DepartmentServiceImpl implements DepartmentService {
             Users user = createDepartmentUser(savedDepartment, accountPayload, createdKeycloakId);
             DepartmentProfile profile = buildDepartmentProfile(savedDepartment, user, request);
             departmentProfileRepository.save(profile);
+            userDomainEventProducer.publishUserCreated(user.getId());
+            userProjectionPublisher.publishById(user.getId());
 
             return toResponse(savedDepartment);
         } catch (Exception exception) {
@@ -98,6 +104,13 @@ public class DepartmentServiceImpl implements DepartmentService {
 
         updateDepartmentProfile(profile, savedDepartment, request);
         departmentProfileRepository.save(profile);
+        if (Boolean.FALSE.equals(savedDepartment.getIsActive())) {
+            userDomainEventProducer.publishUserDeactivated(user.getId());
+        } else {
+            userDomainEventProducer.publishUserUpdated(user.getId());
+            userDomainEventProducer.publishProfileUpdated(user.getId());
+        }
+        userProjectionPublisher.publishById(user.getId());
 
         return toResponse(savedDepartment);
     }
@@ -251,6 +264,12 @@ public class DepartmentServiceImpl implements DepartmentService {
                     user.setStatus(Boolean.FALSE.equals(isActive) ? 0 : 1);
                     keycloakUserProvisionService.updateUserEnabled(user.getKeycloakId(), !Boolean.FALSE.equals(isActive));
                     userRepository.save(user);
+                    if (Boolean.FALSE.equals(isActive)) {
+                        userDomainEventProducer.publishUserDeactivated(user.getId());
+                    } else {
+                        userDomainEventProducer.publishUserUpdated(user.getId());
+                    }
+                    userProjectionPublisher.publishById(user.getId());
                 });
     }
 
@@ -258,9 +277,12 @@ public class DepartmentServiceImpl implements DepartmentService {
         List<DepartmentProfile> profiles = departmentProfileRepository.findByDepartmentId(departmentId);
         for (DepartmentProfile profile : profiles) {
             userRepository.findById(profile.getUserId()).ifPresent(user -> {
-                keycloakUserProvisionService.deleteUser(user.getKeycloakId());
+                user.setStatus(2);
+                keycloakUserProvisionService.updateUserEnabled(user.getKeycloakId(), false);
+                userRepository.save(user);
                 departmentProfileRepository.delete(profile);
-                userRepository.delete(user);
+                userDomainEventProducer.publishUserDeactivated(user.getId());
+                userProjectionPublisher.publishById(user.getId());
             });
         }
     }

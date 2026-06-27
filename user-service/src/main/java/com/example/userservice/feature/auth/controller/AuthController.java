@@ -30,7 +30,6 @@ public class AuthController {
         return ResponseEntity.ok(tokenResponse);
     }
 
-
     @GetMapping("/me")
     public ResponseEntity<?> getMe(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaim("preferred_username");

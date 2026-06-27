@@ -4,10 +4,14 @@ import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.users.model.Users;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
+@Getter
+@Setter
 @Table(name = "complaints")
 public class Complaints {
 
@@ -45,24 +49,4 @@ public class Complaints {
 
     public Complaints() {}
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public Users getStudent() { return student; }
-    public void setStudent(Users student) { this.student = student; }
-    public Activities getActivity() { return activity; }
-    public void setActivity(Activities activity) { this.activity = activity; }
-    public Semesters getSemester() { return semester; }
-    public void setSemester(Semesters semester) { this.semester = semester; }
-    public String getReason() { return reason; }
-    public void setReason(String reason) { this.reason = reason; }
-    public String getDetail() { return detail; }
-    public void setDetail(String detail) { this.detail = detail; }
-    public String getEvidenceUrl() { return evidenceUrl; }
-    public void setEvidenceUrl(String evidenceUrl) { this.evidenceUrl = evidenceUrl; }
-    public Integer getStatus() { return status; }
-    public void setStatus(Integer status) { this.status = status; }
-    public String getDetailResponse() { return detailResponse; }
-    public void setDetailResponse(String detailResponse) { this.detailResponse = detailResponse; }
-    public LocalDateTime getResolvedAt() { return resolvedAt; }
-    public void setResolvedAt(LocalDateTime resolvedAt) { this.resolvedAt = resolvedAt; }
 }

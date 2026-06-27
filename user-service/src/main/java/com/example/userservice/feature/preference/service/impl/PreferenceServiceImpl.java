@@ -6,6 +6,7 @@ import com.example.userservice.feature.preference.dto.PreferenceResponse;
 import com.example.userservice.feature.preference.model.StudentPreferences;
 import com.example.userservice.feature.preference.repository.StudentPreferencesRepository;
 import com.example.userservice.feature.preference.service.PreferenceService;
+import com.example.userservice.feature.kafka.UserDomainEventProducer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,7 @@ public class PreferenceServiceImpl implements PreferenceService {
 
     private final StudentPreferencesRepository preferenceRepository;
     private final ObjectMapper objectMapper;
+    private final UserDomainEventProducer userDomainEventProducer;
 
     private static final String DEFAULT_CATEGORY_RATINGS = "{\"1\":3,\"2\":3,\"3\":3,\"4\":3,\"5\":3}";
     private static final String DEFAULT_CATEGORY_ENABLED = "{\"1\":true,\"2\":true,\"3\":true,\"4\":true,\"5\":true}";
@@ -62,7 +64,9 @@ public class PreferenceServiceImpl implements PreferenceService {
             prefs.setAiRecommendationEnabled(request.getAiRecommendationEnabled());
         }
 
-        return mapToResponse(preferenceRepository.save(prefs));
+        PreferenceResponse response = mapToResponse(preferenceRepository.save(prefs));
+        userDomainEventProducer.publishPreferenceUpdated(response);
+        return response;
     }
 
     @Override
@@ -78,7 +82,9 @@ public class PreferenceServiceImpl implements PreferenceService {
         prefs.setExcludedCategories(null);
         prefs.setAiRecommendationEnabled(true);
 
-        return mapToResponse(preferenceRepository.save(prefs));
+        PreferenceResponse response = mapToResponse(preferenceRepository.save(prefs));
+        userDomainEventProducer.publishPreferenceUpdated(response);
+        return response;
     }
 
     private StudentPreferences createDefaultPreferences(Long userId) {
@@ -89,7 +95,9 @@ public class PreferenceServiceImpl implements PreferenceService {
                 .notificationSettings(DEFAULT_NOTIFICATION_SETTINGS)
                 .aiRecommendationEnabled(true)
                 .build();
-        return preferenceRepository.save(prefs);
+        StudentPreferences saved = preferenceRepository.save(prefs);
+        userDomainEventProducer.publishPreferenceCreated(mapToResponse(saved));
+        return saved;
     }
 
     private PreferenceResponse mapToResponse(StudentPreferences prefs) {

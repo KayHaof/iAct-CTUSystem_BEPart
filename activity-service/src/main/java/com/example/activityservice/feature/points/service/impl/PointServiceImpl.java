@@ -113,7 +113,7 @@ public class PointServiceImpl implements PointService {
     @Override
     public Long getStudentIdByUsername(String username) {
         return userRepository.findByUsername(username)
-                .map(Users::getId)
+                .map(user -> user.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, 
                         "Khong tim thay sinh vien voi username: " + username));
     }
@@ -183,7 +183,7 @@ public class PointServiceImpl implements PointService {
     private CategoryPointResponse buildCategoryTree(Categories category) {
         List<CategoryPointResponse> children = category.getSubCategories() != null
                 ? category.getSubCategories().stream()
-                    .filter(Categories::getIsActive)
+                    .filter(child -> child != null && Boolean.TRUE.equals(child.getIsActive()))
                     .map(this::buildCategoryTree)
                     .collect(Collectors.toList())
                 : Collections.emptyList();

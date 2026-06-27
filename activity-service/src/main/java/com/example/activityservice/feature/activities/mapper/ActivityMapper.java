@@ -10,6 +10,7 @@ import com.example.activityservice.feature.activitySchedule.dto.ActivitySchedule
 import com.example.activityservice.feature.activitySchedule.model.ActivitySchedule;
 import com.example.activityservice.feature.organizers.dto.OrganizerResponse;
 import com.example.activityservice.feature.organizers.model.Organizers;
+import com.example.activityservice.feature.users.model.Users;
 import org.mapstruct.*;
 import org.springframework.data.domain.Page;
 
@@ -38,11 +39,7 @@ public interface ActivityMapper {
     @Mapping(target = "createdAt", source = "createdAt")
     @Mapping(target = "reason", source = "reason")
     @Mapping(target = "handledAt", source = "handledAt")
-
-    @Mapping(target = "createdBy", ignore = true)
-    @Mapping(target = "handledBy", ignore = true)
     @Mapping(target = "benefits", ignore = true)
-    @Mapping(target = "departmentId", ignore = true)
     @Mapping(target = "departmentName", ignore = true)
     ActivityResponse toResponse(Activities entity);
 
@@ -51,13 +48,15 @@ public interface ActivityMapper {
 
     // Keep the public organizer ID compatible with the User ID selected by clients.
     @Mapping(target = "id", source = "userId")
-    @Mapping(target = "name", source = "name")
+    @Mapping(target = "fullName", source = "fullName")
     @Mapping(target = "departmentId", source = "departmentId")
     OrganizerResponse toOrganizerResponse(Organizers organizer);
 
     ActivityScheduleDto toScheduleDto(ActivitySchedule schedule);
 
     List<ActivityScheduleDto> toScheduleDtoList(List<ActivitySchedule> schedules);
+
+    com.example.activityservice.common.dto.UserDto toUserDto(Users user);
 
     // --- UPDATE ENTITY ---
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

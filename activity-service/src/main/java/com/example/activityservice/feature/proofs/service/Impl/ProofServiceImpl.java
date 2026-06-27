@@ -2,6 +2,8 @@ package com.example.activityservice.feature.proofs.service.Impl;
 
 import com.example.activityservice.feature.proofs.dto.ProofResponse;
 import com.example.activityservice.feature.proofs.dto.ProofSubmissionRequest;
+import com.example.activityservice.feature.points.kafka.PointEventProducer;
+import com.example.activityservice.feature.proofs.kafka.ProofEventProducer;
 import com.example.activityservice.feature.proofs.mapper.ProofMapper;
 import com.example.activityservice.feature.proofs.model.Proofs;
 import com.example.activityservice.feature.users.model.Users;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +33,8 @@ public class ProofServiceImpl implements ProofService {
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
     private final ProofMapper proofMapper;
+    private final ProofEventProducer proofEventProducer;
+    private final PointEventProducer pointEventProducer;
 
     private Users getCurrentStudent() {
         String username = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getName();
@@ -76,6 +81,46 @@ public class ProofServiceImpl implements ProofService {
         }
 
         proofToSave = proofRepository.save(proofToSave);
+        proofEventProducer.publishSubmitted(proofToSave);
         return proofMapper.toResponse(proofToSave);
+    }
+
+    @Override
+    @Transactional
+    public ProofResponse approveProof(Long proofId) {
+        Proofs proof = proofRepository.findById(proofId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Minh chung khong ton tai!"));
+        proof.setStatus(1);
+        proof.setRejectionReason(null);
+        proof.setVerifiedBy(getCurrentReviewerId());
+        proof.setVerifiedTime(LocalDateTime.now());
+        Proofs savedProof = proofRepository.save(proof);
+
+        proofEventProducer.publishApproved(savedProof);
+        pointEventProducer.publishAwarded(savedProof.getStudentId(), savedProof.getActivity());
+        return proofMapper.toResponse(savedProof);
+    }
+
+    @Override
+    @Transactional
+    public ProofResponse rejectProof(Long proofId, String reason) {
+        Proofs proof = proofRepository.findById(proofId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Minh chung khong ton tai!"));
+        proof.setStatus(2);
+        proof.setRejectionReason(reason != null && !reason.isBlank() ? reason : "Minh chung khong hop le");
+        proof.setVerifiedBy(getCurrentReviewerId());
+        proof.setVerifiedTime(LocalDateTime.now());
+        Proofs savedProof = proofRepository.save(proof);
+
+        proofEventProducer.publishRejected(savedProof);
+        pointEventProducer.publishRevoked(savedProof.getStudentId(), savedProof.getActivity(), savedProof.getRejectionReason());
+        return proofMapper.toResponse(savedProof);
+    }
+
+    private Long getCurrentReviewerId() {
+        String username = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getName();
+        return userRepository.findByUsername(username)
+                .map(Users::getId)
+                .orElse(null);
     }
 }

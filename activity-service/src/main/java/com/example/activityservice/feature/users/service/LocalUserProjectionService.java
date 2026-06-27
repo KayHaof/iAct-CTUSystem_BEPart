@@ -30,7 +30,19 @@ public class LocalUserProjectionService {
         if (snapshot.getDepartmentId() != null) {
             user.setDepartmentId(snapshot.getDepartmentId());
         }
+        user.setStatus(snapshot.getStatus() != null ? snapshot.getStatus() : 1);
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public void markInactive(Long userId, Integer status) {
+        if (userId == null) {
+            return;
+        }
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setStatus(status);
+            userRepository.save(user);
+        });
     }
 
     private void setIfPresent(String value, java.util.function.Consumer<String> setter) {

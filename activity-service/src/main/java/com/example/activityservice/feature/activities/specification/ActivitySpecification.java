@@ -1,6 +1,7 @@
 package com.example.activityservice.feature.activities.specification;
 
 import com.example.activityservice.feature.activities.model.Activities;
+import com.example.activityservice.feature.benefits.model.Benefits;
 import com.example.activityservice.feature.registration.model.Registrations;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
@@ -9,6 +10,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class ActivitySpecification {
 
@@ -157,6 +159,23 @@ public class ActivitySpecification {
             if (departmentId == null)
                 return null;
             return cb.equal(root.get("departmentId"), departmentId);
+        };
+    }
+
+    public static Specification<Activities> hasBenefitCategories(List<Long> categoryIds) {
+        return (root, query, cb) -> {
+            if (categoryIds == null || categoryIds.isEmpty()) {
+                return null;
+            }
+
+            Subquery<Long> benefitQuery = query.subquery(Long.class);
+            Root<Benefits> benefitRoot = benefitQuery.from(Benefits.class);
+            benefitQuery.select(benefitRoot.get("activity").get("id"))
+                    .where(cb.and(
+                            cb.equal(benefitRoot.get("activity").get("id"), root.get("id")),
+                            benefitRoot.get("category").get("id").in(categoryIds)));
+
+            return cb.exists(benefitQuery);
         };
     }
 }

@@ -7,6 +7,7 @@ import com.example.service.BaseRedisService;
 import com.example.userservice.feature.user_profile.dto.ProfileDto;
 import com.example.userservice.feature.user_profile.dto.UserUpdateRequest;
 import com.example.userservice.feature.user_profile.service.UserProfileService;
+import com.example.userservice.feature.kafka.UserDomainEventProducer;
 import com.example.userservice.feature.users.dto.ChangePasswordRequest;
 import com.example.userservice.feature.users.dto.UserResponse;
 import com.example.userservice.feature.users.event.UserDisabledEvent;
@@ -51,6 +52,7 @@ public class UserService {
 
     private final String realm = "myRealm";
     private final UserProjectionPublisher userProjectionPublisher;
+    private final UserDomainEventProducer userDomainEventProducer;
 
     public UserResponse getMyInfo() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -130,6 +132,8 @@ public class UserService {
     public void updateUserProfile(Long id, UserUpdateRequest request) {
         userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         userProfileService.updateUserProfile(id, request);
+        userDomainEventProducer.publishUserUpdated(id);
+        userDomainEventProducer.publishProfileUpdated(id);
         userProjectionPublisher.publishById(id);
     }
 
@@ -194,6 +198,7 @@ public class UserService {
         }
 
         userRepository.save(user);
+        userDomainEventProducer.publishUserDeactivated(user.getId());
 
         if (!isOwner) {
             eventPublisher.publishEvent(new UserDisabledEvent(user.getId(), "Tài khoản bị vô hiệu hóa",
@@ -218,6 +223,7 @@ public class UserService {
             }
         }
         userRepository.save(user);
+        userDomainEventProducer.publishUserUpdated(user.getId());
     }
 
     public void changePasswordViaKeycloak(String bearerToken, ChangePasswordRequest request) {
@@ -268,6 +274,7 @@ public class UserService {
                     .roleType(1).status(1).build());
 
             userProjectionPublisher.publishById(newUser.getId());
+            userDomainEventProducer.publishUserCreated(newUser.getId());
         }
     }
 

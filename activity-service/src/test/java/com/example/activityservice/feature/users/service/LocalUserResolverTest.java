@@ -44,8 +44,8 @@ class LocalUserResolverTest {
         assertSame(localUser, resolver.resolveById(13L));
 
         verify(restTemplate, never()).exchange(
-                any(String.class), any(HttpMethod.class), any(HttpEntity.class),
-                any(ParameterizedTypeReference.class));
+                any(String.class), any(HttpMethod.class), anyHttpEntity(),
+                anyUserSnapshotResponseType());
     }
 
     @Test
@@ -64,8 +64,8 @@ class LocalUserResolverTest {
         when(restTemplate.exchange(
                 eq("http://localhost:8081/api/v1/users/13"),
                 eq(HttpMethod.GET),
-                any(HttpEntity.class),
-                any(ParameterizedTypeReference.class)))
+                anyHttpEntity(),
+                anyUserSnapshotResponseType()))
                 .thenReturn(ResponseEntity.ok(ApiResponse.success(snapshot)));
         when(projectionService.upsert(snapshot)).thenReturn(projected);
 
@@ -80,5 +80,13 @@ class LocalUserResolverTest {
         LocalUserResolver resolver = new LocalUserResolver(repository, projectionService, restTemplate);
         ReflectionTestUtils.setField(resolver, "userServiceUrl", "http://localhost:8081");
         return resolver;
+    }
+
+    private static HttpEntity<?> anyHttpEntity() {
+        return any();
+    }
+
+    private static ParameterizedTypeReference<ApiResponse<UserSnapshot>> anyUserSnapshotResponseType() {
+        return any();
     }
 }

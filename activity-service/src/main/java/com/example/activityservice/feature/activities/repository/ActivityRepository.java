@@ -16,7 +16,6 @@ public interface ActivityRepository extends JpaRepository<Activities, Long>, Jpa
     List<Activities> findByStatus(Integer status);
     long countByStatus(Integer status);
     boolean existsBySemesterId(Long semesterId);
-    boolean existsByCategoryId(Long categoryId);
     
     // New methods for UC features
     List<Activities> findByDepartmentId(Long departmentId);

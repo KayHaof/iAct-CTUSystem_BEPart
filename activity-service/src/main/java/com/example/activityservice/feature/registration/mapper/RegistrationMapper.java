@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
@@ -32,7 +33,8 @@ public class RegistrationMapper {
 
         if (entity.getRegisteredSchedules() != null) {
             List<Long> scheduleIds = entity.getRegisteredSchedules().stream()
-                    .map(ActivitySchedule::getId)
+                    .filter(Objects::nonNull)
+                    .map(schedule -> schedule.getId())
                     .collect(Collectors.toList());
             res.setScheduleIds(scheduleIds);
         } else {
