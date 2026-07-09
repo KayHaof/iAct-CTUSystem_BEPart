@@ -14,6 +14,7 @@ public class UserSnapshot {
     private String studentCode;
     private String avatarUrl;
     private Long departmentId;
+    private Integer roleType;
     private Integer status;
 
     public Long resolvedId() {

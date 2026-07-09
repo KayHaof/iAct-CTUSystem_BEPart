@@ -14,4 +14,8 @@ public interface UserRepository extends JpaRepository<Users, Long> {
     @Query("SELECT u.id FROM Users u WHERE LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
             "OR LOWER(u.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     List<Long> searchIdsByKeyword(@Param("keyword") String keyword);
+
+    @Query("SELECT u.id FROM Users u WHERE u.departmentId = :departmentId AND u.roleType = 1 AND u.status = 1")
+    List<Long> findActiveStudentIdsByDepartmentId(@Param("departmentId") Long departmentId);
+
 }

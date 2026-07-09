@@ -3,6 +3,7 @@ package com.example.userservice.feature.departments.controller;
 import com.example.dto.ApiResponse;
 import com.example.dto.PageDTO;
 import com.example.userservice.feature.departments.dto.DepartmentRequest;
+import com.example.userservice.feature.departments.dto.DepartmentLookupResponse;
 import com.example.userservice.feature.departments.dto.DepartmentResponse;
 import com.example.userservice.feature.departments.repository.DepartmentRepository;
 import com.example.userservice.feature.departments.service.DepartmentService;
@@ -57,6 +58,11 @@ public class DepartmentController {
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<DepartmentResponse>> getOptions(@RequestParam(required = false) Boolean active) {
         return ApiResponse.success(departmentService.getDepartmentOptions(active));
+    }
+
+    @GetMapping("/public-lookup")
+    public ApiResponse<List<DepartmentLookupResponse>> lookupDepartments(@RequestParam List<Long> ids) {
+        return ApiResponse.success(departmentService.lookupDepartments(ids));
     }
 
     @GetMapping("/{id}")

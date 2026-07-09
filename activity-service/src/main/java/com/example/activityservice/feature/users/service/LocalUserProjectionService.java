@@ -30,6 +30,9 @@ public class LocalUserProjectionService {
         if (snapshot.getDepartmentId() != null) {
             user.setDepartmentId(snapshot.getDepartmentId());
         }
+        if (snapshot.getRoleType() != null) {
+            user.setRoleType(snapshot.getRoleType());
+        }
         user.setStatus(snapshot.getStatus() != null ? snapshot.getStatus() : 1);
         return userRepository.save(user);
     }

@@ -31,6 +31,7 @@ class UserProjectionPublisherTest {
                 .id(4L)
                 .username("dept_cict")
                 .email("dept_cict@iact.com")
+                .roleType(1)
                 .build();
         ProfileDto profile = ProfileDto.builder()
                 .fullName("Khoa CNTT và TT")
@@ -44,7 +45,7 @@ class UserProjectionPublisherTest {
         verify(kafkaTemplate).send(
                 eq(UserProjectionPublisher.USER_SNAPSHOT_TOPIC),
                 eq("4"),
-                contains("\"departmentId\":1"));
+                contains("\"roleType\":1"));
         verify(kafkaTemplate).send(
                 eq(UserProjectionPublisher.STANDARD_USER_SNAPSHOT_TOPIC),
                 eq("4"),

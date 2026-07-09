@@ -34,6 +34,7 @@ class LocalUserProjectionServiceTest {
         UserSnapshot snapshot = new UserSnapshot();
         snapshot.setUserId(13L);
         snapshot.setUsername("new-name");
+        snapshot.setRoleType(1);
 
         when(userRepository.findById(13L)).thenReturn(Optional.of(existing));
         when(userRepository.save(existing)).thenReturn(existing);
@@ -43,5 +44,6 @@ class LocalUserProjectionServiceTest {
         assertEquals("new-name", saved.getUsername());
         assertEquals("Tên đầy đủ", saved.getFullName());
         assertEquals(2L, saved.getDepartmentId());
+        assertEquals(1, saved.getRoleType());
     }
 }

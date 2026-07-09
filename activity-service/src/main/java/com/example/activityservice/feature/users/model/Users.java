@@ -31,6 +31,9 @@ public class Users {
     @Column(name = "department_id")
     private Long departmentId;
 
+    @Column(name = "role_type")
+    private Integer roleType;
+
     @Column(name = "status")
     private Integer status;
 

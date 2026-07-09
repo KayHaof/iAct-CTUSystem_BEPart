@@ -2,6 +2,7 @@ package com.example.userservice.feature.auth.service;
 
 import com.example.userservice.feature.auth.dto.RegisterRequest;
 import com.example.userservice.feature.auth.mapper.AuthMapper;
+import com.example.userservice.feature.kafka.UserDomainEventProducer;
 import com.example.userservice.feature.user_profile.dto.CreateProfileDto;
 import com.example.userservice.feature.user_profile.service.UserProfileService;
 import com.example.userservice.feature.users.model.Users;
@@ -40,13 +41,15 @@ class AuthServiceTest {
         AuthMapper authMapper = mock(AuthMapper.class);
         UserProfileService userProfileService = mock(UserProfileService.class);
         UserProjectionPublisher userProjectionPublisher = mock(UserProjectionPublisher.class);
+        UserDomainEventProducer userDomainEventProducer = mock(UserDomainEventProducer.class);
         AuthService authService = new AuthService(
                 userRepository,
                 keycloak,
                 webClient,
                 authMapper,
                 userProfileService,
-                userProjectionPublisher);
+                userProjectionPublisher,
+                userDomainEventProducer);
 
         RegisterRequest request = RegisterRequest.builder()
                 .username("sv001")
@@ -104,6 +107,7 @@ class AuthServiceTest {
                         && dto.getFullName().equals("Nguyen An")
                         && dto.getStudentCode().equals("B2100001")
                         && dto.getClassId().equals(10L)));
+        verify(userDomainEventProducer).publishUserCreated(42L);
         verify(userProjectionPublisher).publishById(42L);
     }
 }

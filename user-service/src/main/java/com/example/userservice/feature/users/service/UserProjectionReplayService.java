@@ -33,8 +33,8 @@ public class UserProjectionReplayService {
             page = userRepository.findAll(PageRequest.of(
                     pageNumber++, PAGE_SIZE, Sort.by(Sort.Direction.ASC, "id")));
             List<Users> users = page.getContent();
-            Map<Long, ProfileDto> profiles = userProfileService.getProfilesBatch(
-                    users.stream().map(Users::getId).toList());
+                Map<Long, ProfileDto> profiles = userProfileService.getProfilesBatch(
+                    users.stream().map(u -> u.getId()).toList());
             for (Users user : users) {
                 projectionPublisher.publish(user, profiles.get(user.getId()));
                 scheduledEvents++;

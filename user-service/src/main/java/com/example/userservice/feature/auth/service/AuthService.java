@@ -17,7 +17,6 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -165,7 +164,7 @@ public class AuthService {
                         .with("username", request.getUsername())
                         .with("password", request.getPassword()))
                 .retrieve()
-                .onStatus(HttpStatusCode::is4xxClientError,
+                .onStatus(status -> status != null && status.is4xxClientError(),
                         response -> response.bodyToMono(String.class).flatMap(errorBody -> {
                             if (errorBody.contains("Account disabled")) {
                                 return Mono.error(new AppException(ErrorCode.ACCOUNT_LOCKED));

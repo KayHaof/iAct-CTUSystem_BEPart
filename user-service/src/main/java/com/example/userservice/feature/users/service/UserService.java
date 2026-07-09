@@ -107,7 +107,7 @@ public class UserService {
         };
 
         Page<Users> usersPage = userRepository.findAll(spec, pageable);
-        List<Long> userIds = usersPage.getContent().stream().map(Users::getId).toList();
+        List<Long> userIds = usersPage.getContent().stream().map(u -> u.getId()).toList();
         Map<Long, ProfileDto> profileMap = userProfileService.getProfilesBatch(userIds);
 
         List<UserResponse> data = usersPage.getContent().stream()

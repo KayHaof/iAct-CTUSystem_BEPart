@@ -1,6 +1,7 @@
 package com.example.userservice.feature.departments.service;
 
 import com.example.dto.PageDTO;
+import com.example.userservice.feature.departments.dto.DepartmentLookupResponse;
 import com.example.userservice.feature.departments.dto.DepartmentRequest;
 import com.example.userservice.feature.departments.dto.DepartmentResponse;
 
@@ -24,4 +25,6 @@ public interface DepartmentService {
     List<DepartmentResponse> getDepartmentOptions(Boolean active);
 
     List<DepartmentResponse> getAllDepartments();
+
+    List<DepartmentLookupResponse> lookupDepartments(List<Long> ids);
 }

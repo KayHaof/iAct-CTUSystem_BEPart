@@ -51,6 +51,7 @@ public class UserProjectionPublisher {
                 .studentCode(profile != null ? profile.getStudentCode() : null)
                 .avatarUrl(profile != null ? profile.getAvatarUrl() : null)
                 .departmentId(profile != null ? profile.getDepartmentId() : null)
+                .roleType(user.getRoleType())
                 .occurredAt(Instant.now().toString())
                 .build();
 
@@ -111,4 +112,3 @@ public class UserProjectionPublisher {
                 });
     }
 }
-

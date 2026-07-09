@@ -28,6 +28,8 @@ public class SecurityConfig {
                         .pathMatchers("/error").permitAll()
                         .pathMatchers("/activity/api/v1/dashboard/**").permitAll()
                         .pathMatchers("/user/auth/**").permitAll()
+                        .pathMatchers("/internal/notifications/ws/**").permitAll()
+                        .pathMatchers("/internal/notifications/ws").permitAll()
                         .pathMatchers("/user/api/v1/departments/count").permitAll()
                         .pathMatchers("/user/api/v1/majors/count").permitAll()
                         .pathMatchers("/user/api/v1/**").authenticated()

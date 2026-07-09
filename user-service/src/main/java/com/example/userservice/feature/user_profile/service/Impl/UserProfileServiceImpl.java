@@ -166,7 +166,8 @@ public class UserProfileServiceImpl implements UserProfileService {
             return;
 
         Set<String> classCodes = dtos.stream()
-                .map(CreateProfileDto::getClassCode)
+                .filter(Objects::nonNull)
+                .map(dto -> dto.getClassCode())
                 .filter(code -> code != null && !code.trim().isEmpty())
                 .collect(Collectors.toSet());
 

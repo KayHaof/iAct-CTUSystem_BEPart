@@ -36,7 +36,8 @@ public class UserDomainEventProducer {
 
     public void publishUserCreated(Long userId) {
         publishUserSnapshotEvent(userId, KafkaTopics.USER_CREATED, KafkaEventTypes.USER_CREATED, "user-lifecycle");
-        publishUserSnapshotEvent(userId, KafkaTopics.PROFILE_CREATED, KafkaEventTypes.PROFILE_CREATED, "profile-lifecycle");
+        publishUserSnapshotEvent(userId, KafkaTopics.PROFILE_CREATED, KafkaEventTypes.PROFILE_CREATED,
+                "profile-lifecycle");
     }
 
     public void publishUserUpdated(Long userId) {
@@ -44,7 +45,8 @@ public class UserDomainEventProducer {
     }
 
     public void publishUserDeactivated(Long userId) {
-        publishUserSnapshotEvent(userId, KafkaTopics.USER_DEACTIVATED, KafkaEventTypes.USER_DEACTIVATED, "user-lifecycle");
+        publishUserSnapshotEvent(userId, KafkaTopics.USER_DEACTIVATED, KafkaEventTypes.USER_DEACTIVATED,
+                "user-lifecycle");
     }
 
     public void publishUserDeleted(Long userId) {
@@ -52,7 +54,8 @@ public class UserDomainEventProducer {
     }
 
     public void publishProfileUpdated(Long userId) {
-        publishUserSnapshotEvent(userId, KafkaTopics.PROFILE_UPDATED, KafkaEventTypes.PROFILE_UPDATED, "profile-lifecycle");
+        publishUserSnapshotEvent(userId, KafkaTopics.PROFILE_UPDATED, KafkaEventTypes.PROFILE_UPDATED,
+                "profile-lifecycle");
     }
 
     public void publishPreferenceCreated(PreferenceResponse preference) {
@@ -84,8 +87,10 @@ public class UserDomainEventProducer {
                 .studentCode(profile != null ? profile.getStudentCode() : null)
                 .avatarUrl(profile != null ? profile.getAvatarUrl() : null)
                 .departmentId(profile != null ? profile.getDepartmentId() : null)
+                .roleType(user.getRoleType())
                 .occurredAt(Instant.now().toString())
                 .build();
+        @SuppressWarnings("unchecked")
         Map<String, Object> eventPayload = objectMapper.convertValue(payload, Map.class);
         eventPayload.put("status", user.getStatus());
         publish(topic, eventType, "user", String.valueOf(userId), eventPayload, source);
@@ -106,7 +111,7 @@ public class UserDomainEventProducer {
     }
 
     private void publish(String topic, String eventType, String aggregateType, String aggregateId,
-                         Object payload, String source) {
+            Object payload, String source) {
         String eventId = UUID.randomUUID().toString();
         KafkaEventEnvelope<Object> envelope = KafkaEventEnvelope.builder()
                 .eventId(eventId)

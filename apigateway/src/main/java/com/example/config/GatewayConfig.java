@@ -23,6 +23,11 @@ public class GatewayConfig {
                                                 .path("/activity/api/v1/**")
                                                 .filters(f -> f.rewritePath("/activity/(?<segment>.*)", "/${segment}"))
                                                 .uri("lb://activity-service"))
+                                .route("notification-websocket-route", r -> r
+                                                .path("/internal/notifications/ws", "/internal/notifications/ws/**")
+                                                .filters(f -> f.rewritePath("/internal/notifications/(?<segment>.*)",
+                                                                "/${segment}"))
+                                                .uri("lb:ws://notification-service"))
                                 .route("notification-service-route", r -> r
                                                 .path("/notification/api/v1/**")
                                                 .filters(f -> f.rewritePath("/notification/(?<segment>.*)",

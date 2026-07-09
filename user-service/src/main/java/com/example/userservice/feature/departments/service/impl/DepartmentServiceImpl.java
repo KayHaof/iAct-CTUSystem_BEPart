@@ -4,6 +4,7 @@ import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.example.userservice.feature.departments.dto.DepartmentRequest;
+import com.example.userservice.feature.departments.dto.DepartmentLookupResponse;
 import com.example.userservice.feature.departments.dto.DepartmentResponse;
 import com.example.userservice.feature.departments.mapper.DepartmentMapper;
 import com.example.userservice.feature.departments.model.Departments;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -192,6 +194,27 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     public List<DepartmentResponse> getAllDepartments() {
         return getDepartmentOptions(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DepartmentLookupResponse> lookupDepartments(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+
+        return departmentRepository.findAllById(ids.stream()
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList())
+                .stream()
+                .map(department -> DepartmentLookupResponse.builder()
+                        .id(department.getId())
+                        .name(department.getName())
+                        .code(department.getCode())
+                        .isActive(department.getIsActive())
+                        .build())
+                .toList();
     }
 
     private Specification<Departments> buildSpecification(String keyword, Boolean active) {
