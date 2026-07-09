@@ -11,4 +11,7 @@ public class NotificationRequest {
     private String title;
     private String message;
     private Integer type;
+    private String sourceEventId;
+    private String sourceTopic;
+    private String referenceType;
 }

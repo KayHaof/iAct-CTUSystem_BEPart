@@ -91,8 +91,8 @@ public class NotificationDispatchServiceImpl implements NotificationDispatchServ
 
         return (int) Arrays.stream(request.getUserIds())
                 .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
+                .map(userId -> userId != null ? userId.trim() : null)
+                .filter(value -> value != null && !value.isBlank())
                 .map(Long::valueOf)
                 .map(userId -> {
                     NotificationRequest notification = new NotificationRequest();

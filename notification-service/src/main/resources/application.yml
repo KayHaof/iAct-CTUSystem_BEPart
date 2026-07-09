@@ -47,3 +47,7 @@ cloudinary:
   cloud-name: dhjamvg6j
   api-key: 237733137343564
   api-secret: ${api_secret:xzojOJkKQH9R6mcX9M8LMPPFlcw}
+
+app:
+  services:
+    user-service-url: http://localhost:8081

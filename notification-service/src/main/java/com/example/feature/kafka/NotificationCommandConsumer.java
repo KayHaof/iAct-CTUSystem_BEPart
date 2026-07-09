@@ -35,8 +35,10 @@ public class NotificationCommandConsumer {
         JsonNode root = objectMapper.readTree(message);
         JsonNode payload = root.has("payload") ? root.get("payload") : root;
         NotificationRequest request = objectMapper.treeToValue(payload, NotificationRequest.class);
-        if (root.has("eventId")) {
+        if (request.getSourceEventId() == null && root.has("eventId")) {
             request.setSourceEventId(root.get("eventId").asText());
+        }
+        if (request.getSourceTopic() == null) {
             request.setSourceTopic(topic);
         }
         return request;
