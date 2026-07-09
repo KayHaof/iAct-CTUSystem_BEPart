@@ -2,6 +2,7 @@ package com.example.activityservice.feature.registration.service.Impl;
 
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
+import com.example.activityservice.feature.activities.service.ActivityCacheService;
 import com.example.activityservice.feature.proofs.model.Proofs;
 import com.example.activityservice.feature.proofs.repository.ProofRepository;
 import com.example.activityservice.feature.registration.dto.RegistrationQRResponse;
@@ -54,6 +55,7 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final ProofRepository proofRepository;
     private final QRCodeService qrCodeService;
     private final RegistrationKafkaProducer registrationKafkaProducer;
+    private final ActivityCacheService activityCacheService;
 
     // --- Lấy sinh viên đang đăng nhập ---
     public Users getCurrentStudent() {
@@ -134,10 +136,12 @@ public class RegistrationServiceImpl implements RegistrationService {
     public RegistrationResponse register(RegistrationRequest request) {
         Users student = getCurrentStudent();
 
-        Activities activity = activityRepository.findById(request.getActivityId())
+        Activities activity = activityRepository.findByIdForRegistrationUpdate(request.getActivityId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Hoạt động không tồn tại"));
 
         if (activity.getStatus() != 1) throw new AppException(ErrorCode.INVALID_ACTION, "Hoạt động này hiện chưa mở đăng ký.");
+        validateStudentEligibleForActivity(student, activity);
+
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(activity.getRegistrationStart()) || now.isAfter(activity.getRegistrationEnd()))
             throw new AppException(ErrorCode.INVALID_ACTION, "Rất tiếc, đã hết hoặc chưa tới thời hạn đăng ký.");
@@ -145,8 +149,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         Registrations existingReg = registrationRepository.findByStudentIdAndActivityId(student.getId(), activity.getId()).orElse(null);
         if (existingReg != null && (existingReg.getStatus() == 0 || existingReg.getStatus() == 1))
             throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã đăng ký hoạt động này rồi nha!");
-        if (registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2) >= activity.getMaxParticipants())
-            throw new AppException(ErrorCode.INVALID_ACTION, "Hoạt động này đã full chỗ mất rồi!");
+        validateActivityHasAvailableSlot(activity);
 
         List<ActivitySchedule> selectedSchedules = new ArrayList<>();
         if (request.getScheduleIds() != null && !request.getScheduleIds().isEmpty()) {
@@ -172,7 +175,29 @@ public class RegistrationServiceImpl implements RegistrationService {
                 null
         );
 
+        activityCacheService.evictActivityListCaches();
         return registrationMapper.toResponse(saved);
+    }
+
+    private void validateStudentEligibleForActivity(Users student, Activities activity) {
+        if (!isFacultyInternalActivity(activity)) {
+            return;
+        }
+        if (student.getDepartmentId() == null
+                || activity.getDepartmentId() == null
+                || !Objects.equals(student.getDepartmentId(), activity.getDepartmentId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong thuoc khoa duoc phep dang ky hoat dong nay.");
+        }
+    }
+
+    private boolean isFacultyInternalActivity(Activities activity) {
+        return Boolean.TRUE.equals(activity.getIsFaculty()) && !Boolean.TRUE.equals(activity.getIsExternal());
+    }
+
+    private void validateActivityHasAvailableSlot(Activities activity) {
+        if (registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2) >= activity.getMaxParticipants()) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Hoạt động này đã full chỗ mất rồi!");
+        }
     }
 
     @Override
@@ -207,10 +232,12 @@ public class RegistrationServiceImpl implements RegistrationService {
         // Gui Kafka notification
         registrationKafkaProducer.sendCancellationSuccess(studentId, activityId, activityTitle, reason);
 
+        activityCacheService.evictActivityListCaches();
         return registrationMapper.toResponse(saved);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageDTO<RegistrationResponse> getParticipants(Long activityId, String keyword, String status, Pageable pageable) {
         List<Long> searchedUserIds = null;
 
@@ -245,13 +272,22 @@ public class RegistrationServiceImpl implements RegistrationService {
         if (status == 2) {
             registrationMapper.cancelEntity(reg, "Quản trị viên / Khoa hủy đăng ký");
         } else {
+            if (Integer.valueOf(2).equals(reg.getStatus())) {
+                Activities activity = activityRepository.findByIdForRegistrationUpdate(reg.getActivity().getId())
+                        .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
+                                "Hoạt động không tồn tại"));
+                validateActivityHasAvailableSlot(activity);
+            }
             reg.setStatus(status);
         }
 
-        return registrationMapper.toResponse(registrationRepository.save(reg));
+        RegistrationResponse response = registrationMapper.toResponse(registrationRepository.save(reg));
+        activityCacheService.evictActivityListCaches();
+        return response;
     }
 
     @Override
+    @Transactional(readOnly = true)
     public void exportToExcel(Long activityId, String keyword, String status, OutputStream outputStream) {
         List<Long> searchedUserIds = null;
 
@@ -317,7 +353,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         List<RegistrationResponse> responseList = myRecords.stream().map(reg -> {
             int proofStatus = 0;
             if (reg.getStatus() == 1) {
-                Optional<Proofs> proofOpt = proofRepository.findByStudentIdAndActivityId(student.getId(), reg.getActivity().getId());
+                Optional<Proofs> proofOpt = proofRepository.findByRegistrationId(reg.getId());
                 if (proofOpt.isPresent()) {
                     Integer pStatus = proofOpt.get().getStatus();
                     if (pStatus == 0) proofStatus = 1;
@@ -406,6 +442,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         registration.setRegisteredSchedules(newSchedules);
         registration = registrationRepository.save(registration);
 
+        activityCacheService.evictActivityListCaches();
         return registrationMapper.toResponse(registration);
     }
 

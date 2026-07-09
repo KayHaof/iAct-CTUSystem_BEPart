@@ -18,6 +18,24 @@ public class ActivitySpecification {
         return (root, query, cb) -> cb.equal(root.get("status"), 1);
     }
 
+    public static Specification<Activities> visibleToStudentDepartment(Long departmentId) {
+        return (root, query, cb) -> {
+            Predicate isExternal = cb.isTrue(root.get("isExternal"));
+
+            Predicate isNotExternal = cb.or(cb.isFalse(root.get("isExternal")), cb.isNull(root.get("isExternal")));
+            Predicate isFaculty = cb.isTrue(root.get("isFaculty"));
+            Predicate isNotFaculty = cb.or(cb.isFalse(root.get("isFaculty")), cb.isNull(root.get("isFaculty")));
+            Predicate universityLevel = cb.and(isNotExternal, isNotFaculty);
+
+            if (departmentId == null) {
+                return cb.or(isExternal, universityLevel);
+            }
+
+            Predicate facultyLevel = cb.and(isNotExternal, isFaculty, cb.equal(root.get("departmentId"), departmentId));
+            return cb.or(isExternal, universityLevel, facultyLevel);
+        };
+    }
+
     public static Specification<Activities> containsKeyword(String keyword) {
         return (root, query, cb) -> {
             if (!StringUtils.hasText(keyword)) {

@@ -24,25 +24,23 @@ public class ActivityBusinessEventConsumer {
     private final NotificationDispatchService notificationDispatchService;
     private final ObjectMapper objectMapper;
 
-    @KafkaListener(
-            topics = {
-                    KafkaTopics.ACTIVITY_CREATED,
-                    KafkaTopics.ACTIVITY_SUBMITTED,
-                    KafkaTopics.ACTIVITY_UPDATED,
-                    KafkaTopics.ACTIVITY_APPROVED,
-                    KafkaTopics.ACTIVITY_REJECTED,
-                    KafkaTopics.ACTIVITY_CANCELLED,
-                    KafkaTopics.REGISTRATION_CREATED,
-                    KafkaTopics.REGISTRATION_CANCELLED,
-                    KafkaTopics.ATTENDANCE_CHECKED_IN,
-                    KafkaTopics.PROOF_SUBMITTED,
-                    KafkaTopics.PROOF_APPROVED,
-                    KafkaTopics.PROOF_REJECTED,
-                    KafkaTopics.POINT_AWARDED,
-                    KafkaTopics.POINT_RECALCULATED,
-                    KafkaTopics.POINT_REVOKED
-            },
-            groupId = "notification-business-v1")
+    @KafkaListener(topics = {
+            KafkaTopics.ACTIVITY_CREATED,
+            KafkaTopics.ACTIVITY_SUBMITTED,
+            KafkaTopics.ACTIVITY_UPDATED,
+            KafkaTopics.ACTIVITY_APPROVED,
+            KafkaTopics.ACTIVITY_REJECTED,
+            KafkaTopics.ACTIVITY_CANCELLED,
+            KafkaTopics.REGISTRATION_CREATED,
+            KafkaTopics.REGISTRATION_CANCELLED,
+            KafkaTopics.ATTENDANCE_CHECKED_IN,
+            KafkaTopics.PROOF_SUBMITTED,
+            KafkaTopics.PROOF_APPROVED,
+            KafkaTopics.PROOF_REJECTED,
+            KafkaTopics.POINT_AWARDED,
+            KafkaTopics.POINT_RECALCULATED,
+            KafkaTopics.POINT_REVOKED
+    }, groupId = "notification-business-v1")
     @Transactional
     public void handleBusinessEvent(String message, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         try {
@@ -60,9 +58,8 @@ public class ActivityBusinessEventConsumer {
         }
     }
 
-    @KafkaListener(
-            topics = {KafkaTopics.ACTIVITY_DELETED, KafkaTopics.ACTIVITY_DRAFT_EXPIRED},
-            groupId = "notification-cleanup-v1")
+    @KafkaListener(topics = { KafkaTopics.ACTIVITY_DELETED,
+            KafkaTopics.ACTIVITY_DRAFT_EXPIRED }, groupId = "notification-cleanup-v1")
     @Transactional
     public void handleActivityCleanup(String message, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         try {
@@ -92,8 +89,8 @@ public class ActivityBusinessEventConsumer {
             }
             case KafkaEventTypes.ACTIVITY_SUBMITTED -> {
                 request.setUserId(null);
-                request.setTitle("Hoat dong cho duyet");
-                request.setMessage("Hoat dong '" + title(payload) + "' vua duoc gui len cho duyet.");
+                request.setTitle("Hoạt động chờ duyệt");
+                request.setMessage("Hoạt động '" + title(payload) + "' vừa được gửi lên chờ duyệt.");
                 request.setType(2);
             }
             case KafkaEventTypes.ACTIVITY_UPDATED -> {
@@ -144,40 +141,40 @@ public class ActivityBusinessEventConsumer {
             }
             case KafkaEventTypes.PROOF_SUBMITTED -> {
                 request.setUserId(optionalLong(payload, "ownerUserId"));
-                request.setTitle("Minh chung moi can duyet");
-                request.setMessage("Sinh vien vua nop minh chung cho hoat dong: " + activityTitle(payload));
+                request.setTitle("Minh chứng mới cần duyệt");
+                request.setMessage("Sinh viên vừa nộp minh chứng cho hoạt động: " + activityTitle(payload));
                 request.setType(2);
             }
             case KafkaEventTypes.PROOF_APPROVED -> {
                 request.setUserId(requiredLong(payload, "userId"));
-                request.setTitle("Minh chung da duoc duyet");
-                request.setMessage("Minh chung cua ban cho hoat dong " + activityTitle(payload) + " da duoc duyet.");
+                request.setTitle("Minh chứng đã được duyệt");
+                request.setMessage("Minh chứng của bạn cho hoạt động " + activityTitle(payload) + " đã được duyệt.");
                 request.setType(1);
             }
             case KafkaEventTypes.PROOF_REJECTED -> {
                 request.setUserId(requiredLong(payload, "userId"));
-                request.setTitle("Minh chung bi tu choi");
-                request.setMessage("Minh chung cua ban cho hoat dong " + activityTitle(payload)
-                        + " bi tu choi. Ly do: " + defaultText(payload, "reason", "Khong co ly do"));
+                request.setTitle("Minh chứng bị từ chối");
+                request.setMessage("Minh chứng của bạn cho hoạt động " + activityTitle(payload)
+                        + " bị từ chối. Lý do: " + defaultText(payload, "reason", "Không có lý do"));
                 request.setType(3);
             }
             case KafkaEventTypes.POINT_AWARDED -> {
                 request.setUserId(requiredLong(payload, "userId"));
-                request.setTitle("Diem ren luyen da duoc ghi nhan");
-                request.setMessage("Ban da duoc ghi nhan diem tu hoat dong: " + activityTitle(payload));
+                request.setTitle("Điểm rèn luyện đã được ghi nhận");
+                request.setMessage("Bạn đã được ghi nhận điểm từ hoạt động: " + activityTitle(payload));
                 request.setType(1);
             }
             case KafkaEventTypes.POINT_RECALCULATED -> {
                 request.setUserId(requiredLong(payload, "userId"));
-                request.setTitle("Diem ren luyen da duoc tinh lai");
-                request.setMessage("Diem cua ban vua duoc tinh lai tu hoat dong: " + activityTitle(payload));
+                request.setTitle("Điểm rèn luyện đã được tính lại");
+                request.setMessage("Điểm của bạn vừa được tính lại từ hoạt động: " + activityTitle(payload));
                 request.setType(2);
             }
             case KafkaEventTypes.POINT_REVOKED -> {
                 request.setUserId(requiredLong(payload, "userId"));
-                request.setTitle("Diem ren luyen bi thu hoi");
-                request.setMessage("Diem tu hoat dong " + activityTitle(payload)
-                        + " da bi thu hoi. Ly do: " + defaultText(payload, "reason", "Minh chung khong hop le"));
+                request.setTitle("Điểm rèn luyện bị thu hồi");
+                request.setMessage("Điểm từ hoạt động " + activityTitle(payload)
+                        + " đã bị thu hồi. Lý do: " + defaultText(payload, "reason", "Minh chứng không hợp lệ"));
                 request.setType(3);
             }
             default -> {

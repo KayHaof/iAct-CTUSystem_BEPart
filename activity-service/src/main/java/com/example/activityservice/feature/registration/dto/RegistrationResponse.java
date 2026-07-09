@@ -19,7 +19,12 @@ public class RegistrationResponse {
     private String cancelReason;
 
     private LocalDateTime attendedAt;
+    private LocalDateTime checkoutAt;
     private Boolean isAttended;
+    private String attendanceStatus;
+    private String participationStatus;
+    private Boolean canSubmitProof;
+    private String nextAction;
 
     private List<Long> scheduleIds;
     private Integer point;

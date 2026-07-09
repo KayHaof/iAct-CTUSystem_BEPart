@@ -5,17 +5,24 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface ActivityRepository extends JpaRepository<Activities, Long>, JpaSpecificationExecutor<Activities> {
     List<Activities> findByStatusAndUpdatedAtBefore(Integer status, LocalDateTime cutoffDate);
     List<Activities> findByStatus(Integer status);
     long countByStatus(Integer status);
     boolean existsBySemesterId(Long semesterId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Activities a WHERE a.id = :id")
+    Optional<Activities> findByIdForRegistrationUpdate(@Param("id") Long id);
     
     // New methods for UC features
     List<Activities> findByDepartmentId(Long departmentId);
@@ -30,7 +37,6 @@ public interface ActivityRepository extends JpaRepository<Activities, Long>, Jpa
         """)
     List<Activities> findApprovedActivitiesForStudent(@Param("semesterId") Long semesterId);
     
-    // New method for dashboard - fetch with organizer to avoid LazyInitializationException
     @Query("SELECT a FROM Activities a LEFT JOIN FETCH a.organizer ORDER BY a.updatedAt DESC")
     Page<Activities> findRecentActivitiesWithOrganizer(Pageable pageable);
 }

@@ -2,9 +2,11 @@ package com.example.activityservice.feature.activities.service.impl;
 
 import com.example.activityservice.feature.activities.dto.ActivityRequest;
 import com.example.activityservice.feature.activities.dto.ActivityResponse;
+import com.example.activityservice.feature.activities.kafka.ActivityEventProducer;
 import com.example.activityservice.feature.activities.mapper.ActivityMapper;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
+import com.example.activityservice.feature.activities.service.ActivityCacheService;
 import com.example.activityservice.feature.activitySchedule.mapper.ActivityScheduleMapper;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
 import com.example.activityservice.feature.benefits.mapper.BenefitMapper;
@@ -13,10 +15,12 @@ import com.example.activityservice.feature.benefits.repository.BenefitRepository
 import com.example.activityservice.feature.benefits.service.BenefitValidationService;
 import com.example.activityservice.feature.categories.model.Categories;
 import com.example.activityservice.feature.organizers.repository.OrganizerRepository;
+import com.example.activityservice.feature.notification.kafka.NotificationCommandProducer;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import com.example.activityservice.feature.semesters.repository.SemesterRepository;
 import com.example.activityservice.feature.users.repository.UserRepository;
 import com.example.activityservice.feature.users.model.Users;
+import com.example.activityservice.feature.users.service.LocalDepartmentResolver;
 import com.example.activityservice.feature.users.service.LocalUserResolver;
 import com.example.activityservice.service.CloudinaryService;
 import com.example.activityservice.service.QRCodeService;
@@ -24,11 +28,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -52,6 +59,8 @@ class ActivityServiceImplTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private LocalDepartmentResolver localDepartmentResolver;
+    @Mock
     private LocalUserResolver localUserResolver;
     @Mock
     private RegistrationRepository registrationRepository;
@@ -71,9 +80,21 @@ class ActivityServiceImplTest {
     private QRCodeService qrCodeService;
     @Mock
     private KafkaTemplate<String, Object> kafkaTemplate;
+    @Mock
+    private ActivityEventProducer activityEventProducer;
+    @Mock
+    private NotificationCommandProducer notificationCommandProducer;
+    @Mock
+    private ActivityCacheService activityCacheService;
+
+    @Mock
+    private ActivityResponseAssembler responseAssembler;
 
     @InjectMocks
-    private ActivityServiceImpl activityService;
+    private ActivityCommandOperations commandOperations;
+
+    @InjectMocks
+    private AdminActivityOperations adminOperations;
 
     @Test
     void createActivityAllowsDraftWithoutStartDate() {
@@ -91,9 +112,9 @@ class ActivityServiceImplTest {
 
         when(activityMapper.toEntity(request, null)).thenReturn(draft);
         when(activityRepository.save(draft)).thenReturn(draft);
-        when(activityMapper.toResponse(draft)).thenReturn(expectedResponse);
+        when(responseAssembler.toResponse(draft)).thenReturn(expectedResponse);
 
-        ActivityResponse response = activityService.createActivity(request);
+        ActivityResponse response = commandOperations.createActivity(request);
 
         assertSame(expectedResponse, response);
         verify(semesterRepository, never()).findSemesterByDate(org.mockito.ArgumentMatchers.any());
@@ -136,9 +157,9 @@ class ActivityServiceImplTest {
         when(benefitValidationService.validateAndGetCategory(10L, 4, 1)).thenReturn(category);
         when(benefitRepository.saveAll(anyList())).thenReturn(List.of(savedBenefit));
         when(benefitMapper.toResponse(savedBenefit)).thenReturn(requestedBenefit);
-        when(activityMapper.toResponse(draft)).thenReturn(expectedResponse);
+        when(responseAssembler.toResponse(draft)).thenReturn(expectedResponse);
 
-        ActivityResponse response = activityService.createActivity(request);
+        ActivityResponse response = commandOperations.createActivity(request);
 
         assertSame(expectedResponse, response);
         assertEquals(List.of(requestedBenefit), response.getBenefits());
@@ -171,9 +192,9 @@ class ActivityServiceImplTest {
         when(organizerRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(activityMapper.toEntity(eq(request), any())).thenReturn(draft);
         when(activityRepository.save(draft)).thenReturn(draft);
-        when(activityMapper.toResponse(draft)).thenReturn(expectedResponse);
+        when(responseAssembler.toResponse(draft)).thenReturn(expectedResponse);
 
-        activityService.createActivity(request);
+        commandOperations.createActivity(request);
 
         org.mockito.ArgumentCaptor<com.example.activityservice.feature.organizers.model.Organizers> captor =
                 org.mockito.ArgumentCaptor.forClass(
@@ -183,5 +204,37 @@ class ActivityServiceImplTest {
         assertEquals(13L, captor.getValue().getUserId());
         assertEquals("Sinh viên Một", captor.getValue().getFullName());
         assertEquals(2L, captor.getValue().getDepartmentId());
+    }
+
+    @Test
+    void approveActivityNotifiesActiveStudentsInFacultyDepartmentWhenRegistrationOpen() {
+        SecurityContextHolder.clearContext();
+
+        Activities activity = new Activities();
+        activity.setId(40L);
+        activity.setTitle("Ngay hoi khoa");
+        activity.setStatus(0);
+        activity.setIsFaculty(true);
+        activity.setIsExternal(false);
+        activity.setDepartmentId(2L);
+        activity.setRegistrationStart(LocalDateTime.now().minusHours(1));
+        activity.setRegistrationEnd(LocalDateTime.now().plusHours(1));
+
+        when(activityRepository.findById(40L)).thenReturn(Optional.of(activity));
+        when(activityRepository.save(activity)).thenReturn(activity);
+        when(userRepository.findActiveStudentIdsByDepartmentId(2L)).thenReturn(List.of(10L, 11L));
+
+        adminOperations.approveActivity(40L);
+
+        ArgumentCaptor<com.example.activityservice.common.dto.NotificationRequest> captor =
+                ArgumentCaptor.forClass(com.example.activityservice.common.dto.NotificationRequest.class);
+        verify(notificationCommandProducer, org.mockito.Mockito.times(2)).publishCreated(captor.capture());
+
+        List<com.example.activityservice.common.dto.NotificationRequest> requests = captor.getAllValues();
+        assertEquals(List.of(10L, 11L), requests.stream()
+                .map(req -> req.getUserId())
+                .toList());
+        assertEquals("activity-registration-open:40:user:10", requests.get(0).getSourceEventId());
+        assertEquals("activity-registration-open:40:user:11", requests.get(1).getSourceEventId());
     }
 }

@@ -29,6 +29,12 @@ public class AttendanceController {
         return ApiResponse.success(attendanceService.checkIn(request));
     }
 
+    @PostMapping("/check-out")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ApiResponse<AttendanceResponse> checkOut(@RequestBody @Valid CheckInRequest request) {
+        return ApiResponse.success(attendanceService.checkOut(request));
+    }
+
     @GetMapping("/activity/{activityId}/session/{sessionId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ApiResponse<PageDTO<AttendanceResponse>> getAttendancesBySession(

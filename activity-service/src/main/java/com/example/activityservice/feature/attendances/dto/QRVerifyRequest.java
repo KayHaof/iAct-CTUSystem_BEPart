@@ -11,7 +11,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class QRVerifyRequest {
     private String qrData;
+    private String verifyCode;
     private Long activityId;
     private Long sessionId;
     private Long registrationId;
+    private String action;
 }

@@ -1,6 +1,7 @@
 package com.example.activityservice.feature.categories.service.Impl;
 
 import com.example.activityservice.feature.award_criteria.repository.AwardCriteriaRepository;
+import com.example.activityservice.feature.activities.service.ActivityCacheService;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
 import com.example.activityservice.feature.categories.dto.CategoryRequest;
 import com.example.activityservice.feature.categories.dto.CategoryResponse;
@@ -8,6 +9,7 @@ import com.example.activityservice.feature.categories.mapper.CategoryMapper;
 import com.example.activityservice.feature.categories.model.Categories;
 import com.example.activityservice.feature.categories.repository.CategoryRepository;
 import com.example.activityservice.feature.categories.service.CategoryService;
+import com.example.activityservice.feature.points.service.PointCacheService;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -38,6 +40,8 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryMapper categoryMapper;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final PointCacheService pointCacheService;
+    private final ActivityCacheService activityCacheService;
 
     private static final String CACHE_KEY_ALL_TREE = "categories:tree";
     private static final String CACHE_KEY_FLAT_PREFIX = "categories:flat:";
@@ -304,6 +308,8 @@ public class CategoryServiceImpl implements CategoryService {
             redisTemplate.delete(CACHE_KEY_ALL_TREE);
             redisTemplate.delete(CACHE_KEY_ALL_TREE + ":true");
             redisTemplate.delete(CACHE_KEY_ALL_TREE + ":false");
+            pointCacheService.evictCategoryRuleCaches();
+            activityCacheService.evictActivityListCaches();
             log.info("Category caches evicted");
         } catch (Exception e) {
             log.warn("Failed to evict category caches: {}", e.getMessage());

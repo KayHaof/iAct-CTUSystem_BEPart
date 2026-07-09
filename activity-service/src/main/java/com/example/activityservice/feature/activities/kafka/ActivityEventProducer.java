@@ -64,6 +64,10 @@ public class ActivityEventProducer extends KafkaEnvelopePublisher {
         payload.put("title", activity.getTitle());
         payload.put("status", activity.getStatus());
         payload.put("departmentId", activity.getDepartmentId());
+        payload.put("isFaculty", activity.getIsFaculty());
+        payload.put("isExternal", activity.getIsExternal());
+        payload.put("registrationStart", activity.getRegistrationStart() != null ? activity.getRegistrationStart().toString() : null);
+        payload.put("registrationEnd", activity.getRegistrationEnd() != null ? activity.getRegistrationEnd().toString() : null);
         payload.put("reason", activity.getReason());
         payload.put("ownerUserId", activity.getCreatedBy() != null ? activity.getCreatedBy().getId() : null);
         return payload;

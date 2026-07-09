@@ -10,6 +10,8 @@ public class AttendanceResponse {
     private Long id;
     private Long registrationId;
     private LocalDateTime checkinTime;
+    private LocalDateTime checkoutTime;
+    private String attendanceStatus;
     private Integer method;
     private String message;
 }

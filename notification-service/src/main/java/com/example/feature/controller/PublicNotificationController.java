@@ -7,6 +7,7 @@ import com.example.feature.dto.UrgentNotificationRequest;
 import com.example.feature.model.Notifications;
 import com.example.feature.service.NotificationDispatchService;
 import com.example.feature.service.NotificationService;
+import com.example.feature.service.NotificationUserResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +24,7 @@ public class PublicNotificationController {
 
     private final NotificationService notificationService;
     private final NotificationDispatchService dispatchService;
+    private final NotificationUserResolver userResolver;
 
     /**
      * UC11: Lay danh sach thong bao cua nguoi dung
@@ -35,7 +37,7 @@ public class PublicNotificationController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) Boolean isRead) {
         
-        Long userId = extractUserId(jwt);
+        Long userId = userResolver.resolveCurrentUserId(jwt);
         PageRequest pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         
         Page<Notifications> notifications = notificationService.getNotifications(userId, isRead, pageable);
@@ -55,7 +57,7 @@ public class PublicNotificationController {
     @GetMapping("/count-unread")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<Long> getUnreadCount(@AuthenticationPrincipal Jwt jwt) {
-        Long userId = extractUserId(jwt);
+        Long userId = userResolver.resolveCurrentUserId(jwt);
         return ApiResponse.success(notificationService.countUnread(userId));
     }
 
@@ -75,7 +77,7 @@ public class PublicNotificationController {
     @PutMapping("/read-all")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> markAllAsRead(@AuthenticationPrincipal Jwt jwt) {
-        Long userId = extractUserId(jwt);
+        Long userId = userResolver.resolveCurrentUserId(jwt);
         notificationService.markAllAsRead(userId);
         return ApiResponse.of(200, "Da danh dau tat ca da doc", null);
     }
@@ -83,7 +85,7 @@ public class PublicNotificationController {
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> deleteNotification(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
-        Long userId = extractUserId(jwt);
+        Long userId = userResolver.resolveCurrentUserId(jwt);
         notificationService.deleteNotification(id, userId);
         return ApiResponse.of(200, "Da xoa thong bao", null);
     }
@@ -108,14 +110,6 @@ public class PublicNotificationController {
     public ApiResponse<NotificationResponse> getNotificationById(@PathVariable Long id) {
         Notifications notification = notificationService.getById(id);
         return ApiResponse.success(toResponse(notification));
-    }
-
-    private Long extractUserId(Jwt jwt) {
-        String subject = jwt.getSubject();
-        if (subject == null) {
-            subject = jwt.getClaimAsString("sub");
-        }
-        return Long.parseLong(subject);
     }
 
     private NotificationResponse toResponse(Notifications notification) {

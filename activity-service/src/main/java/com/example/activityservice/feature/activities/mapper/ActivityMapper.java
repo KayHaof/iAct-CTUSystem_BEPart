@@ -34,6 +34,8 @@ public interface ActivityMapper {
 
     // --- TO RESPONSE ---
     @Mapping(target = "semesterId", source = "semester.id")
+    @Mapping(target = "semesterName", source = "semester.name")
+    @Mapping(target = "academicYear", source = "semester.academicYear")
     @Mapping(target = "organizer", source = "organizer")
     @Mapping(target = "schedules", source = "schedules")
     @Mapping(target = "createdAt", source = "createdAt")

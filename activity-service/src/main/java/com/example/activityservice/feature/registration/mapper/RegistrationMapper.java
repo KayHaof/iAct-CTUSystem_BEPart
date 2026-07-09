@@ -27,9 +27,14 @@ public class RegistrationMapper {
         res.setRegisteredAt(entity.getRegisteredAt());
         res.setStatus(entity.getStatus());
         res.setCancelReason(entity.getCancelReason());
-        res.setIsAttended(entity.getAttendance() != null);
+        res.setIsAttended(entity.getAttendance() != null && entity.getAttendance().getCheckinTime() != null);
         res.setAttendedAt(entity.getAttendance() != null ? entity.getAttendance().getCheckinTime() : null);
+        res.setCheckoutAt(entity.getAttendance() != null ? entity.getAttendance().getCheckoutTime() : null);
         res.setProofStatus(proofStatus);
+        res.setAttendanceStatus(resolveAttendanceStatus(entity));
+        res.setParticipationStatus(resolveParticipationStatus(entity, proofStatus));
+        res.setCanSubmitProof(canSubmitProof(entity, proofStatus));
+        res.setNextAction(resolveNextAction(res.getParticipationStatus(), res.getCanSubmitProof()));
 
         if (entity.getRegisteredSchedules() != null) {
             List<Long> scheduleIds = entity.getRegisteredSchedules().stream()
@@ -42,6 +47,69 @@ public class RegistrationMapper {
         }
 
         return res;
+    }
+
+    private String resolveAttendanceStatus(Registrations entity) {
+        if (entity.getAttendance() == null || entity.getAttendance().getCheckinTime() == null) {
+            return "NOT_CHECKED_IN";
+        }
+        if (entity.getAttendance().getCheckoutTime() != null) {
+            return "CHECKED_OUT";
+        }
+        return "CHECKED_IN";
+    }
+
+    private String resolveParticipationStatus(Registrations entity, Integer proofStatus) {
+        if (entity.getStatus() != null && entity.getStatus() == 2) {
+            return "CANCELLED";
+        }
+
+        if (entity.getAttendance() == null || entity.getAttendance().getCheckinTime() == null) {
+            if (entity.getActivity() != null
+                    && entity.getActivity().getEndDate() != null
+                    && LocalDateTime.now().isAfter(entity.getActivity().getEndDate())) {
+                return "MISSED";
+            }
+            return "REGISTERED";
+        }
+
+        if (proofStatus != null && proofStatus == 1) {
+            return "PROOF_PENDING";
+        }
+        if (proofStatus != null && proofStatus == 2) {
+            return "COMPLETED";
+        }
+        if (proofStatus != null && proofStatus == 3) {
+            return "PROOF_REJECTED";
+        }
+
+        if (entity.getAttendance().getCheckoutTime() != null) {
+            return "CHECKED_OUT";
+        }
+        return "CHECKED_IN";
+    }
+
+    private Boolean canSubmitProof(Registrations entity, Integer proofStatus) {
+        boolean hasCheckedIn = entity.getAttendance() != null && entity.getAttendance().getCheckinTime() != null;
+        boolean hasCheckedOut = entity.getAttendance() != null && entity.getAttendance().getCheckoutTime() != null;
+        boolean proofIsOpen = proofStatus == null || proofStatus == 0 || proofStatus == 3;
+        return hasCheckedIn && hasCheckedOut && proofIsOpen && (entity.getStatus() == null || entity.getStatus() != 2);
+    }
+
+    private String resolveNextAction(String participationStatus, Boolean canSubmitProof) {
+        if ("REGISTERED".equals(participationStatus)) {
+            return "CHECK_IN";
+        }
+        if ("CHECKED_IN".equals(participationStatus)) {
+            return "CHECK_OUT";
+        }
+        if (Boolean.TRUE.equals(canSubmitProof)) {
+            return "SUBMIT_PROOF";
+        }
+        if ("PROOF_PENDING".equals(participationStatus)) {
+            return "WAIT_PROOF_REVIEW";
+        }
+        return "NONE";
     }
 
     public RegistrationResponse toResponse(Registrations entity) {

@@ -28,8 +28,6 @@ public interface ActivityService {
 
     ActivityStatsResponse getActivityStats();
 
-    // ============ NEW METHODS FOR UC FEATURES ============
-
     PageDTO<ActivityResponse> searchActivities(
             String keyword, Long departmentId, String startDate, String endDate,
             List<Long> categoryIds, String category, String status, Pageable pageable);

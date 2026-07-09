@@ -11,6 +11,8 @@ import java.io.OutputStream;
 
 public interface AttendanceService {
     AttendanceResponse checkIn(CheckInRequest request);
+
+    AttendanceResponse checkOut(CheckInRequest request);
     
     // ============ NEW METHODS FOR UC FEATURES ============
     PageDTO<AttendanceResponse> getAttendancesBySession(Long activityId, Long sessionId, Pageable pageable);

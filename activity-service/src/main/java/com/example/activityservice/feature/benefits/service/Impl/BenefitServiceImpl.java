@@ -3,6 +3,7 @@ package com.example.activityservice.feature.benefits.service.Impl;
 
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
+import com.example.activityservice.feature.activities.service.ActivityCacheService;
 import com.example.activityservice.feature.benefits.dto.BenefitRequest;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
 import com.example.activityservice.feature.benefits.mapper.BenefitMapper;
@@ -13,6 +14,7 @@ import com.example.exception.ErrorCode;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
 import com.example.activityservice.feature.benefits.service.BenefitService;
 import com.example.activityservice.feature.benefits.service.BenefitValidationService;
+import com.example.activityservice.feature.points.service.PointCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,8 @@ public class BenefitServiceImpl implements BenefitService {
     private final ActivityRepository localActivityRepository;
     private final BenefitMapper benefitMapper;
     private final BenefitValidationService benefitValidationService;
+    private final PointCacheService pointCacheService;
+    private final ActivityCacheService activityCacheService;
 
     @Override
     @Transactional
@@ -50,7 +54,10 @@ public class BenefitServiceImpl implements BenefitService {
                 .point(request.getPoint())
                 .build();
 
-        return benefitMapper.toResponse(benefitRepository.save(benefit));
+        Benefits saved = benefitRepository.save(benefit);
+        evictSemesterPointCaches(saved);
+        activityCacheService.evictActivityListCaches();
+        return benefitMapper.toResponse(saved);
     }
 
     @Override
@@ -89,6 +96,8 @@ public class BenefitServiceImpl implements BenefitService {
         benefit.setPoint(request.getPoint());
 
         Benefits updated = benefitRepository.save(benefit);
+        evictSemesterPointCaches(updated);
+        activityCacheService.evictActivityListCaches();
         log.info("Cập nhật quyền lợi thành công: {}", updated.getId());
 
         return benefitMapper.toResponse(updated);
@@ -97,11 +106,21 @@ public class BenefitServiceImpl implements BenefitService {
     @Override
     @Transactional
     public void deleteBenefit(Long id) {
+        Benefits benefit = benefitRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay quyen loi de xoa!"));
         log.info("Đang xóa quyền lợi ID: {}", id);
         if (!benefitRepository.existsById(id)) {
             throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy quyền lợi để xóa!");
         }
         benefitRepository.deleteById(id);
+        evictSemesterPointCaches(benefit);
+        activityCacheService.evictActivityListCaches();
         log.info("Xóa quyền lợi thành công: {}", id);
+    }
+    private void evictSemesterPointCaches(Benefits benefit) {
+        Long semesterId = benefit.getActivity() != null && benefit.getActivity().getSemester() != null
+                ? benefit.getActivity().getSemester().getId()
+                : null;
+        pointCacheService.evictSemesterPointCaches(semesterId);
     }
 }

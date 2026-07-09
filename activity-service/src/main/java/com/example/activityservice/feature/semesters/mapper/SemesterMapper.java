@@ -17,7 +17,6 @@ public interface SemesterMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "activities", ignore = true)
-    @Mapping(target = "complaints", ignore = true)
     @Mapping(target = "studentAwards", ignore = true)
     @Mapping(target = "name", expression = "java(resolveName(request))")
     Semesters toEntity(SemesterRequest request);
@@ -25,7 +24,6 @@ public interface SemesterMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "activities", ignore = true)
-    @Mapping(target = "complaints", ignore = true)
     @Mapping(target = "studentAwards", ignore = true)
     @Mapping(target = "name", expression = "java(resolveName(request))")
     void updateEntityFromRequest(SemesterRequest request, @MappingTarget Semesters semester);

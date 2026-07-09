@@ -7,5 +7,6 @@ public class OrganizerResponse {
     private Long id;
     private String fullName;
     private Long departmentId;
+    private String departmentName;
     private Long representativeId;
 }

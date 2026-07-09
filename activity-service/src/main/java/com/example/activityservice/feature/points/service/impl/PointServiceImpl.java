@@ -3,6 +3,7 @@ package com.example.activityservice.feature.points.service.impl;
 import com.example.activityservice.feature.points.dto.*;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
 import com.example.activityservice.feature.points.service.PointService;
+import com.example.activityservice.feature.points.service.PointCacheService;
 import com.example.activityservice.feature.benefits.model.Benefits;
 import com.example.activityservice.feature.categories.model.Categories;
 import com.example.activityservice.feature.categories.repository.CategoryRepository;
@@ -29,6 +30,7 @@ public class PointServiceImpl implements PointService {
     private final SemesterRepository semesterRepository;
     private final CategoryRepository categoryRepository;
     private final BenefitRepository benefitRepository;
+    private final PointCacheService pointCacheService;
 
     @Override
     @Transactional(readOnly = true)
@@ -40,6 +42,11 @@ public class PointServiceImpl implements PointService {
         if (semester == null) {
             semester = semesterRepository.findByIsActiveTrue()
                     .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong co hoc ky nao"));
+        }
+
+        Optional<PointSummaryResponse> cached = pointCacheService.getSummary(studentId, semester.getId());
+        if (cached.isPresent()) {
+            return cached.get();
         }
 
         List<Benefits> earnedBenefits = benefitRepository.findByStudentIdAndSemesterId(studentId, semester.getId());
@@ -56,7 +63,7 @@ public class PointServiceImpl implements PointService {
 
         String status = calculateStatus(percentage);
 
-        return PointSummaryResponse.builder()
+        PointSummaryResponse response = PointSummaryResponse.builder()
                 .studentId(studentId)
                 .studentCode(student.getStudentCode())
                 .studentName(student.getFullName())
@@ -69,6 +76,8 @@ public class PointServiceImpl implements PointService {
                 .categoryBreakdown(breakdown)
                 .warnings(warnings)
                 .build();
+        pointCacheService.putSummary(studentId, semester.getId(), response);
+        return response;
     }
 
     @Override
@@ -78,6 +87,11 @@ public class PointServiceImpl implements PointService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         Semesters semester = resolveSemester(semesterId);
+
+        Optional<PointDetailsResponse> cached = pointCacheService.getDetails(studentId, semester.getId());
+        if (cached.isPresent()) {
+            return cached.get();
+        }
 
         List<Benefits> earnedBenefits = benefitRepository.findByStudentIdAndSemesterId(studentId, semester.getId());
 
@@ -89,13 +103,15 @@ public class PointServiceImpl implements PointService {
 
         List<CategoryDetail> categories = buildCategoryDetails(earnedBenefits);
 
-        return PointDetailsResponse.builder()
+        PointDetailsResponse response = PointDetailsResponse.builder()
                 .studentId(studentId)
                 .semesterId(semester.getId())
                 .totalPoint(totalPoint)
                 .maxPoint(maxPoint)
                 .categories(categories)
                 .build();
+        pointCacheService.putDetails(studentId, semester.getId(), response);
+        return response;
     }
 
     @Override
@@ -103,11 +119,18 @@ public class PointServiceImpl implements PointService {
     public List<CategoryPointResponse> getCategoriesWithPoints(Long semesterId) {
         Semesters semester = resolveSemester(semesterId);
 
+        Optional<List<CategoryPointResponse>> cached = pointCacheService.getCategories(semester.getId());
+        if (cached.isPresent()) {
+            return cached.get();
+        }
+
         List<Categories> rootCategories = categoryRepository.findRootCategories(semester.getId());
 
-        return rootCategories.stream()
+        List<CategoryPointResponse> response = rootCategories.stream()
                 .map(this::buildCategoryTree)
                 .collect(Collectors.toList());
+        pointCacheService.putCategories(semester.getId(), response);
+        return response;
     }
 
     @Override

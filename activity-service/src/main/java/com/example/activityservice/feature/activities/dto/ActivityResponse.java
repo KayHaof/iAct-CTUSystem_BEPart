@@ -49,4 +49,9 @@ public class ActivityResponse {
     private List<BenefitResponse> benefits;
 
     private List<ActivityScheduleDto> schedules;
+
+    private String semesterName;
+    private String academicYear;
+    private String semesterDisplayName;
+    private String statusLabel;
 }

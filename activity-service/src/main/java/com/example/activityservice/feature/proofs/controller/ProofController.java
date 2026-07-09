@@ -4,8 +4,12 @@ import com.example.activityservice.feature.proofs.dto.ProofResponse;
 import com.example.activityservice.feature.proofs.dto.ProofSubmissionRequest;
 import com.example.activityservice.feature.proofs.service.ProofService;
 import com.example.dto.ApiResponse;
+import com.example.dto.PageDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +18,17 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ProofController {
     private final ProofService proofService;
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
+    public ApiResponse<PageDTO<ProofResponse>> getProofs(
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) Long activityId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ApiResponse.success(proofService.getProofs(status, activityId, pageable));
+    }
 
     @PostMapping("/submit")
     @PreAuthorize("hasRole('STUDENT')")

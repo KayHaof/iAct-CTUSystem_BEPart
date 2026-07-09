@@ -1,7 +1,6 @@
 package com.example.activityservice.feature.semesters.model;
 
 import com.example.activityservice.feature.activities.model.Activities;
-import com.example.activityservice.feature.complaints.model.Complaints;
 import com.example.activityservice.feature.student_awards.model.Student_awards;
 import jakarta.persistence.*;
 import lombok.*;
@@ -48,9 +47,6 @@ public class Semesters {
     // Các liên kết ngược
     @OneToMany(mappedBy = "semester")
     private List<Activities> activities;
-
-    @OneToMany(mappedBy = "semester")
-    private List<Complaints> complaints;
 
     @OneToMany(mappedBy = "semester")
     private List<Student_awards> studentAwards;
