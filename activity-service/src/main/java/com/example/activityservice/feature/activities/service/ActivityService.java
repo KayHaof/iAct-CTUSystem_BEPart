@@ -12,9 +12,13 @@ public interface ActivityService {
 
     ActivityResponse getActivityById(Long id);
 
+    ActivityResponse getMyCreatedActivity(Long id);
+
     ActivityTimeLocationResponse getActivityTimesAndLocation(Long id);
 
     PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId, Pageable pageable);
+
+    PageDTO<ActivityResponse> getMyCreatedActivities(Pageable pageable);
 
     ActivityResponse updateActivity(Long id, ActivityRequest request);
 

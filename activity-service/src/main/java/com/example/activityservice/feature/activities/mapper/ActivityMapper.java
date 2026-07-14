@@ -54,6 +54,9 @@ public interface ActivityMapper {
     @Mapping(target = "departmentId", source = "departmentId")
     OrganizerResponse toOrganizerResponse(Organizers organizer);
 
+    @Mapping(target = "locationId", source = "locationRef.id")
+    @Mapping(target = "locationName", source = "locationRef.name")
+    @Mapping(target = "locationCode", source = "locationRef.code")
     ActivityScheduleDto toScheduleDto(ActivitySchedule schedule);
 
     List<ActivityScheduleDto> toScheduleDtoList(List<ActivitySchedule> schedules);

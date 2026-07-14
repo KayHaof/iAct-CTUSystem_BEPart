@@ -19,6 +19,7 @@ public interface ActivityRepository extends JpaRepository<Activities, Long>, Jpa
     List<Activities> findByStatus(Integer status);
     long countByStatus(Integer status);
     boolean existsBySemesterId(Long semesterId);
+    Page<Activities> findByCreatedById(Long createdById, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM Activities a WHERE a.id = :id")

@@ -29,7 +29,7 @@ public class UserController {
     private final UserProjectionReplayService userProjectionReplayService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ApiResponse<PageDTO<UserResponse>> getAllUsers(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,

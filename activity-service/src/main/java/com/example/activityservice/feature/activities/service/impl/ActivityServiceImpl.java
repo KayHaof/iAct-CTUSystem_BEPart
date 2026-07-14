@@ -37,6 +37,11 @@ public class ActivityServiceImpl implements ActivityService {
     }
 
     @Override
+    public ActivityResponse getMyCreatedActivity(Long id) {
+        return queryOperations.getMyCreatedActivity(id);
+    }
+
+    @Override
     public ActivityTimeLocationResponse getActivityTimesAndLocation(Long id) {
         return queryOperations.getActivityTimesAndLocation(id);
     }
@@ -45,6 +50,11 @@ public class ActivityServiceImpl implements ActivityService {
     public PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId,
             Pageable pageable) {
         return queryOperations.getAllActivities(keyword, level, status, departmentId, pageable);
+    }
+
+    @Override
+    public PageDTO<ActivityResponse> getMyCreatedActivities(Pageable pageable) {
+        return queryOperations.getMyCreatedActivities(pageable);
     }
 
     @Override

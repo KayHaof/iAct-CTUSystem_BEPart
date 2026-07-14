@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ActivityQueryOperations {
+    private static final int STATUS_APPROVED = 1;
 
     private final ActivityRepository activityRepository;
     private final OrganizerRepository organizerRepository;
@@ -46,14 +47,28 @@ public class ActivityQueryOperations {
         Activities activity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong"));
 
+        ensureCurrentStudentCanRead(activity);
+
+        return buildDetailResponse(activity);
+    }
+
+    @Transactional(readOnly = true)
+    public ActivityResponse getMyCreatedActivity(Long id) {
+        Activities activity = activityRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong"));
+
         Users currentUser = accessSupport.getCurrentUserOrNull();
-        if (accessSupport.isCurrentStudent() && !accessSupport.isVisibleToStudent(activity, currentUser)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem hoat dong nay.");
+        if (!accessSupport.isCreatedBy(activity, currentUser)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem de xuat hoat dong nay.");
         }
 
+        return buildDetailResponse(activity);
+    }
+
+    private ActivityResponse buildDetailResponse(Activities activity) {
         ActivityResponse response = responseAssembler.toResponse(activity);
         response.setBenefits(responseAssembler.getActivityBenefits(activity.getId()));
-        long count = registrationRepository.countByActivityIdAndStatusNot(id, 2);
+        long count = registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2);
         response.setRegisteredCount((int) count);
         return response;
     }
@@ -62,7 +77,20 @@ public class ActivityQueryOperations {
         Activities activity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
                         "Khong tim thay hoat dong voi ID: " + id));
+        ensureCurrentStudentCanRead(activity);
         return activityMapper.toTimeResponse(activity);
+    }
+
+    private void ensureCurrentStudentCanRead(Activities activity) {
+        Users currentUser = accessSupport.getCurrentUserOrNull();
+        if (!accessSupport.isCurrentStudent() || accessSupport.isCreatedBy(activity, currentUser)) {
+            return;
+        }
+
+        boolean isApproved = Integer.valueOf(STATUS_APPROVED).equals(activity.getStatus());
+        if (!isApproved || !accessSupport.isVisibleToStudent(activity, currentUser)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem hoat dong nay.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -127,6 +155,28 @@ public class ActivityQueryOperations {
                     ActivityResponse response = responseAssembler.toResponseWithoutDepartment(activity);
                     long count = registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2);
                     response.setRegisteredCount((int) count);
+                    return response;
+                })
+                .collect(Collectors.toList());
+        responseAssembler.enrichDepartmentNames(dtoList);
+
+        return activityMapper.toPageDTO(pageActivities, dtoList);
+    }
+
+    @Transactional(readOnly = true)
+    public PageDTO<ActivityResponse> getMyCreatedActivities(Pageable pageable) {
+        Users currentUser = accessSupport.getCurrentUserOrNull();
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Vui long dang nhap de xem hoat dong da gui.");
+        }
+
+        Page<Activities> pageActivities = activityRepository.findByCreatedById(currentUser.getId(), pageable);
+        List<ActivityResponse> dtoList = pageActivities.getContent().stream()
+                .map(activity -> {
+                    ActivityResponse response = responseAssembler.toResponse(activity);
+                    long count = registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2);
+                    response.setRegisteredCount((int) count);
+                    response.setBenefits(responseAssembler.getActivityBenefits(activity.getId()));
                     return response;
                 })
                 .collect(Collectors.toList());

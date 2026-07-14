@@ -1,6 +1,7 @@
 package com.example.activityservice.feature.activitySchedule.model;
 
 import com.example.activityservice.feature.activities.model.Activities;
+import com.example.activityservice.feature.locations.model.Location;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -30,6 +31,10 @@ public class ActivitySchedule {
     private LocalDateTime endTime;
 
     private String location;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id")
+    private Location locationRef;
 
     public ActivitySchedule() {}
 

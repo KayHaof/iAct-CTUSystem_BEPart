@@ -55,4 +55,11 @@ public class ActivityAccessSupport {
                 && student.getDepartmentId() != null
                 && Objects.equals(student.getDepartmentId(), activity.getDepartmentId());
     }
+
+    public boolean isCreatedBy(Activities activity, Users user) {
+        return activity != null
+                && user != null
+                && activity.getCreatedBy() != null
+                && Objects.equals(activity.getCreatedBy().getId(), user.getId());
+    }
 }

@@ -10,4 +10,7 @@ public class ActivityScheduleDto {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String location;
+    private Long locationId;
+    private String locationName;
+    private String locationCode;
 }

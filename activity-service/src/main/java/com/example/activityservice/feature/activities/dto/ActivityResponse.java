@@ -3,6 +3,7 @@ package com.example.activityservice.feature.activities.dto;
 import com.example.activityservice.common.dto.UserDto;
 import com.example.activityservice.feature.activitySchedule.dto.ActivityScheduleDto;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
+import com.example.activityservice.feature.locations.dto.LocationBookingResponse;
 import com.example.activityservice.feature.organizers.dto.OrganizerResponse;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -49,6 +50,8 @@ public class ActivityResponse {
     private List<BenefitResponse> benefits;
 
     private List<ActivityScheduleDto> schedules;
+
+    private List<LocationBookingResponse> locationBookings;
 
     private String semesterName;
     private String academicYear;

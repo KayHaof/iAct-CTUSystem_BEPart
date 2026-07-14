@@ -121,6 +121,28 @@ CREATE TABLE `student_profiles` (
     CONSTRAINT `fk_student_class` FOREIGN KEY (`class_id`) REFERENCES `classes`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS `class_representatives`;
+CREATE TABLE `class_representatives` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `class_id` BIGINT NOT NULL,
+    `student_id` BIGINT NOT NULL,
+    `representative_type` VARCHAR(50) NOT NULL,
+    `is_active` TINYINT DEFAULT 1,
+    `start_date` DATE,
+    `end_date` DATE,
+    `assigned_by` BIGINT,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_class_representative_class` (`class_id`),
+    KEY `idx_class_representative_student` (`student_id`),
+    KEY `idx_class_representative_active` (`student_id`, `is_active`, `start_date`, `end_date`),
+    KEY `fk_class_representative_assigned_by` (`assigned_by`),
+    CONSTRAINT `fk_class_representative_class` FOREIGN KEY (`class_id`) REFERENCES `classes`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_class_representative_student` FOREIGN KEY (`student_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_class_representative_assigned_by` FOREIGN KEY (`assigned_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP TABLE IF EXISTS `department_profiles`;
 CREATE TABLE `department_profiles` (
     `user_id` BIGINT NOT NULL,
@@ -225,7 +247,38 @@ CREATE TABLE `organizers` (
     KEY `idx_organizer_dept` (`department_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS `activity_location_bookings`;
 DROP TABLE IF EXISTS `activities`;
+DROP TABLE IF EXISTS `locations`;
+CREATE TABLE `locations` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(150) NOT NULL,
+    `code` VARCHAR(50),
+    `type` VARCHAR(50) NOT NULL,
+    `description` TEXT,
+    `address` VARCHAR(255),
+    `building` VARCHAR(100),
+    `floor_label` VARCHAR(50),
+    `room` VARCHAR(50),
+    `capacity` INT,
+    `manager_department_id` BIGINT,
+    `manager_user_id` BIGINT,
+    `contact_name` VARCHAR(100),
+    `contact_phone` VARCHAR(30),
+    `is_bookable` TINYINT DEFAULT 1,
+    `availability_status` VARCHAR(30) DEFAULT 'AVAILABLE',
+    `is_active` TINYINT DEFAULT 1,
+    `unavailable_reason` TEXT,
+    `note` TEXT,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_locations_code` (`code`),
+    KEY `idx_locations_type` (`type`),
+    KEY `idx_locations_manager_department` (`manager_department_id`),
+    KEY `idx_locations_bookable` (`is_active`, `is_bookable`, `availability_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `activities` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `title` VARCHAR(255) NOT NULL,
@@ -274,11 +327,41 @@ CREATE TABLE `activity_schedules` (
     `start_time` DATETIME NOT NULL,
     `end_time` DATETIME NOT NULL,
     `location` VARCHAR(255),
+    `location_id` BIGINT,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `fk_schedule_activity` (`activity_id`),
-    CONSTRAINT `fk_schedule_activity` FOREIGN KEY (`activity_id`) REFERENCES `activities`(`id`) ON DELETE CASCADE
+    KEY `fk_schedule_location` (`location_id`),
+    CONSTRAINT `fk_schedule_activity` FOREIGN KEY (`activity_id`) REFERENCES `activities`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_schedule_location` FOREIGN KEY (`location_id`) REFERENCES `locations`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `activity_location_bookings`;
+CREATE TABLE `activity_location_bookings` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `activity_id` BIGINT NOT NULL,
+    `location_id` BIGINT NOT NULL,
+    `schedule_id` BIGINT,
+    `title` VARCHAR(255),
+    `start_time` DATETIME NOT NULL,
+    `end_time` DATETIME NOT NULL,
+    `status` TINYINT DEFAULT 0,
+    `requested_by` BIGINT,
+    `approved_by` BIGINT,
+    `approved_at` DATETIME,
+    `rejected_reason` TEXT,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `fk_location_booking_activity` (`activity_id`),
+    KEY `fk_location_booking_location` (`location_id`),
+    KEY `fk_location_booking_schedule` (`schedule_id`),
+    KEY `idx_location_booking_lookup` (`location_id`, `status`, `start_time`, `end_time`),
+    KEY `idx_location_booking_activity_status` (`activity_id`, `status`),
+    CONSTRAINT `fk_location_booking_activity` FOREIGN KEY (`activity_id`) REFERENCES `activities`(`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_location_booking_location` FOREIGN KEY (`location_id`) REFERENCES `locations`(`id`) ON DELETE RESTRICT,
+    CONSTRAINT `fk_location_booking_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `activity_schedules`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `registrations`;

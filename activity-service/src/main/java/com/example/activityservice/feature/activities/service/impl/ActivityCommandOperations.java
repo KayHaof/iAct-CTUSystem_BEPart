@@ -15,12 +15,18 @@ import com.example.activityservice.feature.benefits.model.Benefits;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
 import com.example.activityservice.feature.benefits.service.BenefitValidationService;
 import com.example.activityservice.feature.categories.model.Categories;
+import com.example.activityservice.feature.locations.model.Location;
+import com.example.activityservice.feature.locations.repository.LocationRepository;
+import com.example.activityservice.feature.locations.dto.LocationBookingResponse;
+import com.example.activityservice.feature.locations.service.ActivityLocationBookingService;
 import com.example.activityservice.feature.organizers.model.Organizers;
 import com.example.activityservice.feature.organizers.repository.OrganizerRepository;
 import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.semesters.repository.SemesterRepository;
 import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.service.LocalUserResolver;
+import com.example.activityservice.feature.users.service.StudentRepresentativePermissionClient;
+import com.example.activityservice.feature.users.dto.RepresentativeActivityPermissionResponse;
 import com.example.activityservice.service.CloudinaryService;
 import com.example.activityservice.service.QRCodeService;
 import com.example.event.ActivityDeletedEvent;
@@ -45,6 +51,10 @@ import java.util.Optional;
 @Slf4j
 public class ActivityCommandOperations {
 
+    private static final int ROLE_STUDENT = 1;
+    private static final int ROLE_DEPARTMENT = 2;
+    private static final int ROLE_ADMIN = 3;
+
     private final ActivityRepository activityRepository;
     private final SemesterRepository semesterRepository;
     private final OrganizerRepository organizerRepository;
@@ -60,22 +70,43 @@ public class ActivityCommandOperations {
     private final ActivityEventProducer activityEventProducer;
     private final ActivityResponseAssembler responseAssembler;
     private final ActivityCacheService activityCacheService;
+    private final StudentRepresentativePermissionClient representativePermissionClient;
+    private final ActivityLocationBookingService locationBookingService;
+    private final LocationRepository locationRepository;
 
     @Transactional
     public ActivityResponse createActivity(ActivityRequest request) {
         boolean isDraft = Integer.valueOf(3).equals(request.getStatus());
+        Users currentUser = resolveCurrentCreator();
+        boolean studentCreator = isStudent(currentUser);
+        RepresentativeActivityPermissionResponse representativePermission = studentCreator
+                ? validateStudentRepresentativePermission(currentUser)
+                : null;
+        if (studentCreator && isDraft) {
+            validateStudentDraftMinimum(request);
+        }
         Semesters semester = resolveSemesterForCreate(request, isDraft);
-        Organizers organizer = resolveOrganizer(request);
+        Organizers organizer = resolveOrganizer(request, currentUser, studentCreator);
 
         Activities activity = activityMapper.toEntity(request, organizer);
         if (semester != null) {
             activity.setSemester(semester);
         }
-        applyCurrentCreator(activity);
+        applyCurrentCreator(activity, currentUser);
+        if (studentCreator) {
+            applyStudentRepresentativeFlow(activity, representativePermission, isDraft);
+        } else {
+            applyInstitutionFlow(activity, currentUser, isDraft);
+        }
         applySchedules(activity, request);
 
         Activities savedActivity = activityRepository.save(activity);
         List<BenefitResponse> savedBenefits = replaceActivityBenefits(savedActivity, request.getBenefits());
+        List<LocationBookingResponse> savedBookings = locationBookingService.replaceBookings(
+                savedActivity,
+                request.getLocationBookings(),
+                currentUser,
+                savedActivity.getStatus());
 
         if (savedActivity.getStatus() != 3) {
             log.info("Hoat dong da duoc tao va gui duyet thanh cong!");
@@ -85,8 +116,11 @@ public class ActivityCommandOperations {
 
         ActivityResponse response = responseAssembler.toResponse(savedActivity);
         response.setBenefits(savedBenefits);
+        response.setLocationBookings(savedBookings);
         activityEventProducer.publishCreated(savedActivity);
-        if (savedActivity.getStatus() != 3) {
+        if (savedActivity.getStatus() == 1) {
+            activityEventProducer.publishApproved(savedActivity);
+        } else if (savedActivity.getStatus() != 3) {
             activityEventProducer.publishSubmitted(savedActivity);
         }
         activityCacheService.evictActivityListCaches();
@@ -97,6 +131,14 @@ public class ActivityCommandOperations {
     public ActivityResponse updateActivity(Long id, ActivityRequest request) {
         Activities existingActivity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong!"));
+        Users currentUser = resolveCurrentCreator();
+
+        if (isStudent(currentUser)) {
+            validateStudentRepresentativePermission(currentUser);
+            if (Integer.valueOf(3).equals(request.getStatus())) {
+                validateStudentDraftMinimum(request);
+            }
+        }
 
         if (existingActivity.getStatus() != 0 && existingActivity.getStatus() != 3) {
             throw new AppException(ErrorCode.INVALID_ACTION,
@@ -137,8 +179,7 @@ public class ActivityCommandOperations {
             } else {
                 existingActivity.setSchedules(new ArrayList<>());
             }
-            List<ActivitySchedule> newSchedules = scheduleMapper.toEntityList(request.getSchedules());
-            newSchedules.forEach(schedule -> schedule.setActivity(existingActivity));
+            List<ActivitySchedule> newSchedules = buildSchedules(existingActivity, request);
             existingActivity.getSchedules().addAll(newSchedules);
         }
 
@@ -146,11 +187,19 @@ public class ActivityCommandOperations {
         if (request.getBenefits() != null) {
             replaceActivityBenefits(updatedActivity, request.getBenefits());
         }
+        if (request.getLocationBookings() != null) {
+            locationBookingService.replaceBookings(
+                    updatedActivity,
+                    request.getLocationBookings(),
+                    existingActivity.getCreatedBy(),
+                    updatedActivity.getStatus());
+        }
 
         activityEventProducer.publishUpdated(updatedActivity);
 
         ActivityResponse response = responseAssembler.toResponse(updatedActivity);
         response.setBenefits(responseAssembler.getActivityBenefits(updatedActivity.getId()));
+        response.setLocationBookings(locationBookingService.getBookingsByActivityId(updatedActivity.getId()));
         activityCacheService.evictActivityListCaches();
         return response;
     }
@@ -201,7 +250,10 @@ public class ActivityCommandOperations {
         return null;
     }
 
-    private Organizers resolveOrganizer(ActivityRequest request) {
+    private Organizers resolveOrganizer(ActivityRequest request, Users currentUser, boolean studentCreator) {
+        if (studentCreator) {
+            return getOrCreateOrganizer(currentUser);
+        }
         if (request.getOrganizerId() == null) {
             return null;
         }
@@ -209,24 +261,122 @@ public class ActivityCommandOperations {
         return getOrCreateOrganizer(user);
     }
 
-    private void applyCurrentCreator(Activities activity) {
+    private Users resolveCurrentCreator() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()) {
-            String currentUsername = authentication.getName();
-            Users currentUser = localUserResolver.resolveByUsername(currentUsername);
-
-            activity.setCreatedBy(currentUser);
-            activity.setCreatedByUsername(currentUsername);
-            activity.setDepartmentId(currentUser.getDepartmentId());
+            return localUserResolver.resolveByUsername(authentication.getName());
         }
+        return null;
+    }
+
+    private void applyCurrentCreator(Activities activity, Users currentUser) {
+        if (currentUser == null) {
+            return;
+        }
+        activity.setCreatedBy(currentUser);
+        activity.setCreatedByUsername(currentUser.getUsername());
+        activity.setDepartmentId(currentUser.getDepartmentId());
+    }
+
+    private boolean isStudent(Users user) {
+        return user != null && Integer.valueOf(ROLE_STUDENT).equals(user.getRoleType());
+    }
+
+    private RepresentativeActivityPermissionResponse validateStudentRepresentativePermission(Users currentUser) {
+        RepresentativeActivityPermissionResponse permission =
+                representativePermissionClient.getCurrentStudentActivityPermission();
+        if (permission == null
+                || !permission.isCanCreateActivity()
+                || !Objects.equals(permission.getStudentId(), currentUser.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN,
+                    "Chi sinh vien dai dien lop/chi doan moi duoc dang ky to chuc hoat dong.");
+        }
+        return permission;
+    }
+
+    private void validateStudentDraftMinimum(ActivityRequest request) {
+        if (isBlank(request.getTitle())
+                || isBlank(request.getDescription())
+                || isBlank(request.getContent())
+                || request.getRegistrationStart() == null
+                || request.getRegistrationEnd() == null
+                || request.getStartDate() == null
+                || request.getEndDate() == null
+                || request.getMaxParticipants() == null
+                || request.getMaxParticipants() <= 0) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Ban nhap can co ten, mo ta, noi dung, thoi gian dang ky, thoi gian to chuc va suc chua.");
+        }
+
+        if (!request.getRegistrationEnd().isAfter(request.getRegistrationStart())) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Thoi gian dong dang ky phai sau thoi gian mo dang ky.");
+        }
+        if (!request.getStartDate().isAfter(request.getRegistrationEnd())) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Thoi gian to chuc phai sau khi dong dang ky.");
+        }
+        if (!request.getEndDate().isAfter(request.getStartDate())) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Thoi gian ket thuc phai sau thoi gian bat dau.");
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private void applyStudentRepresentativeFlow(
+            Activities activity,
+            RepresentativeActivityPermissionResponse permission,
+            boolean isDraft) {
+        activity.setDepartmentId(
+                permission.getDepartmentId() != null ? permission.getDepartmentId() : activity.getDepartmentId());
+        activity.setIsExternal(false);
+        activity.setIsFaculty(true);
+        activity.setStatus(isDraft ? 3 : 0);
+    }
+
+    private void applyInstitutionFlow(Activities activity, Users currentUser, boolean isDraft) {
+        if (isDraft || currentUser == null) {
+            return;
+        }
+        if (Integer.valueOf(ROLE_ADMIN).equals(currentUser.getRoleType())) {
+            activity.setStatus(1);
+            return;
+        }
+        if (Integer.valueOf(ROLE_DEPARTMENT).equals(currentUser.getRoleType())) {
+            activity.setStatus(0);
+        }
+    }
+
+    private boolean isFacultyInternalActivity(Activities activity) {
+        return Boolean.TRUE.equals(activity.getIsFaculty()) && !Boolean.TRUE.equals(activity.getIsExternal());
     }
 
     private void applySchedules(Activities activity, ActivityRequest request) {
         if (request.getSchedules() != null && !request.getSchedules().isEmpty()) {
-            List<ActivitySchedule> schedulesList = scheduleMapper.toEntityList(request.getSchedules());
-            schedulesList.forEach(schedule -> schedule.setActivity(activity));
+            List<ActivitySchedule> schedulesList = buildSchedules(activity, request);
             activity.setSchedules(schedulesList);
         }
+    }
+
+    private List<ActivitySchedule> buildSchedules(Activities activity, ActivityRequest request) {
+        List<ActivitySchedule> schedulesList = scheduleMapper.toEntityList(request.getSchedules());
+        for (int index = 0; index < schedulesList.size(); index++) {
+            ActivitySchedule schedule = schedulesList.get(index);
+            schedule.setActivity(activity);
+            Long locationId = request.getSchedules().get(index).getLocationId();
+            if (locationId == null) {
+                continue;
+            }
+            Location location = locationRepository.findById(locationId)
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
+                            "Khong tim thay dia diem cua buoi hoat dong."));
+            schedule.setLocationRef(location);
+            schedule.setLocation(location.getName());
+        }
+        return schedulesList;
     }
 
     private List<BenefitResponse> replaceActivityBenefits(

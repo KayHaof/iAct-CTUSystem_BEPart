@@ -2,6 +2,7 @@ package com.example.activityservice.feature.activities.dto;
 
 import com.example.activityservice.feature.activitySchedule.dto.ActivityScheduleDto;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
+import com.example.activityservice.feature.locations.dto.LocationBookingRequest;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,4 +35,6 @@ public class ActivityRequest {
     private List<BenefitResponse> benefits;
 
     private List<ActivityScheduleDto> schedules;
+
+    private List<LocationBookingRequest> locationBookings;
 }

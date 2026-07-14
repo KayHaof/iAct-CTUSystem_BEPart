@@ -8,6 +8,7 @@ import com.example.activityservice.feature.activities.kafka.ActivityEventProduce
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.service.ActivityCacheService;
+import com.example.activityservice.feature.locations.service.ActivityLocationBookingService;
 import com.example.activityservice.feature.notification.kafka.NotificationCommandProducer;
 import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.semesters.repository.SemesterRepository;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +41,7 @@ public class AdminActivityOperations {
     private final ActivityEventProducer activityEventProducer;
     private final NotificationCommandProducer notificationCommandProducer;
     private final ActivityCacheService activityCacheService;
+    private final ActivityLocationBookingService locationBookingService;
 
     @Transactional
     public void approveActivity(Long id) {
@@ -46,12 +49,14 @@ public class AdminActivityOperations {
         if (activity.getStatus() != 0) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Chi duyet duoc hoat dong Cho duyet.");
         }
+        Users reviewer = getCurrentReviewer();
+        validateApprovalPermission(activity, reviewer);
 
         activity.setStatus(1);
-        Users admin = getCurrentAdmin();
-        activity.setHandledBy(admin);
+        activity.setHandledBy(reviewer);
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
+        locationBookingService.approveBookingsForActivity(savedActivity.getId(), reviewer);
 
         activityEventProducer.publishApproved(savedActivity);
         dispatchFacultyRegistrationOpenNotifications(savedActivity);
@@ -64,13 +69,15 @@ public class AdminActivityOperations {
         if (activity.getStatus() != 0) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Chi tu choi duoc hoat dong Cho duyet.");
         }
+        Users reviewer = getCurrentReviewer();
+        validateApprovalPermission(activity, reviewer);
 
         activity.setStatus(2);
         activity.setReason(reason != null && !reason.isBlank() ? reason : "Khong co ly do");
-        Users admin = getCurrentAdmin();
-        activity.setHandledBy(admin);
+        activity.setHandledBy(reviewer);
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
+        locationBookingService.rejectBookingsForActivity(savedActivity.getId(), reviewer, activity.getReason());
 
         activityEventProducer.publishRejected(savedActivity);
         activityCacheService.evictActivityListCaches();
@@ -85,10 +92,11 @@ public class AdminActivityOperations {
 
         activity.setStatus(4);
         activity.setReason(reason != null && !reason.isBlank() ? reason : "Su co ngoai y muon");
-        Users admin = getCurrentAdmin();
-        activity.setHandledBy(admin);
+        Users reviewer = getCurrentReviewer();
+        activity.setHandledBy(reviewer);
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
+        locationBookingService.cancelBookingsForActivity(savedActivity.getId(), reviewer, activity.getReason());
 
         activityEventProducer.publishCancelled(savedActivity);
         activityCacheService.evictActivityListCaches();
@@ -181,13 +189,46 @@ public class AdminActivityOperations {
         return activity;
     }
 
-    private Users getCurrentAdmin() {
+    private Users getCurrentReviewer() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated()
                 && !(authentication instanceof AnonymousAuthenticationToken)) {
             return userRepository.findByUsername(authentication.getName()).orElse(null);
         }
         return null;
+    }
+
+    private void validateApprovalPermission(Activities activity, Users reviewer) {
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            if (isStudentRepresentativeActivity(activity)) {
+                throw new AppException(ErrorCode.FORBIDDEN,
+                        "Admin chi duyet hoat dong do Truong/Khoa gui len.");
+            }
+            return;
+        }
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            if (reviewer == null
+                    || reviewer.getDepartmentId() == null
+                    || !Objects.equals(reviewer.getDepartmentId(), activity.getDepartmentId())
+                    || !isStudentRepresentativeActivity(activity)) {
+                throw new AppException(ErrorCode.FORBIDDEN,
+                        "Don vi chi duyet hoat dong do dai dien lop/chi doan thuoc khoa/vien cua minh gui len.");
+            }
+            return;
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen duyet hoat dong nay.");
+    }
+
+    private boolean isStudentRepresentativeActivity(Activities activity) {
+        return activity.getCreatedBy() != null
+                && Integer.valueOf(1).equals(activity.getCreatedBy().getRoleType());
+    }
+
+    private boolean hasCurrentRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> Objects.equals(authority.getAuthority(), role));
     }
 
     private void dispatchFacultyRegistrationOpenNotifications(Activities activity) {

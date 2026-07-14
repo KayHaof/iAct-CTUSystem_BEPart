@@ -29,7 +29,7 @@ public class ActivityController {
 
     // --- CREATE ---
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT', 'OTHER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT', 'OTHER', 'STUDENT')")
     public ResponseEntity<ApiResponse<ActivityResponse>> createActivity(@RequestBody ActivityRequest request) {
         ActivityResponse response = activityService.createActivity(request);
         return new ResponseEntity<>(ApiResponse.success(response), HttpStatus.CREATED);
@@ -50,6 +50,23 @@ public class ActivityController {
         return ResponseEntity.ok(
                 ApiResponse.success(activityService.getAllActivities(keyword, level, status, departmentId, customPageable))
         );
+    }
+
+    @GetMapping("/my-created")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<PageDTO<ActivityResponse>>> getMyCreatedActivities(
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size
+    ) {
+        int pageNumber = page > 0 ? page - 1 : 0;
+        Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ResponseEntity.ok(ApiResponse.success(activityService.getMyCreatedActivities(pageable)));
+    }
+
+    @GetMapping("/my-created/{id}")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<ApiResponse<ActivityResponse>> getMyCreatedActivity(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(activityService.getMyCreatedActivity(id)));
     }
 
     // --- READ ONE ---
@@ -88,7 +105,7 @@ public class ActivityController {
 
     // --- APPROVE ---
     @PutMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<String>> approveActivity(@PathVariable Long id) {
         activityService.approveActivity(id);
         return ResponseEntity.ok(ApiResponse.success("Phê duyệt hoạt động thành công!"));
@@ -96,7 +113,7 @@ public class ActivityController {
 
     // --- REJECT ---
     @PutMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<String>> rejectActivity(
             @PathVariable Long id,
             @RequestBody ActivityReasonRequest request) {

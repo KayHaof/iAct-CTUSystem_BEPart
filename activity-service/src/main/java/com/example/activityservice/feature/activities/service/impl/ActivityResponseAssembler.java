@@ -6,6 +6,7 @@ import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
 import com.example.activityservice.feature.benefits.mapper.BenefitMapper;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
+import com.example.activityservice.feature.locations.service.ActivityLocationBookingService;
 import com.example.activityservice.feature.users.service.LocalDepartmentResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ public class ActivityResponseAssembler {
     private final BenefitMapper benefitMapper;
     private final BenefitRepository benefitRepository;
     private final LocalDepartmentResolver localDepartmentResolver;
+    private final ActivityLocationBookingService locationBookingService;
 
     public ActivityResponse toResponse(Activities activity) {
         ActivityResponse response = activityMapper.toResponse(activity);
@@ -83,6 +85,9 @@ public class ActivityResponseAssembler {
         }
         response.setSemesterDisplayName(buildSemesterDisplayName(response));
         response.setStatusLabel(toStatusLabel(response.getStatus()));
+        if (response.getId() != null) {
+            response.setLocationBookings(locationBookingService.getBookingsByActivityId(response.getId()));
+        }
     }
 
     private void enrichDepartmentName(ActivityResponse response) {
