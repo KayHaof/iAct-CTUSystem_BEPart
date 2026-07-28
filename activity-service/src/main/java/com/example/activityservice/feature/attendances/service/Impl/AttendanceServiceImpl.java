@@ -4,19 +4,24 @@ import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.attendances.dto.AttendanceResponse;
 import com.example.activityservice.feature.attendances.dto.AttendanceStatisticsResponse;
 import com.example.activityservice.feature.attendances.dto.CheckInRequest;
-import com.example.activityservice.feature.attendances.dto.QRVerifyRequest;
+import com.example.activityservice.feature.attendances.dto.FaceCheckInRequest;
+import com.example.activityservice.feature.attendances.dto.FaceCheckInResponse;
 import com.example.activityservice.feature.attendances.mapper.AttendanceMapper;
 import com.example.activityservice.feature.attendances.model.Attendances;
+import com.example.activityservice.feature.attendances.model.FaceCheckInAttempt;
 import com.example.activityservice.feature.attendances.repository.AttendanceRepository;
+import com.example.activityservice.feature.attendances.repository.FaceCheckInAttemptRepository;
 import com.example.activityservice.feature.attendances.service.AttendanceService;
+import com.example.activityservice.feature.face_embedding.ai.AiFaceVerificationClient;
+import com.example.activityservice.feature.face_embedding.ai.FaceVerificationResult;
+import com.example.activityservice.feature.face_embedding.model.StudentFaceEmbeddingProjection;
+import com.example.activityservice.feature.face_embedding.service.StudentFaceEmbeddingProjectionService;
 import com.example.activityservice.feature.registration.model.Registrations;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import com.example.activityservice.feature.registration.kafka.RegistrationKafkaProducer;
 import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.repository.UserRepository;
 import com.example.activityservice.service.ExcelExportService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
@@ -26,10 +31,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -38,13 +46,18 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AttendanceServiceImpl implements AttendanceService {
 
+    private static final int FACE_CHECK_IN_MAX_ATTEMPTS = 5;
+    private static final long MAX_LIVE_IMAGE_BYTES = 8L * 1024L * 1024L;
+
     private final AttendanceRepository attendanceRepository;
+    private final FaceCheckInAttemptRepository faceCheckInAttemptRepository;
     private final RegistrationRepository registrationRepository;
     private final UserRepository userRepository;
     private final AttendanceMapper attendanceMapper;
     private final ExcelExportService excelExportService;
     private final RegistrationKafkaProducer registrationKafkaProducer;
-    private final ObjectMapper objectMapper;
+    private final StudentFaceEmbeddingProjectionService faceEmbeddingProjectionService;
+    private final AiFaceVerificationClient aiFaceVerificationClient;
 
     private Users getCurrentStudent() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -55,50 +68,273 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Override
     @Transactional
     public AttendanceResponse checkIn(CheckInRequest request) {
-        Registrations registration = resolveCurrentStudentRegistration(request);
+        Registrations registration = resolveCurrentStudentRegistration(request.getActivityId());
+        validateActivityQrToken(registration.getActivity(), request.getVerifyCode());
 
-        return recordAttendance(
-                registration,
-                request.getMethod(),
-                request.getLatitude(),
-                request.getLongitude(),
-                "Ma diem danh",
-                "Check-in thanh cong!",
-                "Ban da duoc ghi nhan tham gia truoc do!"
-        );
+        Optional<Attendances> existing = attendanceRepository.findByRegistrationId(registration.getId());
+        if (existing.isPresent() && existing.get().getCheckinTime() != null) {
+            return attendanceMapper.toResponse(existing.get(), "Ban da check-in hoat dong nay truoc do.");
+        }
+
+        Attendances attendance = existing.orElseGet(Attendances::new);
+        attendance.setRegistration(registration);
+        attendance.setCheckinTime(LocalDateTime.now());
+        attendance.setMethod(request.getMethod() != null ? request.getMethod() : 1);
+        attendance.setLatitude(request.getLatitude());
+        attendance.setLongitude(request.getLongitude());
+        attendance = attendanceRepository.save(attendance);
+
+        return attendanceMapper.toResponse(attendance, "Check-in thanh cong. Vui long check-out sau khi hoan thanh hoat dong.");
     }
 
     @Override
     @Transactional
     public AttendanceResponse checkOut(CheckInRequest request) {
-        Registrations registration = resolveCurrentStudentRegistration(request);
+        Registrations registration = resolveCurrentStudentRegistration(request.getActivityId());
+        validateActivityQrToken(registration.getActivity(), request.getVerifyCode());
 
-        return recordCheckout(
-                registration,
-                "Check-out thanh cong!",
-                "Ban da duoc ghi nhan check-out truoc do!"
-        );
+        Attendances attendance = attendanceRepository.findByRegistrationId(registration.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION, "Ban phai check-in truoc khi check-out."));
+
+        if (attendance.getCheckinTime() == null) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Ban phai check-in truoc khi check-out.");
+        }
+
+        if (attendance.getCheckoutTime() != null) {
+            return attendanceMapper.toResponse(attendance, "Ban da check-out hoat dong nay truoc do.");
+        }
+
+        attendance.setCheckoutTime(LocalDateTime.now());
+        if (request.getLatitude() != null) {
+            attendance.setLatitude(request.getLatitude());
+        }
+        if (request.getLongitude() != null) {
+            attendance.setLongitude(request.getLongitude());
+        }
+        attendance = attendanceRepository.save(attendance);
+
+        return attendanceMapper.toResponse(attendance, "Check-out thanh cong. Ban co the xac minh khuon mat de mo nop minh chung.");
     }
 
-    private Registrations resolveCurrentStudentRegistration(CheckInRequest request) {
+    @Override
+    @Transactional
+    public FaceCheckInResponse faceCheckIn(FaceCheckInRequest request, MultipartFile liveImage) {
+        Registrations registration = resolveCurrentStudentRegistration(request.getActivityId());
+        Attendances attendance = resolveAttendanceReadyForFaceVerification(registration);
+        if (Integer.valueOf(1).equals(registration.getStatus())) {
+            return alreadyCheckedInResponse(attendance);
+        }
+
+        Long studentId = registration.getStudent() != null ? registration.getStudent().getId() : null;
+        StudentFaceEmbeddingProjection reference = faceEmbeddingProjectionService.getActive(studentId);
+
+        long existingAttempts = faceCheckInAttemptRepository.countByRegistrationId(registration.getId());
+        if (existingAttempts >= FACE_CHECK_IN_MAX_ATTEMPTS) {
+            return maxAttemptsExceededResponse((int) existingAttempts);
+        }
+
+        int attemptNo = (int) existingAttempts + 1;
+        FaceVerificationResult verification = verifyFace(reference, liveImage, attemptNo);
+        verification = normalizeVerification(verification, attemptNo);
+        saveFaceCheckInAttempt(registration, reference, verification);
+
+        if (!Boolean.TRUE.equals(verification.getVerified())) {
+            return toFaceCheckInResponse(verification, null);
+        }
+
+        faceEmbeddingProjectionService.markVerified(studentId, LocalDateTime.now());
+        registration.setStatus(1);
+        registrationRepository.save(registration);
+        registrationKafkaProducer.sendCheckInSuccess(
+                registration.getStudent().getId(),
+                registration.getActivity().getId(),
+                registration.getActivity().getTitle(),
+                "Xac thuc khuon mat"
+        );
+
+        AttendanceResponse attendanceResponse = attendanceMapper.toResponse(
+                attendance,
+                "Xac thuc khuon mat thanh cong. Ban co the nop minh chung tham gia.");
+        return toFaceCheckInResponse(verification, attendanceResponse);
+    }
+
+    private FaceVerificationResult verifyFace(
+            StudentFaceEmbeddingProjection reference,
+            MultipartFile liveImage,
+            int attemptNo) {
+        return aiFaceVerificationClient.verify(
+                reference,
+                readLiveImageBytes(liveImage),
+                resolveLiveImageFilename(liveImage),
+                attemptNo,
+                FACE_CHECK_IN_MAX_ATTEMPTS);
+    }
+
+    private byte[] readLiveImageBytes(MultipartFile liveImage) {
+        validateLiveImage(liveImage);
+        try {
+            return liveImage.getBytes();
+        } catch (IOException exception) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Khong doc duoc anh khuon mat de xac thuc");
+        }
+    }
+
+    private void validateLiveImage(MultipartFile liveImage) {
+        if (liveImage == null || liveImage.isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Thieu anh khuon mat de xac thuc");
+        }
+        if (liveImage.getSize() > MAX_LIVE_IMAGE_BYTES) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Anh xac thuc khong duoc vuot qua 8MB");
+        }
+        String contentType = liveImage.getContentType();
+        if (contentType != null && !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "File xac thuc phai la anh");
+        }
+    }
+
+    private String resolveLiveImageFilename(MultipartFile liveImage) {
+        String filename = liveImage.getOriginalFilename();
+        return filename != null && !filename.isBlank() ? filename : "attendance-face-live.jpg";
+    }
+
+    private FaceVerificationResult normalizeVerification(FaceVerificationResult raw, int attemptNo) {
+        boolean verified = Boolean.TRUE.equals(raw.getVerified());
+        boolean allowRetry = !verified
+                && attemptNo < FACE_CHECK_IN_MAX_ATTEMPTS
+                && Boolean.TRUE.equals(raw.getAllowRetry());
+
+        return FaceVerificationResult.builder()
+                .verified(verified)
+                .decision(raw.getDecision() != null
+                        ? raw.getDecision()
+                        : (verified ? "matched" : "not_matched"))
+                .allowRetry(allowRetry)
+                .attempt(attemptNo)
+                .maxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS)
+                .remainingAttempts(Math.max(FACE_CHECK_IN_MAX_ATTEMPTS - attemptNo, 0))
+                .reasonCode(raw.getReasonCode())
+                .message(resolveVerificationMessage(raw, verified, attemptNo))
+                .threshold(raw.getThreshold())
+                .distance(raw.getDistance())
+                .similarity(raw.getSimilarity())
+                .build();
+    }
+
+    private String resolveVerificationMessage(FaceVerificationResult raw, boolean verified, int attemptNo) {
+        if (verified) {
+            return raw.getMessage() != null
+                    ? raw.getMessage()
+                    : "Xac thuc khuon mat thanh cong. Ban co the nop minh chung tham gia.";
+        }
+        if (attemptNo >= FACE_CHECK_IN_MAX_ATTEMPTS) {
+            return "Xac thuc khuon mat khong thanh cong. Ban da het so lan thu, vui long gui khieu nai neu can ho tro.";
+        }
+        return raw.getMessage() != null
+                ? raw.getMessage()
+                : "Xac thuc khuon mat khong thanh cong. Vui long chup lai anh.";
+    }
+
+    private void saveFaceCheckInAttempt(
+            Registrations registration,
+            StudentFaceEmbeddingProjection reference,
+            FaceVerificationResult verification) {
+        FaceCheckInAttempt attempt = new FaceCheckInAttempt();
+        attempt.setRegistration(registration);
+        attempt.setAttemptNo(verification.getAttempt());
+        attempt.setMaxAttempts(verification.getMaxAttempts());
+        attempt.setVerified(Boolean.TRUE.equals(verification.getVerified()));
+        attempt.setAllowRetry(Boolean.TRUE.equals(verification.getAllowRetry()));
+        attempt.setDecision(verification.getDecision());
+        attempt.setReasonCode(verification.getReasonCode());
+        attempt.setMessage(verification.getMessage());
+        attempt.setThreshold(verification.getThreshold());
+        attempt.setDistance(verification.getDistance());
+        attempt.setSimilarity(verification.getSimilarity());
+        attempt.setReferenceEmbeddingVersion(reference.getEmbeddingVersion());
+        attempt.setReferenceModelName(reference.getModelName());
+        faceCheckInAttemptRepository.save(attempt);
+    }
+
+    private FaceCheckInResponse alreadyCheckedInResponse(Attendances attendance) {
+        AttendanceResponse attendanceResponse = attendanceMapper.toResponse(
+                attendance,
+                "Ban da xac minh khuon mat thanh cong truoc do!");
+        return toFaceCheckInResponse(FaceVerificationResult.builder()
+                .verified(true)
+                .decision("already_face_verified")
+                .allowRetry(false)
+                .attempt(0)
+                .maxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS)
+                .remainingAttempts(0)
+                .message("Ban da xac minh khuon mat thanh cong truoc do!")
+                .build(), attendanceResponse);
+    }
+
+    private FaceCheckInResponse maxAttemptsExceededResponse(int existingAttempts) {
+        return toFaceCheckInResponse(FaceVerificationResult.builder()
+                .verified(false)
+                .decision("max_attempts_exceeded")
+                .allowRetry(false)
+                .attempt(Math.min(existingAttempts, FACE_CHECK_IN_MAX_ATTEMPTS))
+                .maxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS)
+                .remainingAttempts(0)
+                .reasonCode("MAX_ATTEMPTS_EXCEEDED")
+                .message("Ban da het 5 lan xac thuc khuon mat. Vui long gui khieu nai neu can ho tro quyen loi.")
+                .build(), null);
+    }
+
+    private Attendances resolveAttendanceReadyForFaceVerification(Registrations registration) {
+        Attendances attendance = attendanceRepository.findByRegistrationId(registration.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION,
+                        "Ban phai check-in va check-out truoc khi xac minh khuon mat."));
+
+        if (attendance.getCheckinTime() == null) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Ban phai check-in truoc khi xac minh khuon mat.");
+        }
+
+        if (attendance.getCheckoutTime() == null) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Ban phai check-out truoc khi xac minh khuon mat.");
+        }
+
+        return attendance;
+    }
+
+    private Registrations resolveCurrentStudentRegistration(Long activityId) {
         Users student = getCurrentStudent();
-        Registrations registration = registrationRepository.findByStudentIdAndActivityId(student.getId(), request.getActivityId())
+        Registrations registration = registrationRepository.findByStudentIdAndActivityId(student.getId(), activityId)
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION, "Ban chua dang ky hoat dong nay nen khong the diem danh!"));
 
         if (registration.getStatus() == 2) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Ban da huy dang ky hoat dong nay roi!");
         }
 
-        validateActivityQrToken(registration.getActivity(), request.getVerifyCode());
         return registration;
     }
 
     private void validateActivityQrToken(Activities activity, String inputCode) {
-        String dbQrToken = activity.getQrCodeToken();
-
+        String dbQrToken = activity != null ? activity.getQrCodeToken() : null;
         if (dbQrToken == null || inputCode == null || !dbQrToken.equals(inputCode.trim())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ma diem danh khong hop le hoac da het han!");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Ma QR diem danh khong hop le hoac khong thuoc hoat dong nay.");
         }
+    }
+
+    private FaceCheckInResponse toFaceCheckInResponse(FaceVerificationResult verification, AttendanceResponse attendance) {
+        return FaceCheckInResponse.builder()
+                .verified(verification.getVerified())
+                .decision(verification.getDecision())
+                .allowRetry(verification.getAllowRetry())
+                .attempt(verification.getAttempt())
+                .maxAttempts(verification.getMaxAttempts())
+                .remainingAttempts(verification.getRemainingAttempts())
+                .reasonCode(verification.getReasonCode())
+                .message(verification.getMessage())
+                .threshold(verification.getThreshold())
+                .distance(verification.getDistance())
+                .similarity(verification.getSimilarity())
+                .attendance(attendance)
+                .build();
     }
     // ============ NEW METHODS FOR UC FEATURES ============
 
@@ -130,168 +366,11 @@ public class AttendanceServiceImpl implements AttendanceService {
     }
 
     @Override
-    @Transactional
-    public AttendanceResponse verifyAndCheckIn(QRVerifyRequest request) {
-        Registrations registration = resolveRegistrationFromQrRequest(request);
-
-        if (request.getActivityId() != null
-                && !request.getActivityId().equals(registration.getActivity().getId())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ma QR khong thuoc hoat dong nay");
-        }
-
-        if (registration.getStatus() == 2) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Dang ky nay da bi huy");
-        }
-
-        if ("CHECK_OUT".equalsIgnoreCase(request.getAction())) {
-            return recordCheckout(
-                    registration,
-                    "Check-out thanh cong!",
-                    "Sinh vien da duoc ghi nhan check-out truoc do!"
-            );
-        }
-
-        return recordAttendance(
-                registration,
-                1,
-                null,
-                null,
-                "Quet QR sinh vien",
-                "Diem danh thanh cong!",
-                "Sinh vien da duoc ghi nhan tham gia truoc do!"
-        );
-    }
-
-    private Registrations resolveRegistrationFromQrRequest(QRVerifyRequest request) {
-        Long registrationId = request.getRegistrationId();
-
-        if (registrationId == null) {
-            registrationId = parseRegistrationId(request.getQrData());
-        }
-
-        if (registrationId == null) {
-            registrationId = parseRegistrationId(request.getVerifyCode());
-        }
-
-        if (registrationId == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ma QR khong hop le");
-        }
-
-        return registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dang ky"));
-    }
-
-    private Long parseRegistrationId(String rawValue) {
-        if (rawValue == null || rawValue.trim().isEmpty()) {
-            return null;
-        }
-
-        String value = rawValue.trim();
-        String upperValue = value.toUpperCase();
-        if (upperValue.startsWith("CK")) {
-            return parseLongSafely(upperValue.substring(2));
-        }
-
-        if (value.matches("\\d+")) {
-            return parseLongSafely(value);
-        }
-
-        try {
-            JsonNode node = objectMapper.readTree(value);
-            if (node.hasNonNull("regId")) {
-                return node.get("regId").asLong();
-            }
-            if (node.hasNonNull("registrationId")) {
-                return node.get("registrationId").asLong();
-            }
-        } catch (Exception ignored) {
-            return null;
-        }
-
-        return null;
-    }
-
-    private Long parseLongSafely(String rawValue) {
-        try {
-            return Long.parseLong(rawValue);
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private AttendanceResponse recordAttendance(
-            Registrations registration,
-            Integer method,
-            java.math.BigDecimal latitude,
-            java.math.BigDecimal longitude,
-            String notificationSource,
-            String successMessage,
-            String alreadyCheckedMessage
-    ) {
-        Optional<Attendances> existing = attendanceRepository.findByRegistrationId(registration.getId());
-        if (existing.isPresent()) {
-            Attendances attendance = existing.get();
-            if (registration.getStatus() != 1) {
-                registration.setStatus(1);
-                registrationRepository.save(registration);
-            }
-            return attendanceMapper.toResponse(attendance, alreadyCheckedMessage);
-        }
-
-        Attendances attendance = Attendances.builder()
-                .registration(registration)
-                .checkinTime(LocalDateTime.now())
-                .method(method != null ? method : 1)
-                .latitude(latitude)
-                .longitude(longitude)
-                .build();
-        attendance = attendanceRepository.save(attendance);
-
-        registration.setStatus(1);
-        registrationRepository.save(registration);
-
-        registrationKafkaProducer.sendCheckInSuccess(
-                registration.getStudent().getId(),
-                registration.getActivity().getId(),
-                registration.getActivity().getTitle(),
-                notificationSource
-        );
-
-        return attendanceMapper.toResponse(attendance, successMessage);
-    }
-
-    private AttendanceResponse recordCheckout(
-            Registrations registration,
-            String successMessage,
-            String alreadyCheckedMessage
-    ) {
-        Attendances attendance = attendanceRepository.findByRegistrationId(registration.getId())
-                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION, "Chua co thong tin check-in nen khong the check-out!"));
-
-        if (attendance.getCheckinTime() == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Chua co thong tin check-in nen khong the check-out!");
-        }
-
-        if (attendance.getCheckoutTime() != null) {
-            return attendanceMapper.toResponse(attendance, alreadyCheckedMessage);
-        }
-
-        attendance.setCheckoutTime(LocalDateTime.now());
-        attendance = attendanceRepository.save(attendance);
-
-        if (registration.getStatus() != 1) {
-            registration.setStatus(1);
-            registrationRepository.save(registration);
-        }
-
-        return attendanceMapper.toResponse(attendance, successMessage);
-    }
-    @Override
     public void exportAttendanceToExcel(Long activityId, Long sessionId, OutputStream outputStream) throws Exception {
         List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId);
         List<Attendances> attendances = attendanceRepository.findByRegistrationIn(registrations);
 
-        String[] headers = {"STT", "MSSV", "Ho Ten", "Lop", "Gio Diem Danh", "Gio Diem Ra", "Trang Thai"};
+        String[] headers = {"STT", "MSSV", "Ho Ten", "Lop", "Gio Diem Danh", "Trang Thai"};
         java.util.concurrent.atomic.AtomicInteger stt = new java.util.concurrent.atomic.AtomicInteger(1);
 
         excelExportService.export(
@@ -308,8 +387,7 @@ public class AttendanceServiceImpl implements AttendanceService {
                             student.getFullName() != null ? student.getFullName() : student.getUsername(),
                             "", // Lop - can join with profile
                             attendance.getCheckinTime() != null ? attendance.getCheckinTime().toString() : "",
-                            attendance.getCheckoutTime() != null ? attendance.getCheckoutTime().toString() : "",
-                            attendance.getCheckoutTime() != null ? "Da diem danh" : "Chua diem ra"
+                            attendance.getCheckinTime() != null ? "Da check-in" : "Chua check-in"
                     };
                 },
                 outputStream

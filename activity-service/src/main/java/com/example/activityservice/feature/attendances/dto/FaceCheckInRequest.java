@@ -6,13 +6,10 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 @Data
-public class CheckInRequest {
+public class FaceCheckInRequest {
     @NotNull(message = "Thieu ma hoat dong")
     private Long activityId;
 
     private BigDecimal latitude;
     private BigDecimal longitude;
-
-    private Integer method = 1;
-    private String verifyCode;
 }
