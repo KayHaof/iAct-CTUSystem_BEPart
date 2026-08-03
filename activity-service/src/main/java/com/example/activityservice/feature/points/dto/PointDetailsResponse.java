@@ -17,4 +17,5 @@ public class PointDetailsResponse {
     private Integer totalPoint;
     private Integer maxPoint;
     private List<CategoryDetail> categories;
+    private List<PointContributionDetail> details;
 }

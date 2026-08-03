@@ -16,5 +16,8 @@ public class ComplaintEligibleActivityResponse {
     private LocalDateTime endDate;
     private LocalDateTime checkinTime;
     private LocalDateTime checkoutTime;
+    private Integer faceAttemptCount;
+    private Boolean faceAttemptExhausted;
+    private String eligibilityReason;
     private ComplaintResponse complaint;
 }

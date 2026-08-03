@@ -20,8 +20,8 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class PointCacheService {
 
-    private static final String SUMMARY_KEY_PREFIX = "points:summary:";
-    private static final String DETAILS_KEY_PREFIX = "points:details:";
+    private static final String SUMMARY_KEY_PREFIX = "points:v2:summary:";
+    private static final String DETAILS_KEY_PREFIX = "points:v2:details:";
     private static final String CATEGORIES_KEY_PREFIX = "points:categories:";
     private static final long STUDENT_POINT_TTL_MINUTES = 2;
     private static final long CATEGORY_RULE_TTL_MINUTES = 10;

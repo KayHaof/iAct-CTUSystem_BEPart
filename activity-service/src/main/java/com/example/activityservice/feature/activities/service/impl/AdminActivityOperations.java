@@ -1,21 +1,21 @@
 package com.example.activityservice.feature.activities.service.impl;
 
-import com.example.activityservice.common.dto.NotificationRequest;
 import com.example.activityservice.feature.activities.dto.ActivityStatsResponse;
+import com.example.activityservice.feature.activities.dto.DepartmentActivityStatsResponse;
 import com.example.activityservice.feature.activities.dto.DepartmentStatsResponse;
 import com.example.activityservice.feature.activities.dto.SystemStatsResponse;
 import com.example.activityservice.feature.activities.kafka.ActivityEventProducer;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
+import com.example.activityservice.feature.activities.specification.ActivitySpecification;
 import com.example.activityservice.feature.activities.service.ActivityCacheService;
+import com.example.activityservice.feature.activities.service.ActivityRegistrationNotificationService;
 import com.example.activityservice.feature.locations.service.ActivityLocationBookingService;
-import com.example.activityservice.feature.notification.kafka.NotificationCommandProducer;
 import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.semesters.repository.SemesterRepository;
 import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.repository.UserRepository;
 import com.example.activityservice.feature.users.service.LocalDepartmentResolver;
-import com.example.event.kafka.KafkaTopics;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -27,21 +27,34 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class AdminActivityOperations {
+    private static final int ROLE_DEPARTMENT = 2;
+    private static final int STATUS_PENDING = 0;
+    private static final int STATUS_APPROVED = 1;
+    private static final int STATUS_REJECTED = 2;
+    private static final List<Integer> MODERATION_STATUSES = List.of(
+            STATUS_PENDING,
+            STATUS_APPROVED,
+            STATUS_REJECTED
+    );
 
     private final ActivityRepository activityRepository;
     private final SemesterRepository semesterRepository;
     private final UserRepository userRepository;
     private final LocalDepartmentResolver localDepartmentResolver;
     private final ActivityEventProducer activityEventProducer;
-    private final NotificationCommandProducer notificationCommandProducer;
     private final ActivityCacheService activityCacheService;
     private final ActivityLocationBookingService locationBookingService;
+    private final ActivityRegistrationNotificationService registrationNotificationService;
+    private final ActivityAccessSupport accessSupport;
 
     @Transactional
     public void approveActivity(Long id) {
@@ -59,7 +72,7 @@ public class AdminActivityOperations {
         locationBookingService.approveBookingsForActivity(savedActivity.getId(), reviewer);
 
         activityEventProducer.publishApproved(savedActivity);
-        dispatchFacultyRegistrationOpenNotifications(savedActivity);
+        registrationNotificationService.notifyIfRegistrationOpen(savedActivity);
         activityCacheService.evictActivityListCaches();
     }
 
@@ -69,15 +82,19 @@ public class AdminActivityOperations {
         if (activity.getStatus() != 0) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Chi tu choi duoc hoat dong Cho duyet.");
         }
+        if (reason == null || reason.isBlank()) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long nhap ly do tu choi cu the.");
+        }
         Users reviewer = getCurrentReviewer();
         validateApprovalPermission(activity, reviewer);
 
+        String rejectionReason = reason.trim();
         activity.setStatus(2);
-        activity.setReason(reason != null && !reason.isBlank() ? reason : "Khong co ly do");
+        activity.setReason(rejectionReason);
         activity.setHandledBy(reviewer);
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
-        locationBookingService.rejectBookingsForActivity(savedActivity.getId(), reviewer, activity.getReason());
+        locationBookingService.rejectBookingsForActivity(savedActivity.getId(), reviewer, rejectionReason);
 
         activityEventProducer.publishRejected(savedActivity);
         activityCacheService.evictActivityListCaches();
@@ -88,6 +105,10 @@ public class AdminActivityOperations {
         Activities activity = getActivityForAction(id);
         if (activity.getStatus() != 0 && activity.getStatus() != 1) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Loi trang thai");
+        }
+        if (!isDepartmentSubmittedActivity(activity) || !Boolean.TRUE.equals(activity.getRequiresAdminApproval())) {
+            throw new AppException(ErrorCode.FORBIDDEN,
+                    "Admin chi huy hoat dong do Khoa/Don vi gui len.");
         }
 
         activity.setStatus(4);
@@ -103,19 +124,22 @@ public class AdminActivityOperations {
     }
 
     public ActivityStatsResponse getActivityStats() {
-        long pending = activityRepository.countByStatus(0);
-        long approved = activityRepository.countByStatus(1);
-        long rejected = activityRepository.countByStatus(2);
+        var baseSpec = moderationScope();
+        long pending = activityRepository.count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_PENDING))));
+        long approved = activityRepository.count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_APPROVED))));
+        long rejected = activityRepository.count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_REJECTED))));
 
         return ActivityStatsResponse.builder()
                 .pendingReview(pending)
                 .approvedThisTerm(approved)
                 .rejected(rejected)
+                .byDepartment(buildDepartmentActivityStats())
                 .build();
     }
 
     @Transactional(readOnly = true)
     public DepartmentStatsResponse getDepartmentStatistics(Long departmentId, Long semesterId) {
+        Long scopedDepartmentId = resolveDepartmentStatisticsScope(departmentId);
         Long actualSemesterId = semesterId;
         if (actualSemesterId == null) {
             Semesters semester = semesterRepository.findSemesterByDate(LocalDate.now()).orElse(null);
@@ -124,8 +148,8 @@ public class AdminActivityOperations {
             }
         }
 
-        String departmentName = localDepartmentResolver.resolveDepartmentName(departmentId).orElse(null);
-        List<Activities> activities = activityRepository.findByDepartmentId(departmentId);
+        String departmentName = localDepartmentResolver.resolveDepartmentName(scopedDepartmentId).orElse(null);
+        List<Activities> activities = activityRepository.findByDepartmentId(scopedDepartmentId);
 
         int total = activities.size();
         int pending = (int) activities.stream().filter(a -> a.getStatus() == 0).count();
@@ -134,7 +158,7 @@ public class AdminActivityOperations {
         int cancelled = (int) activities.stream().filter(a -> a.getStatus() == 4).count();
 
         return DepartmentStatsResponse.builder()
-                .departmentId(departmentId)
+                .departmentId(scopedDepartmentId)
                 .departmentName(departmentName)
                 .semesterId(actualSemesterId)
                 .totalActivities(total)
@@ -151,6 +175,16 @@ public class AdminActivityOperations {
                 .build();
     }
 
+    private Long resolveDepartmentStatisticsScope(Long requestedDepartmentId) {
+        if (accessSupport.isCurrentDepartment()) {
+            return accessSupport.requireCurrentDepartmentId();
+        }
+        if (accessSupport.isCurrentAdmin()) {
+            return requestedDepartmentId;
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem thong ke don vi.");
+    }
+
     @Transactional(readOnly = true)
     public SystemStatsResponse getSystemStatistics(Long semesterId) {
         Long actualSemesterId = semesterId;
@@ -161,10 +195,11 @@ public class AdminActivityOperations {
             }
         }
 
-        long totalActivities = activityRepository.count();
-        long pending = activityRepository.countByStatus(0);
-        long approved = activityRepository.countByStatus(1);
-        long rejected = activityRepository.countByStatus(2);
+        var scope = ActivitySpecification.isNotDepartmentDirectActivity();
+        long totalActivities = activityRepository.count(scope);
+        long pending = activityRepository.count(scope.and(ActivitySpecification.hasStatusIn(List.of(0))));
+        long approved = activityRepository.count(scope.and(ActivitySpecification.hasStatusIn(List.of(1))));
+        long rejected = activityRepository.count(scope.and(ActivitySpecification.hasStatusIn(List.of(2))));
 
         return SystemStatsResponse.builder()
                 .semesterId(actualSemesterId)
@@ -200,9 +235,9 @@ public class AdminActivityOperations {
 
     private void validateApprovalPermission(Activities activity, Users reviewer) {
         if (hasCurrentRole("ROLE_ADMIN")) {
-            if (isStudentRepresentativeActivity(activity)) {
+            if (!isDepartmentSubmittedActivity(activity) || !Boolean.TRUE.equals(activity.getRequiresAdminApproval())) {
                 throw new AppException(ErrorCode.FORBIDDEN,
-                        "Admin chi duyet hoat dong do Truong/Khoa gui len.");
+                        "Admin chi duyet hoat dong do Khoa/Don vi gui len.");
             }
             return;
         }
@@ -219,6 +254,76 @@ public class AdminActivityOperations {
         throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen duyet hoat dong nay.");
     }
 
+    private List<DepartmentActivityStatsResponse> buildDepartmentActivityStats() {
+        List<ActivityRepository.DepartmentStatusCountProjection> rows =
+                activityRepository.countByCreatorRoleTypeAndRequiresAdminApprovalAndStatusesGroupedByDepartment(
+                        ROLE_DEPARTMENT,
+                        true,
+                        MODERATION_STATUSES
+                );
+
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, DepartmentActivityStatsResponse> grouped = new LinkedHashMap<>();
+        for (ActivityRepository.DepartmentStatusCountProjection row : rows) {
+            Long departmentId = row.getDepartmentId();
+            DepartmentActivityStatsResponse current = grouped.computeIfAbsent(
+                    departmentId,
+                    key -> DepartmentActivityStatsResponse.builder()
+                            .departmentId(key)
+                            .departmentName(key == null ? "Cấp Trường" : null)
+                            .build()
+            );
+
+            long count = row.getTotal() == null ? 0L : row.getTotal();
+            int status = row.getStatus() == null ? STATUS_PENDING : row.getStatus();
+            if (status == STATUS_PENDING) {
+                current.setPendingReview(count);
+            } else if (status == STATUS_APPROVED) {
+                current.setApprovedThisTerm(count);
+            } else if (status == STATUS_REJECTED) {
+                current.setRejected(count);
+            }
+        }
+
+        List<Long> departmentIds = grouped.keySet().stream()
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Long, String> departmentNames = localDepartmentResolver.resolveDepartmentNames(departmentIds);
+
+        grouped.values().forEach(item -> {
+            if (item.getDepartmentId() == null) {
+                item.setDepartmentName("Cấp Trường");
+            } else {
+                item.setDepartmentName(
+                        departmentNames.getOrDefault(item.getDepartmentId(), "Đơn vị #" + item.getDepartmentId())
+                );
+            }
+            item.setTotal(item.getPendingReview() + item.getApprovedThisTerm() + item.getRejected());
+        });
+
+        return grouped.values().stream()
+                .sorted(Comparator.comparingLong(DepartmentActivityStatsResponse::getTotal).reversed()
+                        .thenComparing(item -> item.getDepartmentName() == null ? "" : item.getDepartmentName()))
+                .toList();
+    }
+
+    private org.springframework.data.jpa.domain.Specification<Activities> moderationScope() {
+        return com.example.activityservice.feature.activities.specification.ActivitySpecification
+                .hasCreatedByRoleType(ROLE_DEPARTMENT)
+                .and(com.example.activityservice.feature.activities.specification.ActivitySpecification
+                        .hasRequiresAdminApproval(true))
+                .and(com.example.activityservice.feature.activities.specification.ActivitySpecification
+                        .hasStatusIn(MODERATION_STATUSES));
+    }
+
+    private boolean isDepartmentSubmittedActivity(Activities activity) {
+        return activity.getCreatedBy() != null
+                && Integer.valueOf(ROLE_DEPARTMENT).equals(activity.getCreatedBy().getRoleType());
+    }
+
     private boolean isStudentRepresentativeActivity(Activities activity) {
         return activity.getCreatedBy() != null
                 && Integer.valueOf(1).equals(activity.getCreatedBy().getRoleType());
@@ -231,36 +336,4 @@ public class AdminActivityOperations {
                 .anyMatch(authority -> Objects.equals(authority.getAuthority(), role));
     }
 
-    private void dispatchFacultyRegistrationOpenNotifications(Activities activity) {
-        if (!isFacultyInternalActivity(activity) || activity.getDepartmentId() == null || !isRegistrationOpen(activity)) {
-            return;
-        }
-
-        List<Long> studentIds = userRepository.findActiveStudentIdsByDepartmentId(activity.getDepartmentId());
-        for (Long studentId : studentIds) {
-            NotificationRequest request = new NotificationRequest();
-            request.setUserId(studentId);
-            request.setActivityId(activity.getId());
-            request.setTitle("Hoat dong da mo dang ky");
-            request.setMessage("Hoat dong '" + activity.getTitle()
-                    + "' da duoc phe duyet va dang trong thoi gian dang ky.");
-            request.setType(1);
-            request.setReferenceType("activity-registration-open");
-            request.setSourceTopic(KafkaTopics.ACTIVITY_APPROVED);
-            request.setSourceEventId("activity-registration-open:" + activity.getId() + ":user:" + studentId);
-            notificationCommandProducer.publishCreated(request);
-        }
-    }
-
-    private boolean isFacultyInternalActivity(Activities activity) {
-        return Boolean.TRUE.equals(activity.getIsFaculty()) && !Boolean.TRUE.equals(activity.getIsExternal());
-    }
-
-    private boolean isRegistrationOpen(Activities activity) {
-        LocalDateTime now = LocalDateTime.now();
-        return activity.getRegistrationStart() != null
-                && activity.getRegistrationEnd() != null
-                && !now.isBefore(activity.getRegistrationStart())
-                && !now.isAfter(activity.getRegistrationEnd());
-    }
 }

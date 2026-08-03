@@ -25,6 +25,11 @@ public class RegistrationResponse {
     private String participationStatus;
     private Boolean canSubmitProof;
     private String nextAction;
+    private Integer faceVerificationAttemptCount;
+    private Integer faceVerificationMaxAttempts;
+    private Integer faceVerificationRemainingAttempts;
+    private Boolean faceVerificationExhausted;
+    private Boolean canSubmitComplaint;
 
     private List<Long> scheduleIds;
     private Integer point;

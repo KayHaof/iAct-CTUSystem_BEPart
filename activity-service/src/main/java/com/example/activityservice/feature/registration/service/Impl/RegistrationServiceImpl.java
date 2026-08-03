@@ -3,9 +3,10 @@ package com.example.activityservice.feature.registration.service.Impl;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.service.ActivityCacheService;
+import com.example.activityservice.feature.attendances.repository.FaceCheckInAttemptRepository;
+import com.example.activityservice.feature.face_embedding.service.StudentFaceEmbeddingProjectionService;
 import com.example.activityservice.feature.proofs.model.Proofs;
 import com.example.activityservice.feature.proofs.repository.ProofRepository;
-import com.example.activityservice.feature.registration.dto.RegistrationQRResponse;
 import com.example.activityservice.feature.registration.dto.RegistrationRequest;
 import com.example.activityservice.feature.registration.dto.RegistrationResponse;
 import com.example.activityservice.feature.registration.kafka.RegistrationKafkaProducer;
@@ -21,7 +22,6 @@ import com.example.activityservice.feature.activitySchedule.repository.ActivityS
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import com.example.activityservice.feature.registration.service.RegistrationService;
 import com.example.activityservice.service.ExcelExportService;
-import com.example.activityservice.service.QRCodeService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +46,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class RegistrationServiceImpl implements RegistrationService {
+    private static final int FACE_CHECK_IN_MAX_ATTEMPTS = 5;
+
     private final RegistrationRepository registrationRepository;
     private final ActivityRepository activityRepository;
     private final ActivityScheduleRepository scheduleRepository;
@@ -53,9 +55,10 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final RegistrationMapper registrationMapper;
     private final ExcelExportService excelExportService;
     private final ProofRepository proofRepository;
-    private final QRCodeService qrCodeService;
     private final RegistrationKafkaProducer registrationKafkaProducer;
     private final ActivityCacheService activityCacheService;
+    private final StudentFaceEmbeddingProjectionService faceEmbeddingProjectionService;
+    private final FaceCheckInAttemptRepository faceCheckInAttemptRepository;
 
     // --- Lấy sinh viên đang đăng nhập ---
     public Users getCurrentStudent() {
@@ -149,6 +152,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         Registrations existingReg = registrationRepository.findByStudentIdAndActivityId(student.getId(), activity.getId()).orElse(null);
         if (existingReg != null && (existingReg.getStatus() == 0 || existingReg.getStatus() == 1))
             throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã đăng ký hoạt động này rồi nha!");
+        faceEmbeddingProjectionService.ensureActiveForRegistration(student.getId());
         validateActivityHasAvailableSlot(activity);
 
         List<ActivitySchedule> selectedSchedules = new ArrayList<>();
@@ -361,7 +365,9 @@ public class RegistrationServiceImpl implements RegistrationService {
                     else if (pStatus == 2) proofStatus = 3;
                 }
             }
-            return registrationMapper.toResponseWithProof(reg, proofStatus);
+            RegistrationResponse response = registrationMapper.toResponseWithProof(reg, proofStatus);
+            enrichFaceVerificationState(response, reg);
+            return response;
         }).collect(Collectors.toList());
 
         populateProfileData(responseList);
@@ -369,51 +375,29 @@ public class RegistrationServiceImpl implements RegistrationService {
         return responseList;
     }
 
-    // ============ NEW METHODS FOR UC FEATURES ============
+    private void enrichFaceVerificationState(RegistrationResponse response, Registrations registration) {
+        long rawAttemptCount = faceCheckInAttemptRepository.countByRegistrationId(registration.getId());
+        int attemptCount = rawAttemptCount > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) rawAttemptCount;
+        int remainingAttempts = Math.max(FACE_CHECK_IN_MAX_ATTEMPTS - attemptCount, 0);
+        boolean cancelled = registration.getStatus() != null && registration.getStatus() == 2;
+        boolean faceVerified = Integer.valueOf(1).equals(registration.getStatus());
+        boolean checkedIn = registration.getAttendance() != null
+                && registration.getAttendance().getCheckinTime() != null;
+        boolean exhausted = !cancelled && !faceVerified && attemptCount >= FACE_CHECK_IN_MAX_ATTEMPTS;
 
-    @Override
-    @Transactional(readOnly = true)
-    public RegistrationQRResponse getQRCode(Long registrationId) {
-        Users student = getCurrentStudent();
-        
-        Registrations registration = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dang ky"));
+        response.setFaceVerificationAttemptCount(attemptCount);
+        response.setFaceVerificationMaxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS);
+        response.setFaceVerificationRemainingAttempts(remainingAttempts);
+        response.setFaceVerificationExhausted(exhausted);
+        response.setCanSubmitComplaint(!cancelled && (checkedIn || exhausted));
 
-        // Verify ownership
-        if (!registration.getStudent().getId().equals(student.getId())) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen truy cap");
+        if (exhausted) {
+            response.setParticipationStatus("FACE_VERIFICATION_EXHAUSTED");
+            response.setNextAction("SUBMIT_COMPLAINT");
         }
-
-        Activities activity = registration.getActivity();
-
-        // Generate QR data
-        String qrData = generateQRData(registration, student, activity);
-        String checkInCode = generateCheckInCode(registration.getId());
-
-        // Calculate validity (30 mins before to 30 mins after)
-        LocalDateTime validUntil = activity.getEndDate().plusMinutes(30);
-
-        RegistrationQRResponse.SessionInfo sessionInfo = null;
-        if (registration.getRegisteredSchedules() != null && !registration.getRegisteredSchedules().isEmpty()) {
-            ActivitySchedule firstSession = registration.getRegisteredSchedules().iterator().next();
-            sessionInfo = RegistrationQRResponse.SessionInfo.builder()
-                    .sessionId(firstSession.getId())
-                    .sessionName(firstSession.getTitle())
-                    .checkInTime(firstSession.getStartTime())
-                    .checkOutTime(firstSession.getEndTime())
-                    .build();
-        }
-
-        return RegistrationQRResponse.builder()
-                .registrationId(registration.getId())
-                .activityId(activity.getId())
-                .activityTitle(activity.getTitle())
-                .qrData(qrData)
-                .checkInCode(checkInCode)
-                .validUntil(validUntil.toLocalDate().toEpochDay() * 86400 + validUntil.toLocalTime().toSecondOfDay())
-                .sessionInfo(sessionInfo)
-                .build();
     }
+
+    // ============ NEW METHODS FOR UC FEATURES ============
 
     @Override
     @Transactional
@@ -446,18 +430,4 @@ public class RegistrationServiceImpl implements RegistrationService {
         return registrationMapper.toResponse(registration);
     }
 
-    private String generateQRData(Registrations registration, Users student, Activities activity) {
-        String rawData = String.format(
-                "{\"regId\":%d,\"studentId\":\"%s\",\"activityId\":%d,\"timestamp\":%d}",
-                registration.getId(),
-                student.getStudentCode(),
-                activity.getId(),
-                System.currentTimeMillis()
-        );
-        return qrCodeService.generateQRCodeBase64(rawData, 300, 300);
-    }
-
-    private String generateCheckInCode(Long registrationId) {
-        return "CK" + String.format("%06d", registrationId);
-    }
 }

@@ -9,7 +9,7 @@ import com.example.activityservice.feature.locations.repository.ActivityLocation
 import com.example.activityservice.feature.locations.repository.LocationRepository;
 import com.example.activityservice.feature.locations.service.LocationService;
 import com.example.activityservice.feature.users.model.Users;
-import com.example.activityservice.feature.users.repository.UserRepository;
+import com.example.activityservice.feature.users.service.LocalUserResolver;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ public class LocationServiceImpl implements LocationService {
     private final LocationRepository locationRepository;
     private final ActivityLocationBookingRepository bookingRepository;
     private final LocationMapper locationMapper;
-    private final UserRepository userRepository;
+    private final LocalUserResolver localUserResolver;
 
     @Override
     @Transactional
@@ -57,12 +57,14 @@ public class LocationServiceImpl implements LocationService {
             String availabilityStatus,
             String keyword,
             Boolean adminManaged) {
+        LocationAccessScope scope = resolveLocationAccessScope("Ban khong co quyen xem danh sach dia diem.");
+        Long scopedManagerDepartmentId = scope.isAdmin() ? managerDepartmentId : scope.departmentId();
         return locationRepository.findAll().stream()
                 .filter(location -> active == null || active.equals(location.getIsActive()))
                 .filter(location -> bookable == null || bookable.equals(location.getIsBookable()))
                 .filter(location -> type == null || type.isBlank() || type.equalsIgnoreCase(location.getType()))
-                .filter(location -> managerDepartmentId == null
-                        || managerDepartmentId.equals(location.getManagerDepartmentId()))
+                .filter(location -> scopedManagerDepartmentId == null
+                        || scopedManagerDepartmentId.equals(location.getManagerDepartmentId()))
                 .filter(location -> availabilityStatus == null
                         || availabilityStatus.isBlank()
                         || availabilityStatus.equalsIgnoreCase(location.getAvailabilityStatus()))
@@ -80,16 +82,10 @@ public class LocationServiceImpl implements LocationService {
             LocalDateTime endTime,
             Integer minCapacity,
             String type,
-            Long managerDepartmentId,
-            String keyword,
-            Boolean adminManaged) {
+            String keyword) {
         validateTimeRange(startTime, endTime);
         return locationRepository.findByIsActiveTrueAndIsBookableTrueAndAvailabilityStatus(AVAILABLE).stream()
                 .filter(location -> type == null || type.isBlank() || type.equalsIgnoreCase(location.getType()))
-                .filter(location -> managerDepartmentId == null
-                        || managerDepartmentId.equals(location.getManagerDepartmentId()))
-                .filter(location -> adminManaged == null
-                        || adminManaged.equals(location.getManagerDepartmentId() == null))
                 .filter(location -> minCapacity == null
                         || location.getCapacity() == null
                         || location.getCapacity() >= minCapacity)
@@ -106,7 +102,9 @@ public class LocationServiceImpl implements LocationService {
     @Override
     @Transactional(readOnly = true)
     public LocationResponse getLocationById(Long id) {
-        return locationMapper.toResponse(findLocationOrThrow(id));
+        Location location = findLocationOrThrow(id);
+        validateViewPermission(location);
+        return locationMapper.toResponse(location);
     }
 
     @Override
@@ -269,7 +267,7 @@ public class LocationServiceImpl implements LocationService {
         if (!isDepartment) {
             throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen cap nhat dia diem nay.");
         }
-        Users currentUser = userRepository.findByUsername(authentication.getName()).orElse(null);
+        Users currentUser = localUserResolver.resolveByUsername(authentication.getName());
         if (currentUser == null
                 || currentUser.getDepartmentId() == null
                 || !Objects.equals(currentUser.getDepartmentId(), location.getManagerDepartmentId())) {
@@ -278,10 +276,52 @@ public class LocationServiceImpl implements LocationService {
         }
     }
 
+    private void validateViewPermission(Location location) {
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return;
+        }
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            Long departmentId = requireCurrentDepartmentId();
+            if (Objects.equals(departmentId, location.getManagerDepartmentId())) {
+                return;
+            }
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem dia diem nay.");
+    }
+
     private void validateAdminPermission() {
         if (!hasCurrentRole("ROLE_ADMIN")) {
             throw new AppException(ErrorCode.FORBIDDEN, "Chi admin moi duoc thuc hien thao tac nay.");
         }
+    }
+
+    private LocationAccessScope resolveLocationAccessScope(String forbiddenMessage) {
+        return resolveLocationAccessScope(forbiddenMessage, false);
+    }
+
+    private LocationAccessScope resolveLocationAccessScope(String forbiddenMessage, boolean allowStudent) {
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return new LocationAccessScope(true, null);
+        }
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            return new LocationAccessScope(false, requireCurrentDepartmentId());
+        }
+        if (allowStudent && hasCurrentRole("ROLE_STUDENT")) {
+            return new LocationAccessScope(false, requireCurrentDepartmentId());
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, forbiddenMessage);
+    }
+
+    private Long requireCurrentDepartmentId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+        }
+        Users currentUser = localUserResolver.resolveByUsername(authentication.getName());
+        if (currentUser.getDepartmentId() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+        }
+        return currentUser.getDepartmentId();
     }
 
     private boolean hasCurrentRole(String role) {
@@ -301,5 +341,8 @@ public class LocationServiceImpl implements LocationService {
 
     private String trimToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private record LocationAccessScope(boolean isAdmin, Long departmentId) {
     }
 }

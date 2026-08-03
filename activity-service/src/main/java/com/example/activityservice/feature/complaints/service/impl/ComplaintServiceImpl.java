@@ -1,23 +1,34 @@
 package com.example.activityservice.feature.complaints.service.impl;
 
+import com.example.activityservice.common.dto.NotificationRequest;
+import com.example.activityservice.feature.activities.model.Activities;
+import com.example.activityservice.feature.attendances.repository.FaceCheckInAttemptRepository;
 import com.example.activityservice.feature.complaints.dto.ComplaintEligibleActivityResponse;
 import com.example.activityservice.feature.complaints.dto.ComplaintRequest;
 import com.example.activityservice.feature.complaints.dto.ComplaintResponse;
+import com.example.activityservice.feature.complaints.dto.ResolveComplaintRequest;
 import com.example.activityservice.feature.complaints.mapper.ComplaintMapper;
 import com.example.activityservice.feature.complaints.model.Complaints;
 import com.example.activityservice.feature.complaints.repository.ComplaintRepository;
 import com.example.activityservice.feature.complaints.service.ComplaintService;
+import com.example.activityservice.feature.notification.kafka.NotificationCommandProducer;
 import com.example.activityservice.feature.registration.model.Registrations;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.repository.UserRepository;
+import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,11 +37,16 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ComplaintServiceImpl implements ComplaintService {
+    private static final int FACE_CHECK_IN_MAX_ATTEMPTS = 5;
+
     private final ComplaintRepository complaintRepository;
     private final RegistrationRepository registrationRepository;
     private final UserRepository userRepository;
     private final ComplaintMapper complaintMapper;
+    private final FaceCheckInAttemptRepository faceCheckInAttemptRepository;
+    private final NotificationCommandProducer notificationCommandProducer;
 
     @Override
     @Transactional(readOnly = true)
@@ -56,9 +72,11 @@ public class ComplaintServiceImpl implements ComplaintService {
                         Function.identity()));
 
         return registrations.stream()
-                .map(registration -> complaintMapper.toEligibleResponse(
-                        registration,
-                        complaintsByRegistrationId.get(registration.getId())))
+                .map(registration -> enrichFaceAttemptEligibility(
+                        complaintMapper.toEligibleResponse(
+                                registration,
+                                complaintsByRegistrationId.get(registration.getId())),
+                        registration))
                 .toList();
     }
 
@@ -82,6 +100,7 @@ public class ComplaintServiceImpl implements ComplaintService {
             if (complaint.getStatus() != null && complaint.getStatus() != 0) {
                 throw new AppException(ErrorCode.INVALID_ACTION, "Khieu nai da duoc xu ly, khong the cap nhat");
             }
+            complaintMapper.syncRegistrationContext(complaint, registration);
             complaintMapper.updateEntityFromRequest(request, complaint);
             complaint.setStatus(0);
         }
@@ -89,19 +108,241 @@ public class ComplaintServiceImpl implements ComplaintService {
         return complaintMapper.toResponse(complaintRepository.save(complaint));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PageDTO<ComplaintResponse> getComplaints(Long activityId, Integer status, Pageable pageable) {
+        Page<Complaints> page;
+        if (isAdmin()) {
+            page = findComplaintsForAdmin(activityId, status, pageable);
+        } else if (isDepartment()) {
+            Users reviewer = getCurrentUser();
+            Long departmentId = requireDepartmentId(reviewer);
+            page = findComplaintsForDepartment(activityId, departmentId, status, pageable);
+        } else {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem danh sach khieu nai");
+        }
+
+        return new PageDTO<>(
+                page,
+                page.getContent().stream()
+                        .map(complaintMapper::toResponse)
+                        .toList());
+    }
+
+    @Override
+    @Transactional
+    public ComplaintResponse approveComplaint(Long id, ResolveComplaintRequest request) {
+        Complaints complaint = resolveReviewableComplaint(id);
+        ensureCanReview(complaint);
+        ensurePending(complaint);
+
+        String response = normalizeResponse(request);
+        complaint.setStatus(1);
+        complaint.setResponse(response);
+        complaint.setDetailResponse(response);
+        complaint.setResolvedAt(LocalDateTime.now());
+        complaint.setResolvedBy(getCurrentUser());
+
+        Registrations registration = complaint.getRegistration();
+        if (registration != null) {
+            registration.setStatus(1);
+            registrationRepository.save(registration);
+        }
+
+        Complaints saved = complaintRepository.save(complaint);
+        publishComplaintNotification(
+                saved,
+                "Khiếu nại điểm danh được duyệt",
+                "Khiếu nại của bạn đã được duyệt. Bạn có thể nộp minh chứng tham gia để hệ thống ghi nhận.",
+                1,
+                "activity-complaint-approved");
+        return complaintMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public ComplaintResponse rejectComplaint(Long id, ResolveComplaintRequest request) {
+        Complaints complaint = resolveReviewableComplaint(id);
+        ensureCanReview(complaint);
+        ensurePending(complaint);
+
+        String response = normalizeResponse(request);
+        complaint.setStatus(2);
+        complaint.setResponse(response);
+        complaint.setDetailResponse(response);
+        complaint.setResolvedAt(LocalDateTime.now());
+        complaint.setResolvedBy(getCurrentUser());
+
+        Complaints saved = complaintRepository.save(complaint);
+        publishComplaintNotification(
+                saved,
+                "Khiếu nại điểm danh bị từ chối",
+                response,
+                3,
+                "activity-complaint-rejected");
+        return complaintMapper.toResponse(saved);
+    }
+
+    private Page<Complaints> findComplaintsForAdmin(Long activityId, Integer status, Pageable pageable) {
+        if (activityId != null && status != null) {
+            return complaintRepository.findByActivityIdAndStatus(activityId, status, pageable);
+        }
+        if (activityId != null) {
+            return complaintRepository.findByActivityId(activityId, pageable);
+        }
+        if (status != null) {
+            return complaintRepository.findByStatus(status, pageable);
+        }
+        return complaintRepository.findAll(pageable);
+    }
+
+    private Page<Complaints> findComplaintsForDepartment(
+            Long activityId,
+            Long departmentId,
+            Integer status,
+            Pageable pageable) {
+        if (activityId != null && status != null) {
+            return complaintRepository.findByActivityIdAndActivityDepartmentIdAndStatus(
+                    activityId,
+                    departmentId,
+                    status,
+                    pageable);
+        }
+        if (activityId != null) {
+            return complaintRepository.findByActivityIdAndActivityDepartmentId(activityId, departmentId, pageable);
+        }
+        if (status != null) {
+            return complaintRepository.findByActivityDepartmentIdAndStatus(departmentId, status, pageable);
+        }
+        return complaintRepository.findByActivityDepartmentId(departmentId, pageable);
+    }
+
     private void validateEligibleRegistration(Registrations registration) {
+        if (registration.getStatus() != null && registration.getStatus() == 2) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Dang ky da bi huy nen khong the khieu nai");
+        }
+
         boolean attended = registration.getStatus() != null && registration.getStatus() == 1;
         boolean checkedIn = registration.getAttendance() != null && registration.getAttendance().getCheckinTime() != null;
-        boolean checkedOut = registration.getAttendance() != null && registration.getAttendance().getCheckoutTime() != null;
+        boolean faceAttemptExhausted = faceCheckInAttemptRepository.countByRegistrationId(registration.getId())
+                >= FACE_CHECK_IN_MAX_ATTEMPTS;
 
-        if (!attended || !checkedIn || !checkedOut) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Chi co the khieu nai hoat dong da tham gia day du");
+        if ((!attended || !checkedIn) && !faceAttemptExhausted) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Chi co the khieu nai hoat dong da check-in hoac da het 5 lan xac thuc khuon mat");
         }
     }
 
+    private ComplaintEligibleActivityResponse enrichFaceAttemptEligibility(
+            ComplaintEligibleActivityResponse response,
+            Registrations registration) {
+        long attemptCount = faceCheckInAttemptRepository.countByRegistrationId(registration.getId());
+        boolean exhausted = attemptCount >= FACE_CHECK_IN_MAX_ATTEMPTS;
+        response.setFaceAttemptCount((int) attemptCount);
+        response.setFaceAttemptExhausted(exhausted);
+        response.setEligibilityReason(exhausted && response.getCheckinTime() == null
+                ? "FACE_VERIFICATION_EXHAUSTED"
+                : "CHECKED_IN");
+        return response;
+    }
+
     private Users getCurrentStudent() {
+        return getCurrentUser();
+    }
+
+    private Users getCurrentUser() {
         String username = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication()).getName();
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    }
+
+    private Complaints resolveReviewableComplaint(Long id) {
+        return complaintRepository.findDetailById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khieu nai khong ton tai"));
+    }
+
+    private void ensureCanReview(Complaints complaint) {
+        if (isAdmin()) {
+            return;
+        }
+
+        Users reviewer = getCurrentUser();
+        Activities activity = complaint.getActivity();
+        if (isDepartment()
+                && activity != null
+                && activity.getDepartmentId() != null
+                && Objects.equals(activity.getDepartmentId(), requireDepartmentId(reviewer))) {
+            return;
+        }
+
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xu ly khieu nai nay");
+    }
+
+    private void ensurePending(Complaints complaint) {
+        if (complaint.getStatus() != null && complaint.getStatus() != 0) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Khieu nai da duoc xu ly");
+        }
+    }
+
+    private Long requireDepartmentId(Users user) {
+        if (user == null || user.getDepartmentId() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi");
+        }
+        return user.getDepartmentId();
+    }
+
+    private String normalizeResponse(ResolveComplaintRequest request) {
+        String response = request != null ? request.getResponse() : null;
+        if (response == null || response.isBlank()) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Noi dung phan hoi khong duoc de trong");
+        }
+        return response.trim();
+    }
+
+    private boolean isAdmin() {
+        return hasRole("ROLE_ADMIN");
+    }
+
+    private boolean isDepartment() {
+        return hasRole("ROLE_DEPARTMENT");
+    }
+
+    private boolean hasRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> role.equals(authority.getAuthority()));
+    }
+
+    private void publishComplaintNotification(
+            Complaints complaint,
+            String title,
+            String message,
+            Integer type,
+            String referenceType) {
+        Users student = complaint.getStudent() != null
+                ? complaint.getStudent()
+                : (complaint.getRegistration() != null ? complaint.getRegistration().getStudent() : null);
+        Activities activity = complaint.getActivity();
+        if (student == null || student.getId() == null) {
+            return;
+        }
+
+        NotificationRequest notification = new NotificationRequest();
+        notification.setUserId(student.getId());
+        notification.setActivityId(activity != null ? activity.getId() : null);
+        notification.setTitle(title);
+        notification.setMessage(message);
+        notification.setContent(message);
+        notification.setType(type);
+        notification.setReferenceType(referenceType);
+        notification.setSourceEventId(referenceType + ":" + complaint.getId());
+        notification.setSourceTopic("activity-complaints");
+
+        try {
+            notificationCommandProducer.publishCreated(notification);
+        } catch (Exception exception) {
+            log.warn("Khong the gui thong bao xu ly khieu nai id={}: {}", complaint.getId(), exception.getMessage());
+        }
     }
 }

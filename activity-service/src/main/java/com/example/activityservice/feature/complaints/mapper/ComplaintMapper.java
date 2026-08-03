@@ -1,82 +1,157 @@
 package com.example.activityservice.feature.complaints.mapper;
 
 import com.example.activityservice.feature.activities.model.Activities;
-import com.example.activityservice.feature.attendances.model.Attendances;
 import com.example.activityservice.feature.complaints.dto.ComplaintEligibleActivityResponse;
 import com.example.activityservice.feature.complaints.dto.ComplaintRequest;
 import com.example.activityservice.feature.complaints.dto.ComplaintResponse;
 import com.example.activityservice.feature.complaints.model.Complaints;
 import com.example.activityservice.feature.registration.model.Registrations;
-import org.springframework.stereotype.Component;
+import com.example.activityservice.feature.semesters.model.Semesters;
+import com.example.activityservice.feature.users.model.Users;
+import org.mapstruct.AfterMapping;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.ReportingPolicy;
 
-@Component
-public class ComplaintMapper {
-    public Complaints toNewEntity(ComplaintRequest request, Registrations registration) {
-        Complaints complaint = new Complaints();
-        complaint.setRegistration(registration);
-        updateEntityFromRequest(request, complaint);
-        complaint.setStatus(0);
-        return complaint;
-    }
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+public abstract class ComplaintMapper {
+    protected static final String DEFAULT_DETAIL_RESPONSE = "Chờ đơn vị tổ chức hoạt động phản hồi!";
+    protected static final int LEGACY_TEXT_MAX_LENGTH = 255;
 
-    public void updateEntityFromRequest(ComplaintRequest request, Complaints complaint) {
-        complaint.setDetail(request.getDetail().trim());
-        complaint.setEvidenceUrl(normalize(request.getEvidenceUrl()));
-    }
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "registration", source = "registration")
+    @Mapping(target = "detail", expression = "java(request.getDetail() != null ? request.getDetail().trim() : null)")
+    @Mapping(target = "reason", expression = "java(truncateDetail(request.getDetail(), LEGACY_TEXT_MAX_LENGTH))")
+    @Mapping(target = "evidenceUrl", expression = "java(request.getEvidenceUrl() == null || request.getEvidenceUrl().isBlank() ? null : request.getEvidenceUrl().trim())")
+    @Mapping(target = "detailResponse", expression = "java(DEFAULT_DETAIL_RESPONSE)")
+    @Mapping(target = "status", expression = "java(0)")
+    @Mapping(target = "activity", ignore = true)
+    @Mapping(target = "semester", ignore = true)
+    @Mapping(target = "student", ignore = true)
+    @Mapping(target = "response", ignore = true)
+    @Mapping(target = "resolvedAt", ignore = true)
+    @Mapping(target = "resolvedBy", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    public abstract Complaints toNewEntity(ComplaintRequest request, Registrations registration);
 
-    public ComplaintResponse toResponse(Complaints complaint) {
-        if (complaint == null) {
-            return null;
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "registration", ignore = true)
+    @Mapping(target = "detail", expression = "java(request.getDetail() != null ? request.getDetail().trim() : null)")
+    @Mapping(target = "reason", expression = "java(truncateDetail(request.getDetail(), LEGACY_TEXT_MAX_LENGTH))")
+    @Mapping(target = "evidenceUrl", expression = "java(request.getEvidenceUrl() == null || request.getEvidenceUrl().isBlank() ? null : request.getEvidenceUrl().trim())")
+    @Mapping(target = "detailResponse", ignore = true)
+    @Mapping(target = "status", expression = "java(0)")
+    @Mapping(target = "activity", ignore = true)
+    @Mapping(target = "semester", ignore = true)
+    @Mapping(target = "student", ignore = true)
+    @Mapping(target = "response", ignore = true)
+    @Mapping(target = "resolvedAt", ignore = true)
+    @Mapping(target = "resolvedBy", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    public abstract void updateEntityFromRequest(ComplaintRequest request, @MappingTarget Complaints complaint);
+
+    @Mapping(target = "registrationId", source = "registration.id")
+    @Mapping(target = "activityId", source = "activity.id")
+    @Mapping(target = "activityTitle", source = "activity.title")
+    @Mapping(target = "semesterId", source = "semester.id")
+    @Mapping(target = "semesterName", source = "semester.name")
+    @Mapping(target = "studentId", source = "student.id")
+    @Mapping(target = "studentCode", source = "student.studentCode")
+    @Mapping(target = "studentName", source = "student.fullName")
+    @Mapping(target = "statusLabel", expression = "java(resolveStatusLabel(complaint.getStatus()))")
+    public abstract ComplaintResponse toResponse(Complaints complaint);
+
+    @Mapping(target = "registrationId", source = "registration.id")
+    @Mapping(target = "activityId", source = "registration.activity.id")
+    @Mapping(target = "activityTitle", source = "registration.activity.title")
+    @Mapping(target = "location", source = "registration.activity.location")
+    @Mapping(target = "startDate", source = "registration.activity.startDate")
+    @Mapping(target = "endDate", source = "registration.activity.endDate")
+    @Mapping(target = "checkinTime", source = "registration.attendance.checkinTime")
+    @Mapping(target = "checkoutTime", source = "registration.attendance.checkoutTime")
+    @Mapping(target = "complaint", expression = "java(toResponse(complaint))")
+    public abstract ComplaintEligibleActivityResponse toEligibleResponse(
+            Registrations registration,
+            Complaints complaint);
+
+    public void syncRegistrationContext(Complaints complaint, Registrations registration) {
+        if (complaint == null || registration == null) {
+            return;
         }
 
-        Registrations registration = complaint.getRegistration();
-        Activities activity = registration != null ? registration.getActivity() : null;
-
-        ComplaintResponse response = new ComplaintResponse();
-        response.setId(complaint.getId());
-        response.setRegistrationId(registration != null ? registration.getId() : null);
-        response.setActivityId(activity != null ? activity.getId() : null);
-        response.setActivityTitle(activity != null ? activity.getTitle() : null);
-        response.setDetail(complaint.getDetail());
-        response.setEvidenceUrl(complaint.getEvidenceUrl());
-        response.setResponse(complaint.getResponse());
-        response.setStatus(complaint.getStatus());
-        response.setStatusLabel(resolveStatusLabel(complaint.getStatus()));
-        response.setResolvedAt(complaint.getResolvedAt());
-        response.setCreatedAt(complaint.getCreatedAt());
-        response.setUpdatedAt(complaint.getUpdatedAt());
-        return response;
-    }
-
-    public ComplaintEligibleActivityResponse toEligibleResponse(
-            Registrations registration,
-            Complaints complaint) {
         Activities activity = registration.getActivity();
-        Attendances attendance = registration.getAttendance();
+        Users student = registration.getStudent();
 
-        ComplaintEligibleActivityResponse response = new ComplaintEligibleActivityResponse();
-        response.setRegistrationId(registration.getId());
-        response.setActivityId(activity != null ? activity.getId() : null);
-        response.setActivityTitle(activity != null ? activity.getTitle() : null);
-        response.setLocation(activity != null ? activity.getLocation() : null);
-        response.setStartDate(activity != null ? activity.getStartDate() : null);
-        response.setEndDate(activity != null ? activity.getEndDate() : null);
-        response.setCheckinTime(attendance != null ? attendance.getCheckinTime() : null);
-        response.setCheckoutTime(attendance != null ? attendance.getCheckoutTime() : null);
-        response.setComplaint(toResponse(complaint));
-        return response;
+        complaint.setRegistration(registration);
+        complaint.setActivity(activity);
+        complaint.setSemester(activity != null ? activity.getSemester() : null);
+        complaint.setStudent(student);
     }
 
-    private String normalize(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+    @AfterMapping
+    protected void syncNewEntityContext(Registrations registration, @MappingTarget Complaints complaint) {
+        syncRegistrationContext(complaint, registration);
+        applyDefaultDetailResponse(complaint);
     }
 
-    private String resolveStatusLabel(Integer status) {
+    @AfterMapping
+    protected void applyDefaultDetailResponse(@MappingTarget Complaints complaint) {
+        if (complaint.getDetailResponse() == null || complaint.getDetailResponse().isBlank()) {
+            complaint.setDetailResponse(DEFAULT_DETAIL_RESPONSE);
+        }
+    }
+
+    @AfterMapping
+    protected void fillResponseFallbacks(Complaints complaint, @MappingTarget ComplaintResponse response) {
+        Registrations registration = complaint.getRegistration();
+        Activities activity = complaint.getActivity() != null
+                ? complaint.getActivity()
+                : (registration != null ? registration.getActivity() : null);
+        Semesters semester = complaint.getSemester() != null
+                ? complaint.getSemester()
+                : (activity != null ? activity.getSemester() : null);
+        Users student = complaint.getStudent() != null
+                ? complaint.getStudent()
+                : (registration != null ? registration.getStudent() : null);
+
+        if (response.getRegistrationId() == null && registration != null) {
+            response.setRegistrationId(registration.getId());
+        }
+        if (response.getActivityId() == null && activity != null) {
+            response.setActivityId(activity.getId());
+            response.setActivityTitle(activity.getTitle());
+        }
+        if (response.getSemesterId() == null && semester != null) {
+            response.setSemesterId(semester.getId());
+            response.setSemesterName(semester.getName());
+        }
+        if (response.getStudentId() == null && student != null) {
+            response.setStudentId(student.getId());
+            response.setStudentCode(student.getStudentCode());
+            response.setStudentName(student.getFullName());
+        }
+    }
+
+    protected String truncateDetail(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        String trimmedValue = value.trim();
+        if (trimmedValue.length() <= maxLength) {
+            return trimmedValue;
+        }
+        return trimmedValue.substring(0, maxLength);
+    }
+
+    protected String resolveStatusLabel(Integer status) {
         if (status == null || status == 0) {
             return "Đang chờ xử lý";
         }
         if (status == 1) {
-            return "Đã phản hồi";
+            return "Đã duyệt";
         }
         if (status == 2) {
             return "Từ chối";

@@ -21,6 +21,7 @@ public class ActivityRequest {
     private String sourceLink;
     private Boolean isExternal;
     private Boolean isFaculty;
+    private Boolean requiresAdminApproval;
 
     private LocalDateTime registrationStart;
     private LocalDateTime registrationEnd;

@@ -41,7 +41,7 @@ public class LocationController {
     }
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<List<LocationResponse>>> getLocations(
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) Boolean bookable,
@@ -61,33 +61,29 @@ public class LocationController {
     }
 
     @GetMapping("/available")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT', 'STUDENT')")
     public ResponseEntity<ApiResponse<List<LocationResponse>>> getAvailableLocations(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
             @RequestParam(required = false) Integer minCapacity,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) Long managerDepartmentId,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Boolean adminManaged) {
+            @RequestParam(required = false) String keyword) {
         return ResponseEntity.ok(ApiResponse.success(locationService.getAvailableLocations(
                 startTime,
                 endTime,
                 minCapacity,
                 type,
-                managerDepartmentId,
-                keyword,
-                adminManaged)));
+                keyword)));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<LocationResponse>> getLocationById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(locationService.getLocationById(id)));
     }
 
     @GetMapping("/{id}/bookings")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<List<LocationBookingResponse>>> getLocationBookings(
             @PathVariable Long id,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,

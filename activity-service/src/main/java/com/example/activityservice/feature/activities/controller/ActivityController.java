@@ -43,13 +43,50 @@ public class ActivityController {
             @RequestParam(value = "status", required = false, defaultValue = "ALL") String status,
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "size", required = false, defaultValue = "5") int size,
-            @RequestParam(value = "departmentId", required = false, defaultValue = "") Long departmentId
+            @RequestParam(value = "departmentId", required = false, defaultValue = "") Long departmentId,
+            @RequestParam(value = "adminApprovalOnly", required = false, defaultValue = "false")
+            boolean adminApprovalOnly
     ) {
         int pageNumber = page > 0 ? page - 1 : 0;
         Pageable customPageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "id"));
         return ResponseEntity.ok(
-                ApiResponse.success(activityService.getAllActivities(keyword, level, status, departmentId, customPageable))
+                ApiResponse.success(activityService.getAllActivities(
+                        keyword, level, status, departmentId, adminApprovalOnly, customPageable))
         );
+    }
+
+    @GetMapping("/department-approvals")
+    @PreAuthorize("hasRole('DEPARTMENT')")
+    public ResponseEntity<ApiResponse<PageDTO<ActivityResponse>>> getDepartmentApprovalActivities(
+            @RequestParam(value = "keyword", required = false, defaultValue = "") String keyword,
+            @RequestParam(value = "status", required = false, defaultValue = "PENDING") String status,
+            @RequestParam(value = "classId", required = false) Long classId,
+            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size,
+            @RequestParam(value = "sortBy", required = false, defaultValue = "updatedAt") String sortBy,
+            @RequestParam(value = "sortDirection", required = false, defaultValue = "DESC") String sortDirection
+    ) {
+        int pageNumber = page > 0 ? page - 1 : 0;
+        Sort.Direction direction = "ASC".equalsIgnoreCase(sortDirection) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(
+                pageNumber,
+                size,
+                Sort.by(direction, normalizeApprovalSortBy(sortBy)));
+
+        return ResponseEntity.ok(ApiResponse.success(
+                activityService.getDepartmentApprovalActivities(keyword, status, classId, pageable)
+        ));
+    }
+
+    @GetMapping("/department-approvals/stats")
+    @PreAuthorize("hasRole('DEPARTMENT')")
+    public ResponseEntity<ApiResponse<ActivityStatsResponse>> getDepartmentApprovalStats(
+            @RequestParam(value = "keyword", required = false, defaultValue = "") String keyword,
+            @RequestParam(value = "classId", required = false) Long classId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                activityService.getDepartmentApprovalStats(keyword, classId)
+        ));
     }
 
     @GetMapping("/my-created")
@@ -88,7 +125,7 @@ public class ActivityController {
 
     // --- UPDATE ---
     @PutMapping("/{id}")
-    @PreAuthorize("@activitySecurity.hasActivityPermission(authentication, #id)")
+    @PreAuthorize("@activitySecurity.canUpdateActivity(authentication, #id)")
     public ResponseEntity<ApiResponse<ActivityResponse>> updateActivity(
             @PathVariable Long id,
             @RequestBody ActivityRequest request) {
@@ -131,12 +168,19 @@ public class ActivityController {
         return ResponseEntity.ok(ApiResponse.success("Hủy hoạt động thành công!"));
     }
 
-    // --- GENERATE QR CODE ---
+    @PutMapping("/{id}/support-admin")
+    @PreAuthorize("hasRole('DEPARTMENT')")
+    public ResponseEntity<ApiResponse<String>> requestAdminSupport(
+            @PathVariable Long id,
+            @RequestBody ActivityReasonRequest request) {
+        activityService.requestAdminSupport(id, request.getReason());
+        return ResponseEntity.ok(ApiResponse.success("Đã gửi yêu cầu hỗ trợ lên admin."));
+    }
+
     @GetMapping("/{id}/qr-code")
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<String>> getActivityQrCode(@PathVariable Long id) {
-        String qrImageBase64 = activityService.getQrCodeForActivity(id);
-        return ResponseEntity.ok(ApiResponse.success(qrImageBase64));
+        return ResponseEntity.ok(ApiResponse.success(activityService.getQrCodeForActivity(id)));
     }
 
     // --- GET COUNT ACT BY STATUS ---
@@ -228,5 +272,14 @@ public class ActivityController {
         String prompt = request.get("prompt");
         String description = activityService.generateDescription(prompt);
         return ResponseEntity.ok(ApiResponse.success(description));
+    }
+
+    private String normalizeApprovalSortBy(String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return "updatedAt";
+        }
+        List<String> allowedFields = List.of(
+                "id", "title", "createdAt", "updatedAt", "startDate", "endDate", "status", "handledAt");
+        return allowedFields.contains(sortBy) ? sortBy : "updatedAt";
     }
 }

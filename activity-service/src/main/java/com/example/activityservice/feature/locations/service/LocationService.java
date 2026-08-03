@@ -22,9 +22,7 @@ public interface LocationService {
             LocalDateTime endTime,
             Integer minCapacity,
             String type,
-            Long managerDepartmentId,
-            String keyword,
-            Boolean adminManaged);
+            String keyword);
     LocationResponse getLocationById(Long id);
     LocationResponse updateLocation(Long id, LocationRequest request);
     LocationResponse updateAvailability(Long id, LocationAvailabilityRequest request);

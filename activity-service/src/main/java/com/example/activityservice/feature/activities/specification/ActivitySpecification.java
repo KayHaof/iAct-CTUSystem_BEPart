@@ -10,6 +10,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 public class ActivitySpecification {
@@ -177,6 +178,76 @@ public class ActivitySpecification {
             if (departmentId == null)
                 return null;
             return cb.equal(root.get("departmentId"), departmentId);
+        };
+    }
+
+    public static Specification<Activities> matchesApprovalKeyword(String keyword) {
+        return (root, query, cb) -> {
+            if (!StringUtils.hasText(keyword)) {
+                return null;
+            }
+            String like = "%" + keyword.trim().toLowerCase() + "%";
+            return cb.or(
+                    cb.like(cb.lower(root.get("title")), like),
+                    cb.like(cb.lower(root.get("description")), like),
+                    cb.like(cb.lower(root.get("location")), like),
+                    cb.like(cb.lower(root.get("createdBy").get("fullName")), like),
+                    cb.like(cb.lower(root.get("createdBy").get("studentCode")), like),
+                    cb.like(cb.lower(root.get("createdBy").get("username")), like));
+        };
+    }
+
+    public static Specification<Activities> hasCreatedByRoleType(Integer roleType) {
+        return (root, query, cb) -> {
+            if (roleType == null) {
+                return null;
+            }
+            return cb.equal(root.get("createdBy").get("roleType"), roleType);
+        };
+    }
+
+    public static Specification<Activities> hasRequiresAdminApproval(Boolean requiresAdminApproval) {
+        return (root, query, cb) -> {
+            if (requiresAdminApproval == null) {
+                return null;
+            }
+            return cb.equal(root.get("requiresAdminApproval"), requiresAdminApproval);
+        };
+    }
+
+    public static Specification<Activities> isDepartmentDirectActivity() {
+        return (root, query, cb) -> cb.and(
+                cb.equal(root.get("createdBy").get("roleType"), 2),
+                cb.or(cb.isFalse(root.get("requiresAdminApproval")), cb.isNull(root.get("requiresAdminApproval"))));
+    }
+
+    public static Specification<Activities> isDepartmentApprovalActivity() {
+        return (root, query, cb) -> cb.and(
+                cb.equal(root.get("createdBy").get("roleType"), 2),
+                cb.isTrue(root.get("requiresAdminApproval")));
+    }
+
+    public static Specification<Activities> isNotDepartmentDirectActivity() {
+        return (root, query, cb) -> cb.or(
+                cb.notEqual(root.get("createdBy").get("roleType"), 2),
+                cb.isTrue(root.get("requiresAdminApproval")));
+    }
+
+    public static Specification<Activities> hasCreatedByIdIn(Collection<Long> userIds) {
+        return (root, query, cb) -> {
+            if (userIds == null || userIds.isEmpty()) {
+                return cb.disjunction();
+            }
+            return root.get("createdBy").get("id").in(userIds);
+        };
+    }
+
+    public static Specification<Activities> hasStatusIn(Collection<Integer> statuses) {
+        return (root, query, cb) -> {
+            if (statuses == null || statuses.isEmpty()) {
+                return cb.disjunction();
+            }
+            return root.get("status").in(statuses);
         };
     }
 

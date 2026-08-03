@@ -7,6 +7,7 @@ import com.example.activityservice.feature.activities.mapper.ActivityMapper;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.service.ActivityCacheService;
+import com.example.activityservice.feature.activities.service.ActivityRegistrationNotificationService;
 import com.example.activityservice.feature.activitySchedule.mapper.ActivityScheduleMapper;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
 import com.example.activityservice.feature.benefits.mapper.BenefitMapper;
@@ -28,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -86,6 +86,8 @@ class ActivityServiceImplTest {
     private NotificationCommandProducer notificationCommandProducer;
     @Mock
     private ActivityCacheService activityCacheService;
+    @Mock
+    private ActivityRegistrationNotificationService registrationNotificationService;
 
     @Mock
     private ActivityResponseAssembler responseAssembler;
@@ -222,19 +224,8 @@ class ActivityServiceImplTest {
 
         when(activityRepository.findById(40L)).thenReturn(Optional.of(activity));
         when(activityRepository.save(activity)).thenReturn(activity);
-        when(userRepository.findActiveStudentIdsByDepartmentId(2L)).thenReturn(List.of(10L, 11L));
-
         adminOperations.approveActivity(40L);
 
-        ArgumentCaptor<com.example.activityservice.common.dto.NotificationRequest> captor =
-                ArgumentCaptor.forClass(com.example.activityservice.common.dto.NotificationRequest.class);
-        verify(notificationCommandProducer, org.mockito.Mockito.times(2)).publishCreated(captor.capture());
-
-        List<com.example.activityservice.common.dto.NotificationRequest> requests = captor.getAllValues();
-        assertEquals(List.of(10L, 11L), requests.stream()
-                .map(req -> req.getUserId())
-                .toList());
-        assertEquals("activity-registration-open:40:user:10", requests.get(0).getSourceEventId());
-        assertEquals("activity-registration-open:40:user:11", requests.get(1).getSourceEventId());
+        verify(registrationNotificationService).notifyIfRegistrationOpen(activity);
     }
 }

@@ -2,6 +2,8 @@ package com.example.activityservice.feature.points.service.impl;
 
 import com.example.activityservice.feature.points.dto.*;
 import com.example.activityservice.feature.benefits.repository.BenefitRepository;
+import com.example.activityservice.feature.certificate_submissions.model.CertificateSubmission;
+import com.example.activityservice.feature.certificate_submissions.repository.CertificateSubmissionRepository;
 import com.example.activityservice.feature.points.service.PointService;
 import com.example.activityservice.feature.points.service.PointCacheService;
 import com.example.activityservice.feature.benefits.model.Benefits;
@@ -30,6 +32,7 @@ public class PointServiceImpl implements PointService {
     private final SemesterRepository semesterRepository;
     private final CategoryRepository categoryRepository;
     private final BenefitRepository benefitRepository;
+    private final CertificateSubmissionRepository certificateSubmissionRepository;
     private final PointCacheService pointCacheService;
 
     @Override
@@ -49,16 +52,21 @@ public class PointServiceImpl implements PointService {
             return cached.get();
         }
 
-        List<Benefits> earnedBenefits = benefitRepository.findByStudentIdAndSemesterId(studentId, semester.getId());
+        List<Benefits> earnedBenefits = benefitRepository.findAwardedByStudentIdAndSemesterId(studentId, semester.getId());
+        List<CertificateSubmission> approvedCertificates =
+                certificateSubmissionRepository.findApprovedForPointSummary(studentId, semester.getId());
 
         int totalPoint = earnedBenefits.stream()
                 .mapToInt(b -> b.getPoint() != null ? b.getPoint() : 0)
+                .sum()
+                + approvedCertificates.stream()
+                .mapToInt(c -> c.getApprovedPoint() != null ? c.getApprovedPoint() : 0)
                 .sum();
 
         int maxPoint = categoryRepository.sumMaxPointBySemesterId(semester.getId());
         double percentage = maxPoint > 0 ? (totalPoint * 100.0) / maxPoint : 0;
 
-        List<CategoryPointItem> breakdown = buildCategoryBreakdown(earnedBenefits);
+        List<CategoryPointItem> breakdown = buildCategoryBreakdown(earnedBenefits, approvedCertificates);
         List<String> warnings = generateWarnings(totalPoint, maxPoint, breakdown);
 
         String status = calculateStatus(percentage);
@@ -93,15 +101,20 @@ public class PointServiceImpl implements PointService {
             return cached.get();
         }
 
-        List<Benefits> earnedBenefits = benefitRepository.findByStudentIdAndSemesterId(studentId, semester.getId());
+        List<Benefits> earnedBenefits = benefitRepository.findAwardedByStudentIdAndSemesterId(studentId, semester.getId());
+        List<CertificateSubmission> approvedCertificates =
+                certificateSubmissionRepository.findApprovedForPointSummary(studentId, semester.getId());
 
         int totalPoint = earnedBenefits.stream()
                 .mapToInt(b -> b.getPoint() != null ? b.getPoint() : 0)
+                .sum()
+                + approvedCertificates.stream()
+                .mapToInt(c -> c.getApprovedPoint() != null ? c.getApprovedPoint() : 0)
                 .sum();
 
         int maxPoint = categoryRepository.sumMaxPointBySemesterId(semester.getId());
 
-        List<CategoryDetail> categories = buildCategoryDetails(earnedBenefits);
+        List<CategoryDetail> categories = buildCategoryDetails(earnedBenefits, approvedCertificates);
 
         PointDetailsResponse response = PointDetailsResponse.builder()
                 .studentId(studentId)
@@ -109,6 +122,7 @@ public class PointServiceImpl implements PointService {
                 .totalPoint(totalPoint)
                 .maxPoint(maxPoint)
                 .categories(categories)
+                .details(buildContributionDetails(earnedBenefits, approvedCertificates))
                 .build();
         pointCacheService.putDetails(studentId, semester.getId(), response);
         return response;
@@ -150,58 +164,115 @@ public class PointServiceImpl implements PointService {
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong co hoc ky hien tai"));
     }
 
-    private List<CategoryPointItem> buildCategoryBreakdown(List<Benefits> benefits) {
-        Map<Long, List<Benefits>> byCategory = benefits.stream()
-                .filter(b -> b.getCategory() != null)
-                .collect(Collectors.groupingBy(b -> b.getCategory().getId()));
+    private List<CategoryPointItem> buildCategoryBreakdown(
+            List<Benefits> benefits,
+            List<CertificateSubmission> certificates) {
+        Map<Long, CategoryAccumulator> byCategory = categoryAccumulators(benefits, certificates);
 
-        List<CategoryPointItem> breakdown = new ArrayList<>();
-
-        for (Map.Entry<Long, List<Benefits>> entry : byCategory.entrySet()) {
-            Categories category = entry.getValue().get(0).getCategory();
-            int earned = entry.getValue().stream()
-                    .mapToInt(b -> b.getPoint() != null ? b.getPoint() : 0)
-                    .sum();
-
-            breakdown.add(CategoryPointItem.builder()
-                    .categoryId(category.getId())
-                    .categoryCode(category.getCode())
-                    .categoryName(category.getName())
-                    .earnedPoint(earned)
-                    .maxPoint(category.getMaxPoint())
-                    .percentage(category.getMaxPoint() > 0 ? Math.round((earned * 100.0) / category.getMaxPoint() * 10.0) / 10.0 : 0)
-                    .build());
-        }
-
-        return breakdown;
+        return byCategory.values().stream()
+                .map(accumulator -> CategoryPointItem.builder()
+                        .categoryId(accumulator.category().getId())
+                        .categoryCode(accumulator.category().getCode())
+                        .categoryName(accumulator.category().getName())
+                        .earnedPoint(accumulator.earnedPoint())
+                        .maxPoint(accumulator.category().getMaxPoint())
+                        .percentage(percentage(accumulator.earnedPoint(), accumulator.category().getMaxPoint()))
+                        .build())
+                .collect(Collectors.toList());
     }
 
-    private List<CategoryDetail> buildCategoryDetails(List<Benefits> benefits) {
-        Map<Long, List<Benefits>> byCategory = benefits.stream()
-                .filter(b -> b.getCategory() != null)
-                .collect(Collectors.groupingBy(b -> b.getCategory().getId()));
+    private List<CategoryDetail> buildCategoryDetails(
+            List<Benefits> benefits,
+            List<CertificateSubmission> certificates) {
+        Map<Long, CategoryAccumulator> byCategory = categoryAccumulators(benefits, certificates);
 
-        List<CategoryDetail> categories = new ArrayList<>();
-
-        for (Map.Entry<Long, List<Benefits>> entry : byCategory.entrySet()) {
-            Categories category = entry.getValue().get(0).getCategory();
-            int earned = entry.getValue().stream()
-                    .mapToInt(b -> b.getPoint() != null ? b.getPoint() : 0)
-                    .sum();
-
-            categories.add(CategoryDetail.builder()
-                    .id(category.getId())
-                    .code(category.getCode())
-                    .name(category.getName())
-                    .maxPoint(category.getMaxPoint())
-                    .earnedPoint(earned)
-                    .percentage(category.getMaxPoint() > 0 ? Math.round((earned * 100.0) / category.getMaxPoint() * 10.0) / 10.0 : 0)
-                    .criteria(Collections.emptyList())
-                    .build());
-        }
-
-        return categories;
+        return byCategory.values().stream()
+                .map(accumulator -> CategoryDetail.builder()
+                        .id(accumulator.category().getId())
+                        .code(accumulator.category().getCode())
+                        .name(accumulator.category().getName())
+                        .maxPoint(accumulator.category().getMaxPoint())
+                        .earnedPoint(accumulator.earnedPoint())
+                        .percentage(percentage(accumulator.earnedPoint(), accumulator.category().getMaxPoint()))
+                        .criteria(Collections.emptyList())
+                        .build())
+                .collect(Collectors.toList());
     }
+
+    private Map<Long, CategoryAccumulator> categoryAccumulators(
+            List<Benefits> benefits,
+            List<CertificateSubmission> certificates) {
+        Map<Long, CategoryAccumulator> byCategory = new LinkedHashMap<>();
+        benefits.stream()
+                .filter(benefit -> benefit.getCategory() != null)
+                .forEach(benefit -> addCategoryPoint(
+                        byCategory,
+                        benefit.getCategory(),
+                        benefit.getPoint() != null ? benefit.getPoint() : 0));
+        certificates.stream()
+                .filter(certificate -> certificate.getApprovedCategory() != null)
+                .forEach(certificate -> addCategoryPoint(
+                        byCategory,
+                        certificate.getApprovedCategory(),
+                        certificate.getApprovedPoint() != null ? certificate.getApprovedPoint() : 0));
+        return byCategory;
+    }
+
+    private void addCategoryPoint(Map<Long, CategoryAccumulator> byCategory, Categories category, int point) {
+        CategoryAccumulator current = byCategory.get(category.getId());
+        byCategory.put(category.getId(), new CategoryAccumulator(
+                category,
+                (current != null ? current.earnedPoint() : 0) + point));
+    }
+
+    private List<PointContributionDetail> buildContributionDetails(
+            List<Benefits> benefits,
+            List<CertificateSubmission> certificates) {
+        List<PointContributionDetail> details = new ArrayList<>();
+        benefits.stream()
+                .map(benefit -> {
+                    var activity = benefit.getActivity();
+                    var category = benefit.getCategory();
+                    return PointContributionDetail.builder()
+                            .sourceType("ACTIVITY")
+                            .activityId(activity != null ? activity.getId() : null)
+                            .activityTitle(activity != null ? activity.getTitle() : null)
+                            .categoryId(category != null ? category.getId() : null)
+                            .categoryName(category != null ? category.getName() : null)
+                            .earnedPoint(benefit.getPoint() != null ? benefit.getPoint() : 0)
+                            .attendedAt(activity != null && activity.getEndDate() != null
+                                    ? activity.getEndDate().toString()
+                                    : null)
+                            .proofStatus(1)
+                            .build();
+                })
+                .forEach(details::add);
+        certificates.stream()
+                .map(certificate -> PointContributionDetail.builder()
+                        .sourceType("CERTIFICATE_SUBMISSION")
+                        .certificateSubmissionId(certificate.getId())
+                        .certificateTitle(certificate.getCertificateTitle())
+                        .categoryId(certificate.getApprovedCategory() != null
+                                ? certificate.getApprovedCategory().getId()
+                                : null)
+                        .categoryName(certificate.getApprovedCategory() != null
+                                ? certificate.getApprovedCategory().getName()
+                                : null)
+                        .earnedPoint(certificate.getApprovedPoint() != null ? certificate.getApprovedPoint() : 0)
+                        .attendedAt(certificate.getReviewedAt() != null ? certificate.getReviewedAt().toString() : null)
+                        .proofStatus(1)
+                        .build())
+                .forEach(details::add);
+        return details;
+    }
+
+    private Double percentage(int earnedPoint, Integer maxPoint) {
+        return maxPoint != null && maxPoint > 0
+                ? Math.round((earnedPoint * 100.0) / maxPoint * 10.0) / 10.0
+                : 0;
+    }
+
+    private record CategoryAccumulator(Categories category, int earnedPoint) {}
 
     private CategoryPointResponse buildCategoryTree(Categories category) {
         List<CategoryPointResponse> children = category.getSubCategories() != null

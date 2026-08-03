@@ -19,8 +19,14 @@ public interface BenefitRepository extends JpaRepository<Benefits, Long> {
         SELECT DISTINCT b.* FROM benefits b
         INNER JOIN activities a ON b.activity_id = a.id
         INNER JOIN registrations r ON r.activity_id = a.id
+        INNER JOIN attendances at ON at.registration_id = r.id
+        INNER JOIN proofs p ON p.registration_id = r.id
         INNER JOIN semesters s ON a.semester_id = s.id
-        WHERE r.student_id = :studentId AND s.id = :semesterId
+        WHERE r.student_id = :studentId
+          AND s.id = :semesterId
+          AND at.checkin_time IS NOT NULL
+          AND at.checkout_time IS NOT NULL
+          AND p.status = 1
         """, nativeQuery = true)
-    List<Benefits> findByStudentIdAndSemesterId(@Param("studentId") Long studentId, @Param("semesterId") Long semesterId);
+    List<Benefits> findAwardedByStudentIdAndSemesterId(@Param("studentId") Long studentId, @Param("semesterId") Long semesterId);
 }

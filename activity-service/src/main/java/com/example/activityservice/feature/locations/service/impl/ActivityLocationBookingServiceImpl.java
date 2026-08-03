@@ -12,9 +12,12 @@ import com.example.activityservice.feature.locations.repository.ActivityLocation
 import com.example.activityservice.feature.locations.repository.LocationRepository;
 import com.example.activityservice.feature.locations.service.ActivityLocationBookingService;
 import com.example.activityservice.feature.users.model.Users;
+import com.example.activityservice.feature.users.service.LocalUserResolver;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +39,11 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
     private static final int STATUS_REJECTED = 2;
     private static final int STATUS_DRAFT = 3;
     private static final int STATUS_CANCELLED = 4;
-
     private final ActivityLocationBookingRepository bookingRepository;
     private final LocationRepository locationRepository;
     private final ActivityScheduleRepository scheduleRepository;
     private final LocationMapper locationMapper;
+    private final LocalUserResolver localUserResolver;
 
     @Override
     @Transactional
@@ -90,9 +93,9 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
         if (locationId == null) {
             throw new AppException(ErrorCode.INVALID_ACTION, "Vui long chon dia diem.");
         }
-        if (!locationRepository.existsById(locationId)) {
-            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dia diem.");
-        }
+        Location location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dia diem."));
+        validateCanViewLocationSchedule(location);
         TimeRange timeRange = resolveScheduleRange(date, view);
         List<Integer> statusFilter = statuses == null || statuses.isEmpty() ? null : statuses;
         return bookingRepository.findScheduleByLocation(
@@ -146,7 +149,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
             validateNoConflict(location.getId(), request.getStartTime(), request.getEndTime(), activity.getId());
         }
         syncScheduleLocation(schedule, location);
-        return ActivityLocationBooking.builder()
+        ActivityLocationBooking.ActivityLocationBookingBuilder builder = ActivityLocationBooking.builder()
                 .activity(activity)
                 .location(location)
                 .schedule(schedule)
@@ -154,8 +157,12 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .status(status)
-                .requestedBy(requestedBy)
-                .build();
+                .requestedBy(requestedBy);
+        if (Integer.valueOf(STATUS_APPROVED).equals(status)) {
+            builder.approvedBy(requestedBy)
+                    .approvedAt(LocalDateTime.now());
+        }
+        return builder.build();
     }
 
     private ActivitySchedule resolveSchedule(Activities activity, LocationBookingRequest request) {
@@ -251,6 +258,38 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
             throw new AppException(ErrorCode.INVALID_ACTION,
                     "Dia diem dang khong san sang cho muon: " + location.getName());
         }
+    }
+
+    private void validateCanViewLocationSchedule(Location location) {
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return;
+        }
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            Long departmentId = requireCurrentDepartmentId();
+            if (Objects.equals(departmentId, location.getManagerDepartmentId())) {
+                return;
+            }
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem lich su dung dia diem nay.");
+    }
+
+    private Long requireCurrentDepartmentId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+        }
+        Users currentUser = localUserResolver.resolveByUsername(authentication.getName());
+        if (currentUser.getDepartmentId() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+        }
+        return currentUser.getDepartmentId();
+    }
+
+    private boolean hasCurrentRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> role.equals(authority.getAuthority()));
     }
 
     private void validateCapacity(Activities activity, Location location) {

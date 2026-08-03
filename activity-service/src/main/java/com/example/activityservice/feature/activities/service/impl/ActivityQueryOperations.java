@@ -6,11 +6,10 @@ import com.example.activityservice.feature.activities.mapper.ActivityMapper;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.specification.ActivitySpecification;
-import com.example.activityservice.feature.organizers.model.Organizers;
-import com.example.activityservice.feature.organizers.repository.OrganizerRepository;
+// import com.example.activityservice.feature.organizers.repository.OrganizerRepository;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import com.example.activityservice.feature.users.model.Users;
-import com.example.activityservice.feature.users.repository.UserRepository;
+// import com.example.activityservice.feature.users.repository.UserRepository;
 import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
@@ -26,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,8 +33,8 @@ public class ActivityQueryOperations {
     private static final int STATUS_APPROVED = 1;
 
     private final ActivityRepository activityRepository;
-    private final OrganizerRepository organizerRepository;
-    private final UserRepository userRepository;
+    // private final OrganizerRepository organizerRepository;
+    // private final UserRepository userRepository;
     private final RegistrationRepository registrationRepository;
     private final ActivityMapper activityMapper;
     private final ActivityResponseAssembler responseAssembler;
@@ -47,6 +45,8 @@ public class ActivityQueryOperations {
         Activities activity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong"));
 
+        ensureCurrentAdminCanRead(activity);
+        accessSupport.ensureCurrentDepartmentCanRead(activity);
         ensureCurrentStudentCanRead(activity);
 
         return buildDetailResponse(activity);
@@ -73,10 +73,13 @@ public class ActivityQueryOperations {
         return response;
     }
 
+    @Transactional(readOnly = true)
     public ActivityTimeLocationResponse getActivityTimesAndLocation(Long id) {
         Activities activity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
                         "Khong tim thay hoat dong voi ID: " + id));
+        ensureCurrentAdminCanRead(activity);
+        accessSupport.ensureCurrentDepartmentCanRead(activity);
         ensureCurrentStudentCanRead(activity);
         return activityMapper.toTimeResponse(activity);
     }
@@ -93,9 +96,30 @@ public class ActivityQueryOperations {
         }
     }
 
+    private void ensureCurrentAdminCanRead(Activities activity) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return;
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_ADMIN"));
+        if (!isAdmin) {
+            return;
+        }
+
+        if (activity.getCreatedBy() == null || !Integer.valueOf(2).equals(activity.getCreatedBy().getRoleType())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Admin chi xem hoat dong do Khoa/Don vi gui len.");
+        }
+    }
+
     @Transactional(readOnly = true)
     public PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId,
+            boolean adminApprovalOnly,
             Pageable pageable) {
+        final int ROLE_DEPARTMENT = 2;
         Long userDeptId = null;
         boolean isAdmin = false;
         boolean isDepartment = false;
@@ -106,25 +130,13 @@ public class ActivityQueryOperations {
 
         if (authentication != null && authentication.isAuthenticated()
                 && !(authentication instanceof AnonymousAuthenticationToken)) {
-            isAdmin = authentication.getAuthorities().stream()
-                    .anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_ADMIN"));
-            isDepartment = authentication.getAuthorities().stream()
-                    .anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_DEPARTMENT"));
+            isAdmin = accessSupport.isCurrentAdmin();
+            isDepartment = accessSupport.isCurrentDepartment();
             isStudent = !isAdmin && !isDepartment;
 
-            String username = authentication.getName();
-            Optional<Users> userOpt = userRepository.findByUsername(username);
-
-            if (userOpt.isPresent()) {
-                currentUser = userOpt.get();
-                if (isAdmin || isDepartment) {
-                    Optional<Organizers> orgOpt = organizerRepository.findById(currentUser.getId());
-                    if (orgOpt.isPresent() && orgOpt.get().getDepartmentId() != null) {
-                        userDeptId = orgOpt.get().getDepartmentId();
-                    }
-                } else {
-                    userDeptId = currentUser.getDepartmentId();
-                }
+            currentUser = accessSupport.getCurrentUserOrNull();
+            if (currentUser != null) {
+                userDeptId = currentUser.getDepartmentId();
             }
         }
 
@@ -133,13 +145,18 @@ public class ActivityQueryOperations {
         if (isStudent) {
             spec = spec.and(ActivitySpecification.isApproved());
             spec = spec.and(ActivitySpecification.visibleToStudentDepartment(userDeptId));
-        } else if (isDepartment && currentUser != null) {
-            spec = spec.and(ActivitySpecification.isOwnedByOrOrganizedBy(currentUser.getId()));
+        } else if (isDepartment) {
+            userDeptId = accessSupport.requireCurrentDepartmentId();
+            spec = spec.and(ActivitySpecification.hasDepartmentId(userDeptId));
         } else if (isAdmin) {
-            spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.notEqual(root.get("status"), 3));
+            spec = spec.and(ActivitySpecification.hasCreatedByRoleType(ROLE_DEPARTMENT))
+                    .and(ActivitySpecification.hasStatusIn(List.of(0, 1, 2)));
+            if (adminApprovalOnly) {
+                spec = spec.and(ActivitySpecification.hasRequiresAdminApproval(true));
+            }
         }
 
-        if (departmentId != null) {
+        if (departmentId != null && isAdmin) {
             spec = spec.and(ActivitySpecification.hasDepartmentId(departmentId));
         }
 

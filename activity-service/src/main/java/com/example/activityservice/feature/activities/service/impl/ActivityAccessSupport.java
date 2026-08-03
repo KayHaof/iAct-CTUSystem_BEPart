@@ -3,6 +3,8 @@ package com.example.activityservice.feature.activities.service.impl;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.repository.UserRepository;
+import com.example.exception.AppException;
+import com.example.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -18,7 +20,7 @@ public class ActivityAccessSupport {
     private final UserRepository userRepository;
 
     public Users getCurrentUserOrNull() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Authentication authentication = currentAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
                 || authentication instanceof AnonymousAuthenticationToken) {
             return null;
@@ -26,21 +28,50 @@ public class ActivityAccessSupport {
         return userRepository.findByUsername(authentication.getName()).orElse(null);
     }
 
+    public Users requireCurrentUser() {
+        Users currentUser = getCurrentUserOrNull();
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Khong xac dinh duoc tai khoan hien tai.");
+        }
+        return currentUser;
+    }
+
+    public Users requireCurrentDepartmentUser() {
+        if (!isCurrentDepartment()) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Chi tai khoan Khoa/Don vi moi duoc truy cap du lieu nay.");
+        }
+        Users currentUser = requireCurrentUser();
+        if (currentUser.getDepartmentId() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan Khoa/Don vi chua duoc gan don vi.");
+        }
+        return currentUser;
+    }
+
+    public Long requireCurrentDepartmentId() {
+        return requireCurrentDepartmentUser().getDepartmentId();
+    }
+
     public Long currentStudentDepartmentId() {
         Users currentUser = getCurrentUserOrNull();
         return currentUser != null ? currentUser.getDepartmentId() : null;
     }
 
+    public boolean isCurrentAdmin() {
+        return hasCurrentAuthority("ROLE_ADMIN");
+    }
+
+    public boolean isCurrentDepartment() {
+        return hasCurrentAuthority("ROLE_DEPARTMENT");
+    }
+
     public boolean isCurrentStudent() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Authentication authentication = currentAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
                 || authentication instanceof AnonymousAuthenticationToken) {
             return false;
         }
-        boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_ADMIN"));
-        boolean isDepartment = authentication.getAuthorities().stream()
-                .anyMatch(auth -> Objects.equals(auth.getAuthority(), "ROLE_DEPARTMENT"));
+        boolean isAdmin = isCurrentAdmin();
+        boolean isDepartment = isCurrentDepartment();
         return !isAdmin && !isDepartment;
     }
 
@@ -61,5 +92,54 @@ public class ActivityAccessSupport {
                 && user != null
                 && activity.getCreatedBy() != null
                 && Objects.equals(activity.getCreatedBy().getId(), user.getId());
+    }
+
+    public boolean canCurrentDepartmentManageActivity(Activities activity) {
+        if (!isCurrentDepartment() || activity == null || activity.getDepartmentId() == null) {
+            return false;
+        }
+        Users currentUser = getCurrentUserOrNull();
+        return currentUser != null
+                && currentUser.getDepartmentId() != null
+                && Objects.equals(currentUser.getDepartmentId(), activity.getDepartmentId());
+    }
+
+    public void ensureCurrentDepartmentCanManageActivity(Activities activity) {
+        if (canCurrentDepartmentManageActivity(activity)) {
+            return;
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen truy cap hoat dong ngoai don vi cua minh.");
+    }
+
+    public void ensureCurrentDepartmentCanRead(Activities activity) {
+        if (!isCurrentDepartment()) {
+            return;
+        }
+        ensureCurrentDepartmentCanManageActivity(activity);
+    }
+
+    public void ensureCurrentUserCanManageActivity(Activities activity) {
+        if (isCurrentAdmin()) {
+            return;
+        }
+        Users currentUser = getCurrentUserOrNull();
+        if (isCreatedBy(activity, currentUser) || canCurrentDepartmentManageActivity(activity)) {
+            return;
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen thao tac tren hoat dong nay.");
+    }
+
+    private boolean hasCurrentAuthority(String authority) {
+        Authentication authentication = currentAuthentication();
+        return authentication != null
+                && authentication.isAuthenticated()
+                && !(authentication instanceof AnonymousAuthenticationToken)
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(auth -> Objects.equals(auth.getAuthority(), authority));
+    }
+
+    private Authentication currentAuthentication() {
+        return SecurityContextHolder.getContext().getAuthentication();
     }
 }

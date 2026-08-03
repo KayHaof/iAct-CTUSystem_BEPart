@@ -27,7 +27,7 @@ public class RegistrationMapper {
         res.setRegisteredAt(entity.getRegisteredAt());
         res.setStatus(entity.getStatus());
         res.setCancelReason(entity.getCancelReason());
-        res.setIsAttended(entity.getAttendance() != null && entity.getAttendance().getCheckinTime() != null);
+        res.setIsAttended(Integer.valueOf(1).equals(entity.getStatus()));
         res.setAttendedAt(entity.getAttendance() != null ? entity.getAttendance().getCheckinTime() : null);
         res.setCheckoutAt(entity.getAttendance() != null ? entity.getAttendance().getCheckoutTime() : null);
         res.setProofStatus(proofStatus);
@@ -53,6 +53,9 @@ public class RegistrationMapper {
         if (entity.getAttendance() == null || entity.getAttendance().getCheckinTime() == null) {
             return "NOT_CHECKED_IN";
         }
+        if (Integer.valueOf(1).equals(entity.getStatus())) {
+            return "FACE_VERIFIED";
+        }
         if (entity.getAttendance().getCheckoutTime() != null) {
             return "CHECKED_OUT";
         }
@@ -73,6 +76,14 @@ public class RegistrationMapper {
             return "REGISTERED";
         }
 
+        if (entity.getAttendance().getCheckoutTime() == null) {
+            return "CHECKED_IN";
+        }
+
+        if (!Integer.valueOf(1).equals(entity.getStatus())) {
+            return "CHECKED_OUT";
+        }
+
         if (proofStatus != null && proofStatus == 1) {
             return "PROOF_PENDING";
         }
@@ -83,25 +94,26 @@ public class RegistrationMapper {
             return "PROOF_REJECTED";
         }
 
-        if (entity.getAttendance().getCheckoutTime() != null) {
-            return "CHECKED_OUT";
-        }
-        return "CHECKED_IN";
+        return "FACE_VERIFIED";
     }
 
     private Boolean canSubmitProof(Registrations entity, Integer proofStatus) {
         boolean hasCheckedIn = entity.getAttendance() != null && entity.getAttendance().getCheckinTime() != null;
         boolean hasCheckedOut = entity.getAttendance() != null && entity.getAttendance().getCheckoutTime() != null;
+        boolean faceVerified = Integer.valueOf(1).equals(entity.getStatus());
         boolean proofIsOpen = proofStatus == null || proofStatus == 0 || proofStatus == 3;
-        return hasCheckedIn && hasCheckedOut && proofIsOpen && (entity.getStatus() == null || entity.getStatus() != 2);
+        return hasCheckedIn && hasCheckedOut && faceVerified && proofIsOpen;
     }
 
     private String resolveNextAction(String participationStatus, Boolean canSubmitProof) {
         if ("REGISTERED".equals(participationStatus)) {
-            return "CHECK_IN";
+            return "QR_CHECK_IN";
         }
         if ("CHECKED_IN".equals(participationStatus)) {
-            return "CHECK_OUT";
+            return "QR_CHECK_OUT";
+        }
+        if ("CHECKED_OUT".equals(participationStatus)) {
+            return "FACE_VERIFY";
         }
         if (Boolean.TRUE.equals(canSubmitProof)) {
             return "SUBMIT_PROOF";

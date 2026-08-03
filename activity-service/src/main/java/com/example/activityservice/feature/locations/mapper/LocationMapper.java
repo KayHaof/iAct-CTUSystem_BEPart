@@ -68,15 +68,15 @@ public class LocationMapper {
 
     private String toStatusLabel(Integer status) {
         if (status == null) {
-            return "Khong xac dinh";
+            return "Không xác định";
         }
         return switch (status) {
-            case 0 -> "Cho duyet";
-            case 1 -> "Da duyet";
-            case 2 -> "Tu choi";
-            case 3 -> "Ban nhap";
-            case 4 -> "Da huy";
-            default -> "Khong xac dinh";
+            case 0 -> "Chờ duyệt";
+            case 1 -> "Đã duyệt";
+            case 2 -> "Từ chối";
+            case 3 -> "Bản nháp";
+            case 4 -> "Đã hủy";
+            default -> "Không xác định";
         };
     }
 }

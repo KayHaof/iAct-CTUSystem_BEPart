@@ -16,7 +16,17 @@ public interface ActivityService {
 
     ActivityTimeLocationResponse getActivityTimesAndLocation(Long id);
 
-    PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId, Pageable pageable);
+    PageDTO<ActivityResponse> getAllActivities(
+            String keyword,
+            String level,
+            String status,
+            Long departmentId,
+            boolean adminApprovalOnly,
+            Pageable pageable);
+
+    PageDTO<ActivityResponse> getDepartmentApprovalActivities(String keyword, String status, Long classId, Pageable pageable);
+
+    ActivityStatsResponse getDepartmentApprovalStats(String keyword, Long classId);
 
     PageDTO<ActivityResponse> getMyCreatedActivities(Pageable pageable);
 
@@ -27,6 +37,7 @@ public interface ActivityService {
     void approveActivity(Long id);
     void rejectActivity(Long id, String reason);
     void cancelActivity(Long id, String reason);
+    void requestAdminSupport(Long id, String reason);
 
     String getQrCodeForActivity(Long activityId);
 

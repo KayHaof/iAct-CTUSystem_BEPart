@@ -1,6 +1,5 @@
 package com.example.activityservice.feature.registration.controller;
 
-import com.example.activityservice.feature.registration.dto.RegistrationQRResponse;
 import com.example.activityservice.feature.registration.dto.RegistrationRequest;
 import com.example.activityservice.feature.registration.dto.RegistrationResponse;
 import com.example.activityservice.feature.registration.service.RegistrationService;
@@ -81,12 +80,6 @@ public class RegistrationController {
     public ApiResponse<List<RegistrationResponse>> getMyRecords(
             @RequestParam(required = false) Long semesterId) {
         return ApiResponse.success(registrationService.getMyRecords(semesterId));
-    }
-
-    @GetMapping("/{id}/qr")
-    @PreAuthorize("hasRole('STUDENT')")
-    public ApiResponse<RegistrationQRResponse> getRegistrationQR(@PathVariable Long id) {
-        return ApiResponse.success(registrationService.getQRCode(id));
     }
 
     @DeleteMapping("/{id}")

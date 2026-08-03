@@ -1,6 +1,8 @@
 package com.example.activityservice.feature.attendances.service.Impl;
 
 import com.example.activityservice.feature.activities.model.Activities;
+import com.example.activityservice.feature.activities.repository.ActivityRepository;
+import com.example.activityservice.feature.activities.service.impl.ActivityAccessSupport;
 import com.example.activityservice.feature.attendances.dto.AttendanceResponse;
 import com.example.activityservice.feature.attendances.dto.AttendanceStatisticsResponse;
 import com.example.activityservice.feature.attendances.dto.CheckInRequest;
@@ -51,6 +53,7 @@ public class AttendanceServiceImpl implements AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
     private final FaceCheckInAttemptRepository faceCheckInAttemptRepository;
+    private final ActivityRepository activityRepository;
     private final RegistrationRepository registrationRepository;
     private final UserRepository userRepository;
     private final AttendanceMapper attendanceMapper;
@@ -58,6 +61,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     private final RegistrationKafkaProducer registrationKafkaProducer;
     private final StudentFaceEmbeddingProjectionService faceEmbeddingProjectionService;
     private final AiFaceVerificationClient aiFaceVerificationClient;
+    private final ActivityAccessSupport accessSupport;
 
     private Users getCurrentStudent() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -341,6 +345,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Override
     @Transactional(readOnly = true)
     public PageDTO<AttendanceResponse> getAttendancesBySession(Long activityId, Long sessionId, Pageable pageable) {
+        ensureCanManageActivity(activityId);
         List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId);
         
         // Filter registrations that attended this session
@@ -367,6 +372,7 @@ public class AttendanceServiceImpl implements AttendanceService {
 
     @Override
     public void exportAttendanceToExcel(Long activityId, Long sessionId, OutputStream outputStream) throws Exception {
+        ensureCanManageActivity(activityId);
         List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId);
         List<Attendances> attendances = attendanceRepository.findByRegistrationIn(registrations);
 
@@ -397,6 +403,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Override
     @Transactional(readOnly = true)
     public AttendanceStatisticsResponse getStatistics(Long activityId, Long sessionId) {
+        ensureCanManageActivity(activityId);
         List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId);
         List<Attendances> attendances = attendanceRepository.findByRegistrationIn(registrations);
 
@@ -421,5 +428,21 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .absentMale(0)
                 .absentFemale(0)
                 .build();
+    }
+
+    private void ensureCanManageActivity(Long activityId) {
+        if (activityId == null) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Thieu ma hoat dong.");
+        }
+        Activities activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong!"));
+        if (accessSupport.isCurrentAdmin()) {
+            return;
+        }
+        if (accessSupport.isCurrentDepartment()) {
+            accessSupport.ensureCurrentDepartmentCanManageActivity(activity);
+            return;
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem diem danh cua hoat dong nay.");
     }
 }

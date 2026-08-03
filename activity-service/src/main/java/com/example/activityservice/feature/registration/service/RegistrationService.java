@@ -1,6 +1,5 @@
 package com.example.activityservice.feature.registration.service;
 
-import com.example.activityservice.feature.registration.dto.RegistrationQRResponse;
 import com.example.activityservice.feature.registration.dto.RegistrationRequest;
 import com.example.activityservice.feature.registration.dto.RegistrationResponse;
 import com.example.dto.PageDTO;
@@ -21,8 +20,6 @@ public interface RegistrationService {
     RegistrationResponse cancelByActivityId(Long activityId, String reason);
 
     RegistrationResponse cancel(Long registrationId, String reason);
-
-    RegistrationQRResponse getQRCode(Long registrationId);
 
     RegistrationResponse updateSessions(Long registrationId, List<Long> sessionIds);
 

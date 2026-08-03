@@ -2,11 +2,13 @@ package com.example.activityservice.feature.dashboard.service.impl;
 
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.model.Activities;
+import com.example.activityservice.feature.activities.service.impl.ActivityAccessSupport;
 import com.example.activityservice.feature.dashboard.dto.DashboardStatsResponse;
 import com.example.activityservice.feature.dashboard.dto.RecentActivityDto;
 import com.example.activityservice.feature.dashboard.service.DashboardService;
 import com.example.activityservice.feature.dashboard.service.StatsCacheService;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
+import com.example.activityservice.feature.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -20,13 +22,29 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
 
+    private static final int ROLE_STUDENT = 1;
+
     private final ActivityRepository activityRepository;
     private final RegistrationRepository registrationRepository;
+    private final UserRepository userRepository;
     private final StatsCacheService statsCacheService;
+    private final ActivityAccessSupport accessSupport;
 
     @Override
     @Transactional(readOnly = true)
     public DashboardStatsResponse getDashboardStats() {
+        if (accessSupport.isCurrentDepartment()) {
+            return getDepartmentDashboardStats(accessSupport.requireCurrentDepartmentId());
+        }
+        if (!accessSupport.isCurrentAdmin()) {
+            throw new com.example.exception.AppException(
+                    com.example.exception.ErrorCode.FORBIDDEN,
+                    "Ban khong co quyen xem dashboard quan tri.");
+        }
+        return getSystemDashboardStats();
+    }
+
+    private DashboardStatsResponse getSystemDashboardStats() {
         long totalActivities = activityRepository.count();
         long pendingActivities = activityRepository.countByStatus(0);
         long activeActivities = activityRepository.countByStatus(1);
@@ -38,7 +56,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .map(this::mapToRecentActivityDto)
                 .collect(Collectors.toList());
 
-        long totalStudents = registrationRepository.countDistinctStudentIds();
+        long totalStudents = userRepository.countByRoleType(ROLE_STUDENT);
 
         return DashboardStatsResponse.builder()
                 .totalActivities((int) totalActivities)
@@ -47,6 +65,32 @@ public class DashboardServiceImpl implements DashboardService {
                 .totalStudents((int) totalStudents)
                 .totalDepartments((int) statsCacheService.getCachedDepartmentCount())
                 .totalMajors((int) statsCacheService.getCachedMajorCount())
+                .recentActivities(recentActivities)
+                .build();
+    }
+
+    private DashboardStatsResponse getDepartmentDashboardStats(Long departmentId) {
+        long totalActivities = activityRepository.countByDepartmentId(departmentId);
+        long pendingActivities = activityRepository.countByDepartmentIdAndStatus(departmentId, 0);
+        long activeActivities = activityRepository.countByDepartmentIdAndStatus(departmentId, 1);
+
+        List<Activities> recentActivitiesList = activityRepository.findRecentActivitiesWithOrganizerByDepartmentId(
+                departmentId,
+                PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "updatedAt"))).getContent();
+
+        List<RecentActivityDto> recentActivities = recentActivitiesList.stream()
+                .map(this::mapToRecentActivityDto)
+                .collect(Collectors.toList());
+
+        long totalStudents = registrationRepository.countDistinctStudentIdsByActivityDepartmentId(departmentId);
+
+        return DashboardStatsResponse.builder()
+                .totalActivities((int) totalActivities)
+                .pendingActivities((int) pendingActivities)
+                .activeActivities((int) activeActivities)
+                .totalStudents((int) totalStudents)
+                .totalDepartments(1)
+                .totalMajors(0)
                 .recentActivities(recentActivities)
                 .build();
     }

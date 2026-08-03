@@ -7,6 +7,7 @@ import com.example.activityservice.feature.points.kafka.PointEventProducer;
 import com.example.activityservice.feature.proofs.kafka.ProofEventProducer;
 import com.example.activityservice.feature.proofs.mapper.ProofMapper;
 import com.example.activityservice.feature.proofs.model.Proofs;
+import com.example.activityservice.feature.activities.service.impl.ActivityAccessSupport;
 import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.repository.UserRepository;
 import com.example.exception.AppException;
@@ -43,6 +44,7 @@ public class ProofServiceImpl implements ProofService {
         private final ProofEventProducer proofEventProducer;
         private final PointEventProducer pointEventProducer;
         private final PointCacheService pointCacheService;
+        private final ActivityAccessSupport accessSupport;
 
         private Users getCurrentStudent() {
                 String username = Objects.requireNonNull(SecurityContextHolder.getContext().getAuthentication())
@@ -66,26 +68,26 @@ public class ProofServiceImpl implements ProofService {
                                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION,
                                                 "Bạn chưa đăng ký hoạt động này!"));
 
-                // Trạng thái (status) = 1 nghĩa là đã quét mã Check-in/Check-out.
-                // Nếu chưa quét (0) hoặc đã hủy (2) thì không cho nộp!
+                // Trạng thái (status) = 1 nghĩa là sinh viên đã xác thực khuôn mặt thành công.
+                // Nếu chưa xác thực (0) hoặc đã hủy (2) thì không cho nộp!
                 if (reg.getStatus() != 1) {
                         throw new AppException(ErrorCode.INVALID_ACTION,
-                                        "Bạn phải quét mã điểm danh tham gia hoạt động trước khi nộp minh chứng!");
+                                        "Bạn phải xác thực khuôn mặt tham gia hoạt động trước khi nộp minh chứng!");
                 }
 
                 // 3. Xử lý nộp/cập nhật minh chứng
                 Attendances attendance = attendanceRepository.findByRegistrationId(reg.getId())
                                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION,
-                                                "Ban phai check-in tham gia hoat dong truoc khi nop minh chung!"));
+                                                "Ban phai xac thuc khuon mat tham gia hoat dong truoc khi nop minh chung!"));
 
                 if (attendance.getCheckinTime() == null) {
                         throw new AppException(ErrorCode.INVALID_ACTION,
-                                        "Ban phai check-in tham gia hoat dong truoc khi nop minh chung!");
+                                        "Ban phai xac thuc khuon mat tham gia hoat dong truoc khi nop minh chung!");
                 }
 
                 if (attendance.getCheckoutTime() == null) {
                         throw new AppException(ErrorCode.INVALID_ACTION,
-                                        "Ban phai check-out sau khi tham gia hoat dong truoc khi nop minh chung!");
+                                        "Ban phai check-out truoc khi xac thuc khuon mat va nop minh chung!");
                 }
 
                 Proofs existingProof = proofRepository.findByRegistrationId(reg.getId())
@@ -115,7 +117,10 @@ public class ProofServiceImpl implements ProofService {
         public PageDTO<ProofResponse> getProofs(Integer status, Long activityId, Pageable pageable) {
                 Page<Proofs> page;
 
-                if (activityId != null && status != null) {
+                if (accessSupport.isCurrentDepartment()) {
+                        Long departmentId = accessSupport.requireCurrentDepartmentId();
+                        page = getDepartmentProofs(status, activityId, departmentId, pageable);
+                } else if (activityId != null && status != null) {
                         page = proofRepository.findByRegistration_Activity_IdAndStatus(activityId, status, pageable);
                 } else if (activityId != null) {
                         page = proofRepository.findByRegistration_Activity_Id(activityId, pageable);
@@ -138,6 +143,7 @@ public class ProofServiceImpl implements ProofService {
                 Proofs proof = proofRepository.findById(proofId)
                                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
                                                 "Minh chung khong ton tai!"));
+                ensureCanReviewProof(proof);
                 proof.setStatus(1);
                 proof.setRejectionReason(null);
                 proof.setVerifiedBy(getCurrentReviewerId());
@@ -156,6 +162,7 @@ public class ProofServiceImpl implements ProofService {
                 Proofs proof = proofRepository.findById(proofId)
                                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
                                                 "Minh chung khong ton tai!"));
+                ensureCanReviewProof(proof);
                 proof.setStatus(2);
                 proof.setRejectionReason(reason != null && !reason.isBlank() ? reason : "Minh chung khong hop le");
                 proof.setVerifiedBy(getCurrentReviewerId());
@@ -167,6 +174,36 @@ public class ProofServiceImpl implements ProofService {
                                 savedProof.getRejectionReason());
                 evictPointCaches(savedProof);
                 return proofMapper.toResponse(savedProof);
+        }
+
+        private Page<Proofs> getDepartmentProofs(
+                        Integer status,
+                        Long activityId,
+                        Long departmentId,
+                        Pageable pageable) {
+                if (activityId != null && status != null) {
+                        return proofRepository.findByActivityIdAndActivityDepartmentIdAndStatus(
+                                        activityId, departmentId, status, pageable);
+                }
+                if (activityId != null) {
+                        return proofRepository.findByActivityIdAndActivityDepartmentId(
+                                        activityId, departmentId, pageable);
+                }
+                if (status != null) {
+                        return proofRepository.findByActivityDepartmentIdAndStatus(departmentId, status, pageable);
+                }
+                return proofRepository.findByActivityDepartmentId(departmentId, pageable);
+        }
+
+        private void ensureCanReviewProof(Proofs proof) {
+                if (accessSupport.isCurrentAdmin()) {
+                        return;
+                }
+                if (accessSupport.isCurrentDepartment()) {
+                        accessSupport.ensureCurrentDepartmentCanManageActivity(proof.getActivity());
+                        return;
+                }
+                throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen duyet minh chung nay.");
         }
 
         private void evictPointCaches(Proofs proof) {

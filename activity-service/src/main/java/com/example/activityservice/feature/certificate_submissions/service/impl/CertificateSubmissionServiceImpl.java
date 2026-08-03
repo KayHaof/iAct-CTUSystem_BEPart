@@ -168,6 +168,14 @@ public class CertificateSubmissionServiceImpl implements com.example.activityser
         submission.setReviewedAt(LocalDateTime.now());
         submission.setApprovedCategory(approvedCategory);
         submission.setApprovedPoint(request.getApprovedPoint());
+        String adjustedCertificateTitle = blankToNull(request.getCertificateTitle());
+        if (adjustedCertificateTitle != null) {
+            submission.setCertificateTitle(adjustedCertificateTitle);
+        }
+        String adjustedAchievement = blankToNull(request.getAchievement());
+        if (adjustedAchievement != null) {
+            submission.setAchievement(adjustedAchievement);
+        }
         submission.setReviewNote(blankToNull(request.getReviewNote()));
         submission.setRejectionReason(null);
 

@@ -55,6 +55,9 @@ public class Activities {
     @Column(name = "is_faculty")
     private Boolean isFaculty;
 
+    @Column(name = "requires_admin_approval")
+    private Boolean requiresAdminApproval = false;
+
     @Column(name = "qr_code_token", unique = true)
     private String qrCodeToken;
 
@@ -135,6 +138,7 @@ public class Activities {
         public ActivitiesBuilder sourceLink(String sourceLink) { instance.setSourceLink(sourceLink); return this; }
         public ActivitiesBuilder isExternal(Boolean isExternal) { instance.setIsExternal(isExternal); return this; }
         public ActivitiesBuilder isFaculty(Boolean isFaculty) { instance.setIsFaculty(isFaculty); return this; }
+        public ActivitiesBuilder requiresAdminApproval(Boolean requiresAdminApproval) { instance.setRequiresAdminApproval(requiresAdminApproval); return this; }
         public ActivitiesBuilder qrCodeToken(String qrCodeToken) { instance.setQrCodeToken(qrCodeToken); return this; }
         public ActivitiesBuilder status(Integer status) { instance.setStatus(status); return this; }
         public ActivitiesBuilder departmentId(Long departmentId) { instance.setDepartmentId(departmentId); return this; }

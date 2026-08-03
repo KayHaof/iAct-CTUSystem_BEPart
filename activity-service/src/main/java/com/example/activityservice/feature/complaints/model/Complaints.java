@@ -1,6 +1,8 @@
 package com.example.activityservice.feature.complaints.model;
 
+import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.registration.model.Registrations;
+import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.users.model.Users;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -34,7 +36,25 @@ public class Complaints {
     @Column(name = "response", columnDefinition = "TEXT")
     private String response;
 
+    @Column(name = "detail_response")
+    private String detailResponse;
+
+    @Column(name = "reason")
+    private String reason;
+
     private Integer status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "activity_id")
+    private Activities activity;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "semester_id")
+    private Semesters semester;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "student_id")
+    private Users student;
 
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;

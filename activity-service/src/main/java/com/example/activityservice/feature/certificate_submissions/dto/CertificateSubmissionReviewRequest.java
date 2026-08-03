@@ -13,5 +13,7 @@ public class CertificateSubmissionReviewRequest {
     @Min(value = 0, message = "Điểm được duyệt phải lớn hơn hoặc bằng 0.")
     private Integer approvedPoint;
 
+    private String certificateTitle;
+    private String achievement;
     private String reviewNote;
 }

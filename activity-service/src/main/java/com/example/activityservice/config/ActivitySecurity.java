@@ -3,6 +3,8 @@ package com.example.activityservice.config;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.registration.repository.RegistrationRepository;
+import com.example.activityservice.feature.users.model.Users;
+import com.example.activityservice.feature.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
@@ -15,36 +17,48 @@ import java.util.Objects;
 public class ActivitySecurity {
     private final ActivityRepository activityRepository;
     private final RegistrationRepository registrationRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public boolean hasActivityPermission(Authentication authentication, Long activityId) {
-        boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_ADMIN"));
-
-        if (isAdmin) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
             return true;
         }
 
         return activityRepository.findById(activityId)
-                .map(activity -> isOwner(authentication, activity))
+                .map(activity -> isOwner(authentication, activity)
+                        || canDepartmentManageActivity(authentication, activity))
+                .orElse(false);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean canUpdateActivity(Authentication authentication, Long activityId) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
+            return true;
+        }
+
+        return activityRepository.findById(activityId)
+                .map(activity -> isOwner(authentication, activity)
+                        || canDepartmentManageActivity(authentication, activity))
                 .orElse(false);
     }
 
     @Transactional(readOnly = true)
     public boolean hasRegistrationPermission(Authentication authentication, Long registrationId) {
-        boolean isAdmin = authentication.getAuthorities().stream()
-                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_ADMIN"));
-
-        if (isAdmin) {
+        if (hasAuthority(authentication, "ROLE_ADMIN")) {
             return true;
         }
 
         return registrationRepository.findById(registrationId)
-                .map(registration -> isOwner(authentication, registration.getActivity()))
+                .map(registration -> isOwner(authentication, registration.getActivity())
+                        || canDepartmentManageActivity(authentication, registration.getActivity()))
                 .orElse(false);
     }
 
     private boolean isOwner(Authentication authentication, Activities activity) {
+        if (authentication == null) {
+            return false;
+        }
         String currentUsername = authentication.getName();
 
         if (currentUsername == null) {
@@ -70,5 +84,47 @@ public class ActivitySecurity {
         }
 
         return false;
+    }
+
+    private boolean canDepartmentManageActivity(Authentication authentication, Activities activity) {
+        if (!hasAuthority(authentication, "ROLE_DEPARTMENT")
+                || authentication == null
+                || authentication.getName() == null
+                || activity == null
+                || activity.getDepartmentId() == null) {
+            return false;
+        }
+
+        Users currentUser = userRepository.findByUsername(authentication.getName()).orElse(null);
+        return currentUser != null
+                && currentUser.getDepartmentId() != null
+                && Objects.equals(currentUser.getDepartmentId(), activity.getDepartmentId());
+    }
+
+    private boolean canDepartmentEditSubmittedRepresentativeActivity(
+            Authentication authentication,
+            Activities activity) {
+        if (!hasAuthority(authentication, "ROLE_DEPARTMENT")
+                || authentication == null
+                || authentication.getName() == null
+                || activity == null
+                || !Integer.valueOf(0).equals(activity.getStatus())
+                || activity.getDepartmentId() == null
+                || activity.getCreatedBy() == null
+                || !Integer.valueOf(1).equals(activity.getCreatedBy().getRoleType())) {
+            return false;
+        }
+
+        Users currentUser = userRepository.findByUsername(authentication.getName()).orElse(null);
+        return currentUser != null
+                && currentUser.getDepartmentId() != null
+                && Objects.equals(currentUser.getDepartmentId(), activity.getDepartmentId());
+    }
+
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication != null
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(a -> Objects.equals(a.getAuthority(), authority));
     }
 }

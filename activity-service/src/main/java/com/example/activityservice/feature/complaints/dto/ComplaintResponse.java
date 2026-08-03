@@ -12,9 +12,16 @@ public class ComplaintResponse {
     private Long registrationId;
     private Long activityId;
     private String activityTitle;
+    private Long semesterId;
+    private String semesterName;
+    private Long studentId;
+    private String studentCode;
+    private String studentName;
     private String detail;
+    private String reason;
     private String evidenceUrl;
     private String response;
+    private String detailResponse;
     private Integer status;
     private String statusLabel;
     private LocalDateTime resolvedAt;

@@ -24,6 +24,7 @@ public class ActivityServiceImpl implements ActivityService {
     private final ActivityQueryOperations queryOperations;
     private final StudentActivityOperations studentOperations;
     private final AdminActivityOperations adminOperations;
+    private final DepartmentApprovalOperations departmentApprovalOperations;
     private final ActivityContentGenerationService contentGenerationService;
 
     @Override
@@ -47,9 +48,25 @@ public class ActivityServiceImpl implements ActivityService {
     }
 
     @Override
-    public PageDTO<ActivityResponse> getAllActivities(String keyword, String level, String status, Long departmentId,
+    public PageDTO<ActivityResponse> getAllActivities(
+            String keyword,
+            String level,
+            String status,
+            Long departmentId,
+            boolean adminApprovalOnly,
             Pageable pageable) {
-        return queryOperations.getAllActivities(keyword, level, status, departmentId, pageable);
+        return queryOperations.getAllActivities(keyword, level, status, departmentId, adminApprovalOnly, pageable);
+    }
+
+    @Override
+    public PageDTO<ActivityResponse> getDepartmentApprovalActivities(String keyword, String status, Long classId,
+            Pageable pageable) {
+        return departmentApprovalOperations.getDepartmentApprovalActivities(keyword, status, classId, pageable);
+    }
+
+    @Override
+    public ActivityStatsResponse getDepartmentApprovalStats(String keyword, Long classId) {
+        return departmentApprovalOperations.getDepartmentApprovalStats(keyword, classId);
     }
 
     @Override
@@ -80,6 +97,11 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     public void cancelActivity(Long id, String reason) {
         adminOperations.cancelActivity(id, reason);
+    }
+
+    @Override
+    public void requestAdminSupport(Long id, String reason) {
+        commandOperations.requestAdminSupport(id, reason);
     }
 
     @Override
