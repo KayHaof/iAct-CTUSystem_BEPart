@@ -49,6 +49,8 @@ eureka:
     prefer-ip-address: true
 
 app:
+  services:
+    ai-service-url: ${AI_SERVICE_URL:http://localhost:8000}
   keycloak:
     token-uri: http://localhost:8088/realms/myRealm/protocol/openid-connect/token
 keycloak-admin-password: ${KEYCLOAK_ADMIN_PASSWORD:123456}

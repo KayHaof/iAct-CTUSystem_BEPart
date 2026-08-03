@@ -42,11 +42,13 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<UserResponse> getUserById(@PathVariable Long id) {
         return ApiResponse.success(userService.getUserById(id));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> updateUserProfile(
             @PathVariable Long id,
             @RequestBody UserUpdateRequest request) {
@@ -88,6 +90,7 @@ public class UserController {
     }
 
     @GetMapping("/search")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<UserResponse> getUserByEmail(@RequestParam("email") String email) {
         return ApiResponse.success(userService.getUserByEmail(email), "Tim thay nguoi dung thanh cong");
     }
@@ -115,6 +118,7 @@ public class UserController {
     }
 
     @GetMapping("/username/{username}")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<UserResponse> getUserByUsername(@PathVariable String username) {
         return ApiResponse.success(userService.getUserByUsername(username));
     }

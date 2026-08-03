@@ -15,8 +15,13 @@ import com.example.userservice.feature.user_profile.model.StudentProfile;
 import com.example.userservice.feature.user_profile.repository.DepartmentProfileRepository;
 import com.example.userservice.feature.user_profile.repository.StudentProfileRepository;
 import com.example.userservice.feature.user_profile.service.UserProfileService;
+import com.example.userservice.feature.users.model.Users;
+import com.example.userservice.feature.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +32,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserProfileServiceImpl implements UserProfileService {
+    private static final int ROLE_DEPARTMENT = 2;
 
     private final StudentProfileRepository studentRepo;
     private final DepartmentProfileRepository departmentProfileRepo;
     private final DepartmentRepository departmentsRepo;
     private final ClassRepository clazzRepo;
     private final UserProfileMapper profileMapper;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -74,11 +81,15 @@ public class UserProfileServiceImpl implements UserProfileService {
     public ProfileDto getProfileByUserId(Long userId) {
         Optional<StudentProfile> studentOpt = studentRepo.findById(userId);
         if (studentOpt.isPresent()) {
-            return profileMapper.toDto(studentOpt.get());
+            ProfileDto profile = profileMapper.toDto(studentOpt.get());
+            ensureCanViewProfile(userId, profile);
+            return profile;
         }
 
         Optional<DepartmentProfile> deptOpt = departmentProfileRepo.findById(userId);
-        return deptOpt.map(profileMapper::toDto).orElse(null);
+        ProfileDto profile = deptOpt.map(profileMapper::toDto).orElse(null);
+        ensureCanViewProfile(userId, profile);
+        return profile;
     }
 
     @Override
@@ -98,27 +109,34 @@ public class UserProfileServiceImpl implements UserProfileService {
             resultMap.put(d.getUserId(), profileMapper.toDto(d));
         }
 
-        return resultMap;
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return resultMap;
+        }
+        return resultMap.entrySet().stream()
+                .filter(entry -> canViewProfile(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     @Override
     public Set<Long> searchUserIds(String keyword, Long departmentId, Integer roleType, Long classId) {
+        Long scopedDepartmentId = resolveSearchDepartmentScope(departmentId);
         Set<Long> resultIds = new HashSet<>();
         if (roleType != null) {
             if (roleType == 1)
-                return new HashSet<>(studentRepo.searchIdsByCriteria(keyword, departmentId, classId));
+                return new HashSet<>(studentRepo.searchIdsByCriteria(keyword, scopedDepartmentId, classId));
             if (roleType == 2)
-                return new HashSet<>(departmentProfileRepo.searchIdsByCriteria(keyword, departmentId));
+                return new HashSet<>(departmentProfileRepo.searchIdsByCriteria(keyword, scopedDepartmentId));
         }
 
-        resultIds.addAll(studentRepo.searchIdsByCriteria(keyword, departmentId, classId));
-        resultIds.addAll(departmentProfileRepo.searchIdsByCriteria(keyword, departmentId));
+        resultIds.addAll(studentRepo.searchIdsByCriteria(keyword, scopedDepartmentId, classId));
+        resultIds.addAll(departmentProfileRepo.searchIdsByCriteria(keyword, scopedDepartmentId));
         return resultIds;
     }
 
     @Override
     @Transactional
     public void updateUserProfile(Long userId, UserUpdateRequest request) {
+        ensureCanUpdateProfile(userId, request);
         Optional<StudentProfile> studentOpt = studentRepo.findById(userId);
         if (studentOpt.isPresent()) {
             StudentProfile s = studentOpt.get();
@@ -157,6 +175,118 @@ public class UserProfileServiceImpl implements UserProfileService {
         department.setName(dto.getFullName());
         department.setDescription(dto.getDescription());
         return departmentsRepo.save(department);
+    }
+
+    private Long resolveSearchDepartmentScope(Long requestedDepartmentId) {
+        if (!hasRequestAuthentication()) {
+            return requestedDepartmentId;
+        }
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return requestedDepartmentId;
+        }
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            return requireCurrentDepartmentId();
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen tim kiem ho so nguoi dung.");
+    }
+
+    private void ensureCanViewProfile(Long userId, ProfileDto profile) {
+        if (!canViewProfile(userId, profile)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem ho so ngoai don vi cua minh.");
+        }
+    }
+
+    private boolean canViewProfile(Long userId, ProfileDto profile) {
+        if (!hasRequestAuthentication()) {
+            return true;
+        }
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return true;
+        }
+
+        Users currentUser = getCurrentUserOrNull();
+        if (currentUser == null) {
+            return false;
+        }
+        if (Objects.equals(currentUser.getId(), userId)) {
+            return true;
+        }
+
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            Long currentDepartmentId = requireCurrentDepartmentId();
+            return profile != null
+                    && profile.getDepartmentId() != null
+                    && Objects.equals(currentDepartmentId, profile.getDepartmentId());
+        }
+
+        return false;
+    }
+
+    private void ensureCanUpdateProfile(Long userId, UserUpdateRequest request) {
+        if (!hasRequestAuthentication()) {
+            return;
+        }
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return;
+        }
+
+        Users currentUser = requireCurrentUser();
+        if (!Objects.equals(currentUser.getId(), userId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen cap nhat ho so nay.");
+        }
+        if (request != null && (request.getDepartmentId() != null || request.getClassId() != null)) {
+            throw new AppException(ErrorCode.FORBIDDEN,
+                    "Khong duoc tu thay doi khoa/lop cua tai khoan. Vui long lien he quan tri vien.");
+        }
+    }
+
+    private Long requireCurrentDepartmentId() {
+        Users currentUser = requireCurrentUser();
+        if (!Integer.valueOf(ROLE_DEPARTMENT).equals(currentUser.getRoleType())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan hien tai khong phai Khoa/Don vi.");
+        }
+
+        ProfileDto profile = getProfileByUserId(currentUser.getId());
+        if (profile == null || profile.getDepartmentId() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan Khoa/Don vi chua duoc gan don vi.");
+        }
+        return profile.getDepartmentId();
+    }
+
+    private Users requireCurrentUser() {
+        Users currentUser = getCurrentUserOrNull();
+        if (currentUser == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Chua dang nhap");
+        }
+        return currentUser;
+    }
+
+    private Users getCurrentUserOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            return null;
+        }
+
+        String keycloakId = jwt.getClaimAsString("sub");
+        if (keycloakId == null || keycloakId.isBlank()) {
+            keycloakId = authentication.getName();
+        }
+        return userRepository.findByKeycloakId(keycloakId).orElse(null);
+    }
+
+    private boolean hasCurrentRole(String authority) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(auth -> Objects.equals(auth.getAuthority(), authority));
+    }
+
+    private boolean hasRequestAuthentication() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof Jwt;
     }
 
     @Override

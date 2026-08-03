@@ -7,6 +7,7 @@ import com.example.userservice.feature.user_profile.dto.UserUpdateRequest;
 import com.example.userservice.feature.user_profile.repository.StudentProfileRepository;
 import com.example.userservice.feature.user_profile.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
@@ -23,23 +24,27 @@ public class UserProfileController {
     private final StudentProfileRepository studentProfileRepository;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> createProfile(@RequestBody CreateProfileDto dto) {
         profileService.createProfile(dto);
         return ApiResponse.of(201, "Tao profile thanh cong", null);
     }
 
     @GetMapping("/{userId}")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<ProfileDto> getProfileByUserId(@PathVariable Long userId) {
         ProfileDto result = profileService.getProfileByUserId(userId);
         return ApiResponse.success(result);
     }
 
     @PostMapping("/batch")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ApiResponse<Map<Long, ProfileDto>> getProfilesBatch(@RequestBody List<Long> userIds) {
         return ApiResponse.success(profileService.getProfilesBatch(userIds));
     }
 
     @GetMapping("/search-ids")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ApiResponse<Set<Long>> searchUserIdsByCriteria(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long departmentId,
@@ -49,6 +54,7 @@ public class UserProfileController {
     }
 
     @PutMapping("/{userId}")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> updateUserProfile(
             @PathVariable Long userId,
             @RequestBody UserUpdateRequest request) {
@@ -57,12 +63,14 @@ public class UserProfileController {
     }
 
     @PostMapping("/batch-create")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> createProfilesBatch(@RequestBody List<CreateProfileDto> profiles) {
         profileService.createProfilesBatch(profiles);
         return ApiResponse.success(null);
     }
 
     @PostMapping("/check-student-codes")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Set<String>> checkExistingStudentCodes(@RequestBody Set<String> codes) {
         if (codes == null || codes.isEmpty()) {
             return ApiResponse.success(new HashSet<>());

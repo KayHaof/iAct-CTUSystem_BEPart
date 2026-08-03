@@ -60,6 +60,11 @@ public class KafkaTopicConfig {
     }
 
     @Bean
+    public NewTopic studentFaceEmbeddingSnapshotTopic() {
+        return topic(KafkaTopics.STUDENT_FACE_EMBEDDING_SNAPSHOT);
+    }
+
+    @Bean
     public NewTopic preferenceCreatedTopic() {
         return topic(KafkaTopics.PREFERENCE_CREATED);
     }
@@ -78,4 +83,3 @@ public class KafkaTopicConfig {
         return TopicBuilder.name(name).partitions(1).replicas(1).build();
     }
 }
-
