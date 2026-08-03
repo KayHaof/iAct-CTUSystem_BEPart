@@ -10,9 +10,9 @@ public interface NotificationService {
     Notifications save(Notifications notification);
     List<Notifications> getAllByUserId(Long userId);
     Page<Notifications> getNotifications(Long userId, Boolean isRead, Pageable pageable);
-    void markAsRead(Long id);
+    void markAsRead(Long id, Long userId);
     void markAllAsRead(Long userId);
     void deleteNotification(Long id, Long userId);
     long countUnread(Long userId);
-    Notifications getById(Long id);
+    Notifications getById(Long id, Long userId);
 }

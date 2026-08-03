@@ -9,6 +9,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -29,8 +30,12 @@ public class ActivityEventProducer extends KafkaEnvelopePublisher {
     }
 
     public void publishSubmitted(Activities activity) {
+        publishSubmitted(activity, List.of());
+    }
+
+    public void publishSubmitted(Activities activity, List<Long> recipientIds) {
         publish(KafkaTopics.ACTIVITY_SUBMITTED, KafkaEventTypes.ACTIVITY_SUBMITTED, "activity",
-                String.valueOf(activity.getId()), activityPayload(activity));
+                String.valueOf(activity.getId()), activityPayload(activity, recipientIds));
     }
 
     public void publishDeleted(Long activityId) {
@@ -59,6 +64,10 @@ public class ActivityEventProducer extends KafkaEnvelopePublisher {
     }
 
     private Map<String, Object> activityPayload(Activities activity) {
+        return activityPayload(activity, List.of());
+    }
+
+    private Map<String, Object> activityPayload(Activities activity, List<Long> recipientIds) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("activityId", activity.getId());
         payload.put("title", activity.getTitle());
@@ -70,6 +79,9 @@ public class ActivityEventProducer extends KafkaEnvelopePublisher {
         payload.put("registrationEnd", activity.getRegistrationEnd() != null ? activity.getRegistrationEnd().toString() : null);
         payload.put("reason", activity.getReason());
         payload.put("ownerUserId", activity.getCreatedBy() != null ? activity.getCreatedBy().getId() : null);
+        if (recipientIds != null && !recipientIds.isEmpty()) {
+            payload.put("userIds", recipientIds);
+        }
         return payload;
     }
 }

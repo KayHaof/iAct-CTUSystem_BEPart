@@ -100,6 +100,21 @@ public class KafkaTopicConfig {
     }
 
     @Bean
+    public NewTopic certificateSubmissionSubmittedTopic() {
+        return topic(KafkaTopics.CERTIFICATE_SUBMISSION_SUBMITTED);
+    }
+
+    @Bean
+    public NewTopic certificateSubmissionApprovedTopic() {
+        return topic(KafkaTopics.CERTIFICATE_SUBMISSION_APPROVED);
+    }
+
+    @Bean
+    public NewTopic certificateSubmissionRejectedTopic() {
+        return topic(KafkaTopics.CERTIFICATE_SUBMISSION_REJECTED);
+    }
+
+    @Bean
     public NewTopic pointAwardedTopic() {
         return topic(KafkaTopics.POINT_AWARDED);
     }
@@ -120,8 +135,18 @@ public class KafkaTopicConfig {
     }
 
     @Bean
+    public NewTopic notificationBroadcastRequestedTopic() {
+        return topic(KafkaTopics.NOTIFICATION_BROADCAST_REQUESTED);
+    }
+
+    @Bean
     public NewTopic standardUserSnapshotTopic() {
         return topic(KafkaTopics.USER_SNAPSHOT);
+    }
+
+    @Bean
+    public NewTopic studentFaceEmbeddingSnapshotTopic() {
+        return topic(KafkaTopics.STUDENT_FACE_EMBEDDING_SNAPSHOT);
     }
 
     private NewTopic topic(String name) {

@@ -15,6 +15,9 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -37,6 +40,9 @@ public class ActivityBusinessEventConsumer {
             KafkaTopics.PROOF_SUBMITTED,
             KafkaTopics.PROOF_APPROVED,
             KafkaTopics.PROOF_REJECTED,
+            KafkaTopics.CERTIFICATE_SUBMISSION_SUBMITTED,
+            KafkaTopics.CERTIFICATE_SUBMISSION_APPROVED,
+            KafkaTopics.CERTIFICATE_SUBMISSION_REJECTED,
             KafkaTopics.POINT_AWARDED,
             KafkaTopics.POINT_RECALCULATED,
             KafkaTopics.POINT_REVOKED
@@ -45,6 +51,10 @@ public class ActivityBusinessEventConsumer {
     public void handleBusinessEvent(String message, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         try {
             JsonNode root = objectMapper.readTree(message);
+            if (KafkaEventTypes.ACTIVITY_SUBMITTED.equals(text(root, "eventType"))) {
+                handleActivitySubmitted(root, topic);
+                return;
+            }
             NotificationRequest request = toNotificationRequest(root, topic);
             if (request == null) {
                 log.info("Business event does not require notification. topic={}", topic);
@@ -56,6 +66,39 @@ public class ActivityBusinessEventConsumer {
                     topic, e.getMessage(), e);
             throw new IllegalStateException("Business notification event failed", e);
         }
+    }
+
+    private void handleActivitySubmitted(JsonNode root, String topic) {
+        JsonNode payload = payload(root);
+        List<Long> recipientIds = extractRecipientIds(payload);
+        if (recipientIds.isEmpty()) {
+            log.warn("Activity submitted event ignored because recipientIds are missing. topic={}, eventId={}",
+                    topic, text(root, "eventId"));
+            return;
+        }
+
+        Long activityId = optionalLong(payload, "activityId");
+        String baseEventId = text(root, "eventId");
+        String activityTitle = title(payload);
+        String notificationTitle = "Hoạt động mới chờ duyệt";
+        String message = "Có hoạt động mới '" + activityTitle + "' vừa được gửi lên, vui lòng kiểm tra và duyệt.";
+
+        for (Long userId : recipientIds) {
+            NotificationRequest request = new NotificationRequest();
+            request.setUserId(userId);
+            request.setActivityId(activityId);
+            request.setTitle(notificationTitle);
+            request.setMessage(message);
+            request.setContent(message);
+            request.setType(2);
+            request.setReferenceType("activity-submitted");
+            request.setSourceTopic(topic);
+            request.setSourceEventId(baseEventId == null ? null : baseEventId + ":user:" + userId);
+            notificationDispatchService.createAndDispatch(request);
+        }
+
+        log.info("Activity submitted notification handled. topic={}, eventId={}, recipients={}",
+                topic, text(root, "eventId"), recipientIds.size());
     }
 
     @KafkaListener(topics = { KafkaTopics.ACTIVITY_DELETED,
@@ -158,10 +201,29 @@ public class ActivityBusinessEventConsumer {
                         + " bị từ chối. Lý do: " + defaultText(payload, "reason", "Không có lý do"));
                 request.setType(3);
             }
+            case KafkaEventTypes.CERTIFICATE_SUBMISSION_SUBMITTED -> {
+                request.setUserId(requiredLong(payload, "userId"));
+                request.setTitle("Giấy khen đã được gửi duyệt");
+                request.setMessage("Giấy khen '" + certificateTitle(payload) + "' đã được ghi nhận và đang chờ Trường duyệt.");
+                request.setType(2);
+            }
+            case KafkaEventTypes.CERTIFICATE_SUBMISSION_APPROVED -> {
+                request.setUserId(requiredLong(payload, "userId"));
+                request.setTitle("Giấy khen đã được duyệt");
+                request.setMessage("Giấy khen '" + certificateTitle(payload) + "' đã được duyệt. Điểm rèn luyện đã được ghi nhận.");
+                request.setType(1);
+            }
+            case KafkaEventTypes.CERTIFICATE_SUBMISSION_REJECTED -> {
+                request.setUserId(requiredLong(payload, "userId"));
+                request.setTitle("Giấy khen bị từ chối");
+                request.setMessage("Giấy khen '" + certificateTitle(payload) + "' bị từ chối. Lý do: "
+                        + defaultText(payload, "reason", "Không có lý do"));
+                request.setType(3);
+            }
             case KafkaEventTypes.POINT_AWARDED -> {
                 request.setUserId(requiredLong(payload, "userId"));
                 request.setTitle("Điểm rèn luyện đã được ghi nhận");
-                request.setMessage("Bạn đã được ghi nhận điểm từ hoạt động: " + activityTitle(payload));
+                request.setMessage(pointAwardedMessage(payload));
                 request.setType(1);
             }
             case KafkaEventTypes.POINT_RECALCULATED -> {
@@ -185,6 +247,21 @@ public class ActivityBusinessEventConsumer {
         return request;
     }
 
+    private List<Long> extractRecipientIds(JsonNode payload) {
+        JsonNode userIds = payload.get("userIds");
+        if (userIds == null || !userIds.isArray()) {
+            return List.of();
+        }
+
+        List<Long> recipientIds = new ArrayList<>();
+        for (JsonNode userId : userIds) {
+            if (userId != null && !userId.isNull()) {
+                recipientIds.add(userId.asLong());
+            }
+        }
+        return recipientIds.stream().distinct().toList();
+    }
+
     private JsonNode payload(JsonNode root) {
         return root.has("payload") ? root.get("payload") : root;
     }
@@ -195,6 +272,17 @@ public class ActivityBusinessEventConsumer {
 
     private String activityTitle(JsonNode payload) {
         return defaultText(payload, "activityTitle", title(payload));
+    }
+
+    private String certificateTitle(JsonNode payload) {
+        return defaultText(payload, "certificateTitle", "Giấy khen");
+    }
+
+    private String pointAwardedMessage(JsonNode payload) {
+        if ("CERTIFICATE_SUBMISSION".equals(text(payload, "sourceType"))) {
+            return "Bạn đã được ghi nhận điểm từ giấy khen: " + certificateTitle(payload);
+        }
+        return "Bạn đã được ghi nhận điểm từ hoạt động: " + activityTitle(payload);
     }
 
     private String cancelMessage(JsonNode payload) {

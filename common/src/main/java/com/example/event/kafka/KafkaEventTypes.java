@@ -12,6 +12,8 @@ public final class KafkaEventTypes {
     public static final String USER_SNAPSHOT = "USER_SNAPSHOT";
     public static final String PROFILE_CREATED = "PROFILE_CREATED";
     public static final String PROFILE_UPDATED = "PROFILE_UPDATED";
+    public static final String STUDENT_FACE_EMBEDDING_UPSERTED = "STUDENT_FACE_EMBEDDING_UPSERTED";
+    public static final String STUDENT_FACE_EMBEDDING_REVOKED = "STUDENT_FACE_EMBEDDING_REVOKED";
     public static final String PREFERENCE_CREATED = "PREFERENCE_CREATED";
     public static final String PREFERENCE_UPDATED = "PREFERENCE_UPDATED";
     public static final String PREFERENCE_DELETED = "PREFERENCE_DELETED";
@@ -31,6 +33,9 @@ public final class KafkaEventTypes {
     public static final String PROOF_SUBMITTED = "PROOF_SUBMITTED";
     public static final String PROOF_APPROVED = "PROOF_APPROVED";
     public static final String PROOF_REJECTED = "PROOF_REJECTED";
+    public static final String CERTIFICATE_SUBMISSION_SUBMITTED = "CERTIFICATE_SUBMISSION_SUBMITTED";
+    public static final String CERTIFICATE_SUBMISSION_APPROVED = "CERTIFICATE_SUBMISSION_APPROVED";
+    public static final String CERTIFICATE_SUBMISSION_REJECTED = "CERTIFICATE_SUBMISSION_REJECTED";
     public static final String POINT_AWARDED = "POINT_AWARDED";
     public static final String POINT_RECALCULATED = "POINT_RECALCULATED";
     public static final String POINT_REVOKED = "POINT_REVOKED";
@@ -44,4 +49,3 @@ public final class KafkaEventTypes {
     public static final String NOTIFICATION_URGENT_REQUESTED = "NOTIFICATION_URGENT_REQUESTED";
     public static final String NOTIFICATION_DELIVERY_FAILED = "NOTIFICATION_DELIVERY_FAILED";
 }
-

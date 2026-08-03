@@ -85,9 +85,11 @@ public class NotificationCommandRequestConsumer {
         request.setActivityId(optionalLong(payload, "activityId"));
         request.setReferenceType(defaultText(payload, "referenceType",
                 KafkaTopics.NOTIFICATION_URGENT_REQUESTED.equals(topic) ? "urgent" : "broadcast"));
-        request.setSourceTopic(topic);
-        String eventId = text(root, "eventId");
-        request.setSourceEventId(userId == null || eventId == null ? eventId : eventId + ":" + userId);
+        request.setSourceTopic(defaultText(payload, "sourceTopic", topic));
+        String sourceEventId = defaultText(payload, "sourceEventId", text(root, "eventId"));
+        request.setSourceEventId(userId == null || sourceEventId == null
+                ? sourceEventId
+                : sourceEventId + ":user:" + userId);
         return request;
     }
 

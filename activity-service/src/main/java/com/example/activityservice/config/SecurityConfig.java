@@ -30,12 +30,11 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.disable())
                 .csrf(csrf -> csrf.disable())
-                .securityMatcher("/auth/**", "/error", "/api/v1/dashboard/**", "/api/v1/activities/public/**")
+                .securityMatcher("/auth/**", "/error", "/api/v1/activities/public/**")
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers("/api/v1/dashboard/**").permitAll()
                         .requestMatchers("/api/v1/activities/public/**").permitAll()
                         .anyRequest().authenticated()
                 );

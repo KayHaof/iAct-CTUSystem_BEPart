@@ -66,8 +66,9 @@ public class PublicNotificationController {
      */
     @PutMapping("/{id}/read")
     @PreAuthorize("isAuthenticated()")
-    public ApiResponse<Void> markAsRead(@PathVariable Long id) {
-        notificationService.markAsRead(id);
+    public ApiResponse<Void> markAsRead(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        Long userId = userResolver.resolveCurrentUserId(jwt);
+        notificationService.markAsRead(id, userId);
         return ApiResponse.of(200, "Da danh dau da doc", null);
     }
 
@@ -94,7 +95,7 @@ public class PublicNotificationController {
      * UC19: Gui thong bao khan cap den sinh vien
      */
     @PostMapping("/urgent")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Integer> sendUrgentNotification(
             @RequestBody UrgentNotificationRequest request) {
 
@@ -107,8 +108,11 @@ public class PublicNotificationController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ApiResponse<NotificationResponse> getNotificationById(@PathVariable Long id) {
-        Notifications notification = notificationService.getById(id);
+    public ApiResponse<NotificationResponse> getNotificationById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt) {
+        Long userId = userResolver.resolveCurrentUserId(jwt);
+        Notifications notification = notificationService.getById(id, userId);
         return ApiResponse.success(toResponse(notification));
     }
 

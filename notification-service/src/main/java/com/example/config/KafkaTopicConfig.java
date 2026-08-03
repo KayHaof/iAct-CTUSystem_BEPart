@@ -107,6 +107,15 @@ public class KafkaTopicConfig {
     public NewTopic proofRejectedTopic() { return topic(KafkaTopics.PROOF_REJECTED); }
 
     @Bean
+    public NewTopic certificateSubmissionSubmittedTopic() { return topic(KafkaTopics.CERTIFICATE_SUBMISSION_SUBMITTED); }
+
+    @Bean
+    public NewTopic certificateSubmissionApprovedTopic() { return topic(KafkaTopics.CERTIFICATE_SUBMISSION_APPROVED); }
+
+    @Bean
+    public NewTopic certificateSubmissionRejectedTopic() { return topic(KafkaTopics.CERTIFICATE_SUBMISSION_REJECTED); }
+
+    @Bean
     public NewTopic pointAwardedTopic() { return topic(KafkaTopics.POINT_AWARDED); }
 
     @Bean

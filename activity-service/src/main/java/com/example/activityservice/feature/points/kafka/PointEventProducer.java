@@ -23,6 +23,20 @@ public class PointEventProducer extends KafkaEnvelopePublisher {
                 aggregateId(userId, activity), payload(userId, activity, "awarded"));
     }
 
+    public void publishCertificateAwarded(Long userId, Long semesterId, String certificateTitle, Integer point) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("userId", userId);
+        payload.put("activityId", null);
+        payload.put("activityTitle", certificateTitle);
+        payload.put("certificateTitle", certificateTitle);
+        payload.put("semesterId", semesterId);
+        payload.put("point", point);
+        payload.put("sourceType", "CERTIFICATE_SUBMISSION");
+        payload.put("reason", "certificate-submission-approved");
+        publish(KafkaTopics.POINT_AWARDED, KafkaEventTypes.POINT_AWARDED, "point",
+                userId + ":certificate:" + certificateTitle, payload);
+    }
+
     public void publishRecalculated(Long userId, Activities activity, String reason) {
         Map<String, Object> payload = payload(userId, activity, reason);
         publish(KafkaTopics.POINT_RECALCULATED, KafkaEventTypes.POINT_RECALCULATED, "point",

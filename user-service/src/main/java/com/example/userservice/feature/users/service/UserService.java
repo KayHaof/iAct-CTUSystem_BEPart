@@ -43,6 +43,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserService {
+    private static final int ROLE_DEPARTMENT = 2;
+
     private final UserRepository userRepository;
     private final UserProfileService userProfileService;
     private final UserMapper userMapper;
@@ -68,11 +70,13 @@ public class UserService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
         ProfileDto profile = userProfileService.getProfileByUserId(user.getId());
+        ensureCanViewUser(user, profile);
         return userMapper.toResponseAggregated(user, profile);
     }
 
     public PageDTO<UserResponse> getUsers(int page, int size, String keyword, Integer roleType, Long departmentId,
             Integer status, Long classId) {
+        Long scopedDepartmentId = resolveListDepartmentScope(departmentId);
         Pageable pageable = PageRequest.of(page > 0 ? page - 1 : 0, size, Sort.by("id").descending());
 
         Specification<Users> spec = (root, query, cb) -> {
@@ -83,8 +87,9 @@ public class UserService {
             if (status != null)
                 predicates.add(cb.equal(root.get("status"), status));
 
-            if (keyword != null || departmentId != null || classId != null) {
-                Set<Long> profileUserIds = userProfileService.searchUserIds(keyword, departmentId, roleType, classId);
+            if (keyword != null || scopedDepartmentId != null || classId != null) {
+                Set<Long> profileUserIds = userProfileService.searchUserIds(
+                        keyword, scopedDepartmentId, roleType, classId);
 
                 if (keyword != null && !keyword.trim().isEmpty()) {
                     // SỬ DỤNG HÀM HELPER ĐỂ TRÁNH TRÙNG LẶP CODE
@@ -120,6 +125,7 @@ public class UserService {
     public UserResponse getUserById(Long id) {
         Users user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         ProfileDto profile = userProfileService.getProfileByUserId(user.getId());
+        ensureCanViewUser(user, profile);
         return userMapper.toResponseAggregated(user, profile);
     }
 
@@ -130,7 +136,8 @@ public class UserService {
 
     @Transactional
     public void updateUserProfile(Long id, UserUpdateRequest request) {
-        userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        Users user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        ensureCanUpdateUser(user, request);
         userProfileService.updateUserProfile(id, request);
         userDomainEventProducer.publishUserUpdated(id);
         userDomainEventProducer.publishProfileUpdated(id);
@@ -142,6 +149,7 @@ public class UserService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED,
                         "Không tìm thấy người dùng có username này"));
         ProfileDto profile = userProfileService.getProfileByUserId(user.getId());
+        ensureCanViewUser(user, profile);
         return userMapper.toResponseAggregated(user, profile);
     }
 
@@ -283,5 +291,88 @@ public class UserService {
         Predicate usernameMatch = cb.like(cb.lower(root.get("username")), likeKeyword);
         Predicate emailMatch = cb.like(cb.lower(root.get("email")), likeKeyword);
         return cb.or(usernameMatch, emailMatch);
+    }
+
+    private Long resolveListDepartmentScope(Long requestedDepartmentId) {
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return requestedDepartmentId;
+        }
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            return requireCurrentDepartmentId();
+        }
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem danh sach nguoi dung.");
+    }
+
+    private void ensureCanViewUser(Users targetUser, ProfileDto targetProfile) {
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return;
+        }
+
+        Users currentUser = requireCurrentUser();
+        if (Objects.equals(currentUser.getId(), targetUser.getId())) {
+            return;
+        }
+
+        if (hasCurrentRole("ROLE_DEPARTMENT")) {
+            Long currentDepartmentId = requireCurrentDepartmentId();
+            if (targetProfile != null
+                    && targetProfile.getDepartmentId() != null
+                    && Objects.equals(currentDepartmentId, targetProfile.getDepartmentId())) {
+                return;
+            }
+        }
+
+        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem nguoi dung ngoai don vi cua minh.");
+    }
+
+    private void ensureCanUpdateUser(Users targetUser, UserUpdateRequest request) {
+        if (hasCurrentRole("ROLE_ADMIN")) {
+            return;
+        }
+
+        Users currentUser = requireCurrentUser();
+        if (!Objects.equals(currentUser.getId(), targetUser.getId())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen cap nhat nguoi dung nay.");
+        }
+
+        if (request != null && (request.getDepartmentId() != null || request.getClassId() != null)) {
+            throw new AppException(ErrorCode.FORBIDDEN,
+                    "Khong duoc tu thay doi khoa/lop cua tai khoan. Vui long lien he quan tri vien.");
+        }
+    }
+
+    private Long requireCurrentDepartmentId() {
+        Users currentUser = requireCurrentUser();
+        if (!Integer.valueOf(ROLE_DEPARTMENT).equals(currentUser.getRoleType())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan hien tai khong phai Khoa/Don vi.");
+        }
+
+        ProfileDto profile = userProfileService.getProfileByUserId(currentUser.getId());
+        if (profile == null || profile.getDepartmentId() == null) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan Khoa/Don vi chua duoc gan don vi.");
+        }
+        return profile.getDepartmentId();
+    }
+
+    private Users requireCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Chua dang nhap");
+        }
+
+        String keycloakId = jwt.getClaimAsString("sub");
+        if (keycloakId == null || keycloakId.isBlank()) {
+            keycloakId = authentication.getName();
+        }
+        return userRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    }
+
+    private boolean hasCurrentRole(String authority) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(auth -> Objects.equals(auth.getAuthority(), authority));
     }
 }

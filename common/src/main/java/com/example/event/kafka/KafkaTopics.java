@@ -17,6 +17,7 @@ public final class KafkaTopics {
     public static final String USER_SNAPSHOT = "iact.user.user.snapshot";
     public static final String PROFILE_CREATED = "iact.user.profile.created";
     public static final String PROFILE_UPDATED = "iact.user.profile.updated";
+    public static final String STUDENT_FACE_EMBEDDING_SNAPSHOT = "iact.user.student-face-embedding.snapshot";
     public static final String PREFERENCE_CREATED = "iact.user.preference.created";
     public static final String PREFERENCE_UPDATED = "iact.user.preference.updated";
     public static final String PREFERENCE_DELETED = "iact.user.preference.deleted";
@@ -35,6 +36,9 @@ public final class KafkaTopics {
     public static final String PROOF_SUBMITTED = "iact.activity.proof.submitted";
     public static final String PROOF_APPROVED = "iact.activity.proof.approved";
     public static final String PROOF_REJECTED = "iact.activity.proof.rejected";
+    public static final String CERTIFICATE_SUBMISSION_SUBMITTED = "iact.activity.certificate-submission.submitted";
+    public static final String CERTIFICATE_SUBMISSION_APPROVED = "iact.activity.certificate-submission.approved";
+    public static final String CERTIFICATE_SUBMISSION_REJECTED = "iact.activity.certificate-submission.rejected";
     public static final String POINT_AWARDED = "iact.activity.point.awarded";
     public static final String POINT_RECALCULATED = "iact.activity.point.recalculated";
     public static final String POINT_REVOKED = "iact.activity.point.revoked";
@@ -49,4 +53,3 @@ public final class KafkaTopics {
     public static final String NOTIFICATION_DELIVERY_FAILED = "iact.notification.delivery.failed";
     public static final String SYSTEM_DEAD_LETTER = "iact.system.dead-letter";
 }
-

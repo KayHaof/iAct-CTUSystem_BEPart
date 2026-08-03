@@ -41,9 +41,10 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public void markAsRead(Long id) {
+    public void markAsRead(Long id, Long userId) {
         Notifications notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Notification not found with id: " + id));
+        ensureBelongsToUser(notification, userId);
 
         if (!notification.getIsRead()) {
             notification.setIsRead(true);
@@ -83,8 +84,18 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public Notifications getById(Long id) {
-        return notificationRepository.findById(id)
+    public Notifications getById(Long id, Long userId) {
+        Notifications notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Notification not found with id: " + id));
+        ensureBelongsToUser(notification, userId);
+        return notification;
+    }
+
+    private void ensureBelongsToUser(Notifications notification, Long userId) {
+        if (notification.getUserId() == null
+                || userId == null
+                || !notification.getUserId().equals(userId)) {
+            throw new RuntimeException("Notification does not belong to current user");
+        }
     }
 }

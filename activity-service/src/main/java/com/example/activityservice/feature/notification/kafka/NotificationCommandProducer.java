@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 public class NotificationCommandProducer extends KafkaEnvelopePublisher {
 
@@ -22,5 +24,9 @@ public class NotificationCommandProducer extends KafkaEnvelopePublisher {
         publish(KafkaTopics.NOTIFICATION_CREATED, KafkaEventTypes.NOTIFICATION_CREATED, "notification",
                 aggregateId, request);
     }
-}
 
+    public void publishBroadcastRequested(String aggregateId, Map<String, Object> payload) {
+        publish(KafkaTopics.NOTIFICATION_BROADCAST_REQUESTED, KafkaEventTypes.NOTIFICATION_BROADCAST_REQUESTED,
+                "notification", aggregateId, payload);
+    }
+}
