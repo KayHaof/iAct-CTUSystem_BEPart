@@ -55,7 +55,7 @@ public class CertificateSubmissionComplaintServiceImpl implements CertificateSub
         ensureCanAppeal(student, submission);
 
         if (complaintRepository.existsByCertificateSubmissionId(submission.getId())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ho so nay da co khiieu nai.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Hồ sơ này đã có khiếu nại.");
         }
 
         CertificateSubmissionComplaint complaint = new CertificateSubmissionComplaint();
@@ -146,7 +146,7 @@ public class CertificateSubmissionComplaintServiceImpl implements CertificateSub
                 savedSubmission.getSemester() != null ? savedSubmission.getSemester().getId() : null);
         publishComplaintNotification(
                 savedComplaint,
-                "Khieu nai giay khen duoc duyet",
+                "Khiếu nại giấy khen được duyệt",
                 buildApprovalMessage(savedSubmission),
                 1,
                 "certificate-submission-complaint-approved");
@@ -173,7 +173,7 @@ public class CertificateSubmissionComplaintServiceImpl implements CertificateSub
         CertificateSubmissionComplaint savedComplaint = complaintRepository.save(complaint);
         publishComplaintNotification(
                 savedComplaint,
-                "Khieu nai giay khen bi tu choi",
+                "Khiếu nại giấy khen bị từ chối",
                 request.getRejectionReason().trim(),
                 3,
                 "certificate-submission-complaint-rejected");
@@ -182,32 +182,32 @@ public class CertificateSubmissionComplaintServiceImpl implements CertificateSub
 
     private CertificateSubmission findSubmission(Long id) {
         return certificateSubmissionRepository.findDetailedById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay ho so giay khen."));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hồ sơ giấy khen."));
     }
 
     private CertificateSubmissionComplaint findDetailed(Long id) {
         return complaintRepository.findDetailById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay khiieu nai giay khen."));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy khiếu nại giấy khen."));
     }
 
     private void ensureCanAppeal(Users student, CertificateSubmission submission) {
         if (submission.getStudent() == null || !Objects.equals(submission.getStudent().getId(), student.getId())) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen khiieu nai ho so nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền khiếu nại hồ sơ này.");
         }
         if (!Objects.equals(submission.getStatus(), CertificateSubmission.STATUS_REJECTED)) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Chi co the khiieu nai ho so bi tu choi.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ có thể khiếu nại hồ sơ bị từ chối.");
         }
         if (submission.getReviewer() != null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ho so nay da duoc truong xu ly, khong thuoc luong khiieu nai tu dong.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Hồ sơ này đã được trường xử lý, không thuộc luồng khiếu nại tự động.");
         }
     }
 
     private void ensureAppealableSubmission(CertificateSubmission submission) {
         if (submission == null || !Objects.equals(submission.getStatus(), CertificateSubmission.STATUS_REJECTED)) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ho so khiieu nai khong con hop le.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Hồ sơ khiếu nại không còn hợp lệ.");
         }
         if (submission.getReviewer() != null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ho so nay da duoc xu ly boi truong.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Hồ sơ này đã được xử lý bởi trường.");
         }
     }
 
@@ -229,7 +229,7 @@ public class CertificateSubmissionComplaintServiceImpl implements CertificateSub
                 && Objects.equals(submission.getDepartmentId(), requireReviewerDepartmentId(currentUser))) {
             return;
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem khiieu nai nay.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem khiếu nại này.");
     }
 
     private void ensureCanReview(CertificateSubmissionComplaint complaint) {
@@ -244,35 +244,35 @@ public class CertificateSubmissionComplaintServiceImpl implements CertificateSub
                 && Objects.equals(submission.getDepartmentId(), requireReviewerDepartmentId(reviewer))) {
             return;
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xu ly khiieu nai nay.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xử lý khiếu nại này.");
     }
 
     private void ensurePending(CertificateSubmissionComplaint complaint) {
         if (complaint.getStatus() != null && complaint.getStatus() != CertificateSubmissionComplaint.STATUS_PENDING) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khieu nai da duoc xu ly.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Khiếu nại đã được xử lý.");
         }
     }
 
     private Categories validateApprovedCategory(Long categoryId, Integer point) {
         if (categoryId == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long chon tieu chi diem ren luyen.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn tiêu chí điểm rèn luyện.");
         }
         if (point == null || point < 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Diem duoc duyet phai lon hon hoac bang 0.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Điểm được duyệt phải lớn hơn hoặc bằng 0.");
         }
         Categories category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                        "Khong tim thay tieu chi diem ren luyen."));
+                        "Không tìm thấy tiêu chí điểm rèn luyện."));
         if (!Boolean.TRUE.equals(category.getIsActive())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Tieu chi diem ren luyen da ngung su dung.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Tiêu chí điểm rèn luyện đã ngừng sử dụng.");
         }
         if (categoryRepository.existsByParentIdAndIsActive(categoryId, true)) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Chi duoc duyet vao tieu chi nho nhat.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ được duyệt vào tiêu chí nhỏ nhất.");
         }
         int maxPoint = category.getMaxPoint() == null ? 0 : category.getMaxPoint();
         if (maxPoint > 0 && point > maxPoint) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Diem duoc duyet khong duoc vuot qua " + maxPoint + " diem cua tieu chi da chon.");
+                    "Điểm được duyệt không được vượt quá " + maxPoint + " điểm của tiêu chí đã chọn.");
         }
         return category;
     }
@@ -307,19 +307,19 @@ public class CertificateSubmissionComplaintServiceImpl implements CertificateSub
     }
 
     private String buildApprovalMessage(CertificateSubmission submission) {
-        StringBuilder builder = new StringBuilder("Khieu nai cua ban da duoc duyet");
+        StringBuilder builder = new StringBuilder("Khiếu nại của bạn đã được duyệt");
         if (submission.getApprovedCategory() != null) {
-            builder.append(" va da duoc ghi nhan vao ").append(submission.getApprovedCategory().getName());
+            builder.append(" và đã được ghi nhận vào ").append(submission.getApprovedCategory().getName());
         }
         if (submission.getApprovedPoint() != null) {
-            builder.append(" voi ").append(submission.getApprovedPoint()).append(" diem.");
+            builder.append(" với ").append(submission.getApprovedPoint()).append(" điểm.");
         }
         return builder.toString();
     }
 
     private Long requireReviewerDepartmentId(Users reviewer) {
         if (reviewer == null || reviewer.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan xu ly chua duoc gan don vi.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản xử lý chưa được gắn đơn vị.");
         }
         return reviewer.getDepartmentId();
     }

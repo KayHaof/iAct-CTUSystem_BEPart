@@ -59,10 +59,11 @@ public class CertificateSubmissionController {
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Long semesterId,
             @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "false") boolean excludeAutoRejected,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.success(certificateSubmissionService.getReviewSubmissions(
-                status, departmentId, semesterId, keyword, pageable(page, size)));
+                status, departmentId, semesterId, keyword, excludeAutoRejected, pageable(page, size)));
     }
 
     @GetMapping("/{id}")

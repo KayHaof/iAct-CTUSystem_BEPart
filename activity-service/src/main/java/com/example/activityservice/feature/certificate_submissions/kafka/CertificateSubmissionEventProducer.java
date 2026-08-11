@@ -4,6 +4,7 @@ import com.example.activityservice.feature.certificate_submissions.model.Certifi
 import com.example.activityservice.feature.kafka.KafkaEnvelopePublisher;
 import com.example.event.kafka.KafkaEventTypes;
 import com.example.event.kafka.KafkaTopics;
+import com.example.util.UtcDateTime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -55,7 +56,7 @@ public class CertificateSubmissionEventProducer extends KafkaEnvelopePublisher {
         payload.put("approvedPoint", submission.getApprovedPoint());
         payload.put("reason", submission.getRejectionReason());
         payload.put("reviewerId", submission.getReviewer() != null ? submission.getReviewer().getId() : null);
-        payload.put("reviewedAt", submission.getReviewedAt() != null ? submission.getReviewedAt().toString() : null);
+        payload.put("reviewedAt", UtcDateTime.format(submission.getReviewedAt()));
         return payload;
     }
 }

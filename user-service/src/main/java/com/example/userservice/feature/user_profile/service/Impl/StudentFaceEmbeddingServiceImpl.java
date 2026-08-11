@@ -36,7 +36,7 @@ public class StudentFaceEmbeddingServiceImpl implements StudentFaceEmbeddingServ
     public StudentFaceEmbeddingResponse upsert(Long userId, StudentFaceEmbeddingRequest request) {
         ensureStudentProfileExists(userId);
         if (!hasText(request.getReferenceImageUrl())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Thieu URL anh goc tren Cloudinary");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Thiếu URL ảnh gốc trên Cloudinary");
         }
         FaceEmbeddingExtractionResult extracted = resolveEmbeddingData(request);
 
@@ -76,7 +76,7 @@ public class StudentFaceEmbeddingServiceImpl implements StudentFaceEmbeddingServ
         return embeddingRepository.findActiveByUserId(userId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                        "Sinh vien chua co vector khuon mat dang hoat dong"));
+                        "Sinh viên chưa có vector khuôn mặt đang hoạt động"));
     }
 
     @Override
@@ -84,10 +84,10 @@ public class StudentFaceEmbeddingServiceImpl implements StudentFaceEmbeddingServ
     public StudentFaceEmbeddingResponse revoke(Long userId, String reason) {
         StudentFaceEmbedding embedding = embeddingRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                        "Sinh vien chua co vector khuon mat"));
+                        "Sinh viên chưa có vector khuôn mặt"));
         embedding.setStatus(StudentFaceEmbedding.STATUS_REVOKED);
         embedding.setRevokedAt(LocalDateTime.now());
-        embedding.setRevokedReason(reason != null && !reason.isBlank() ? reason : "Thu hoi vector khuon mat");
+        embedding.setRevokedReason(reason != null && !reason.isBlank() ? reason : "Thu hồi vector khuôn mặt");
 
         StudentFaceEmbedding saved = embeddingRepository.save(embedding);
         eventProducer.publishRevoked(saved);
@@ -117,7 +117,7 @@ public class StudentFaceEmbeddingServiceImpl implements StudentFaceEmbeddingServ
 
     private void ensureStudentProfileExists(Long userId) {
         if (!studentProfileRepository.existsById(userId)) {
-            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay ho so sinh vien");
+            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hồ sơ sinh viên");
         }
     }
 

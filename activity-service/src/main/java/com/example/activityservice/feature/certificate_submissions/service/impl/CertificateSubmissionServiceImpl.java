@@ -131,12 +131,13 @@ public class CertificateSubmissionServiceImpl implements com.example.activityser
             Integer status,
             Long departmentId,
             Long semesterId,
-        String keyword,
-        Pageable pageable) {
+            String keyword,
+            boolean excludeAutoRejected,
+            Pageable pageable) {
         Users reviewer = getCurrentUser();
         Long scopedDepartmentId = isAdmin() ? departmentId : requireReviewerDepartmentId(reviewer);
         Page<CertificateSubmission> page = certificateSubmissionRepository.findReviewSubmissions(
-                scopedDepartmentId, semesterId, status, blankToNull(keyword), pageable);
+                scopedDepartmentId, semesterId, status, blankToNull(keyword), excludeAutoRejected, pageable);
         return toPageDto(page);
     }
 

@@ -33,7 +33,7 @@ public class CertificateSubmissionComplaintController {
     @PreAuthorize("hasRole('STUDENT')")
     public ApiResponse<CertificateSubmissionComplaintResponse> submit(
             @RequestBody @Valid CertificateSubmissionComplaintRequest request) {
-        return ApiResponse.success(complaintService.submit(request), "Gui khiieu nai thanh cong.");
+        return ApiResponse.success(complaintService.submit(request), "Gửi khiếu nại thành công.");
     }
 
     @GetMapping("/me")
@@ -70,7 +70,7 @@ public class CertificateSubmissionComplaintController {
     public ApiResponse<CertificateSubmissionComplaintResponse> approve(
             @PathVariable Long id,
             @RequestBody @Valid CertificateSubmissionComplaintApproveRequest request) {
-        return ApiResponse.success(complaintService.approve(id, request), "Duyet khiieu nai thanh cong.");
+        return ApiResponse.success(complaintService.approve(id, request), "Duyệt khiếu nại thành công.");
     }
 
     @PutMapping("/{id}/reject")
@@ -78,7 +78,7 @@ public class CertificateSubmissionComplaintController {
     public ApiResponse<CertificateSubmissionComplaintResponse> reject(
             @PathVariable Long id,
             @RequestBody @Valid CertificateSubmissionComplaintRejectRequest request) {
-        return ApiResponse.success(complaintService.reject(id, request), "Tu choi khiieu nai thanh cong.");
+        return ApiResponse.success(complaintService.reject(id, request), "Từ chối khiếu nại thành công.");
     }
 
     private Pageable pageable(int page, int size) {

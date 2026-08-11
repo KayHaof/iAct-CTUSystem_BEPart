@@ -38,7 +38,7 @@ public class StudentFaceEmbeddingController {
             @RequestBody @Valid StudentFaceEmbeddingRequest request) {
         return ApiResponse.success(
                 studentFaceEmbeddingService.upsert(resolveCurrentUserId(jwt), request),
-                "Luu vector khuon mat sinh vien thanh cong");
+                "Lưu vector khuôn mặt sinh viên thành công");
     }
 
     @GetMapping("/me/face-embedding/active")
@@ -54,7 +54,7 @@ public class StudentFaceEmbeddingController {
             @RequestParam(required = false) String reason) {
         return ApiResponse.success(
                 studentFaceEmbeddingService.revoke(resolveCurrentUserId(jwt), reason),
-                "Thu hoi vector khuon mat sinh vien thanh cong");
+                "Thu hồi vector khuôn mặt sinh viên thành công");
     }
 
     @PutMapping("/{userId}/face-embedding")
@@ -64,7 +64,7 @@ public class StudentFaceEmbeddingController {
             @RequestBody @Valid StudentFaceEmbeddingRequest request) {
         return ApiResponse.success(
                 studentFaceEmbeddingService.upsert(userId, request),
-                "Luu vector khuon mat sinh vien thanh cong");
+                "Lưu vector khuôn mặt sinh viên thành công");
     }
 
     @GetMapping("/{userId}/face-embedding/active")
@@ -80,7 +80,7 @@ public class StudentFaceEmbeddingController {
             @RequestParam(required = false) String reason) {
         return ApiResponse.success(
                 studentFaceEmbeddingService.revoke(userId, reason),
-                "Thu hoi vector khuon mat sinh vien thanh cong");
+                "Thu hồi vector khuôn mặt sinh viên thành công");
     }
 
     @PostMapping("/face-embeddings/replay")
@@ -88,16 +88,16 @@ public class StudentFaceEmbeddingController {
     public ApiResponse<Long> replay() {
         return ApiResponse.success(
                 studentFaceEmbeddingService.replayAll(),
-                "Da len lich dong bo lai vector khuon mat sinh vien");
+                "Đã lên lịch đồng bộ lại vector khuôn mặt sinh viên");
     }
 
     private Long resolveCurrentUserId(Jwt jwt) {
         if (jwt == null) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED, "Khong tim thay thong tin dang nhap");
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Không tìm thấy thông tin đăng nhập");
         }
         String username = jwt.getClaimAsString("preferred_username");
         Users user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Khong tim thay tai khoan dang nhap"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy tài khoản đăng nhập"));
         return user.getId();
     }
 }

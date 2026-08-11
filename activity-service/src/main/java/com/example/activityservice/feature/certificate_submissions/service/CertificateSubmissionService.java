@@ -17,6 +17,7 @@ public interface CertificateSubmissionService {
             Long departmentId,
             Long semesterId,
             String keyword,
+            boolean excludeAutoRejected,
             Pageable pageable);
 
     CertificateSubmissionResponse getById(Long id);

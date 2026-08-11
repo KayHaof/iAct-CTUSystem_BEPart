@@ -44,6 +44,7 @@ public interface CertificateSubmissionRepository extends JpaRepository<Certifica
             WHERE (:departmentId IS NULL OR submission.departmentId = :departmentId)
               AND (:semesterId IS NULL OR submission.semester.id = :semesterId)
               AND (:status IS NULL OR submission.status = :status)
+              AND (:excludeAutoRejected = false OR submission.status <> 2 OR submission.reviewer IS NOT NULL)
               AND (
                     :keyword IS NULL
                     OR LOWER(submission.studentCodeSnapshot) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -58,6 +59,7 @@ public interface CertificateSubmissionRepository extends JpaRepository<Certifica
             @Param("semesterId") Long semesterId,
             @Param("status") Integer status,
             @Param("keyword") String keyword,
+            @Param("excludeAutoRejected") boolean excludeAutoRejected,
             Pageable pageable);
 
     @EntityGraph(attributePaths = {"approvedCategory"})

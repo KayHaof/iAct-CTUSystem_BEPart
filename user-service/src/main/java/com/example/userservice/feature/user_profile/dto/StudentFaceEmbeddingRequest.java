@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 
 @Data
 public class StudentFaceEmbeddingRequest {
-    @NotBlank(message = "Thieu URL anh goc")
+    @NotBlank(message = "Thiếu URL ảnh gốc")
     private String referenceImageUrl;
 
     private String referenceImagePublicId;

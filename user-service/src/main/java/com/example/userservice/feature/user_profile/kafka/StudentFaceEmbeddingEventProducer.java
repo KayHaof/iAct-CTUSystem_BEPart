@@ -1,5 +1,6 @@
 package com.example.userservice.feature.user_profile.kafka;
 
+import com.example.util.UtcDateTime;
 import com.example.event.StudentFaceEmbeddingEvent;
 import com.example.event.kafka.KafkaEventEnvelope;
 import com.example.event.kafka.KafkaEventMetadata;
@@ -110,6 +111,6 @@ public class StudentFaceEmbeddingEventProducer {
     }
 
     private String format(LocalDateTime value) {
-        return value != null ? value.toString() : null;
+        return UtcDateTime.format(value);
     }
 }

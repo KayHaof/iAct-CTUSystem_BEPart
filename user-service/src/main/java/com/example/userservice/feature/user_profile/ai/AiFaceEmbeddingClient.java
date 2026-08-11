@@ -48,27 +48,27 @@ public class AiFaceEmbeddingClient {
             JsonNode payload = readAiPayload(response.getBody());
             if (payload == null || !"success".equalsIgnoreCase(payload.path("status").asText())) {
                 throw new AppException(ErrorCode.INVALID_ACTION, resolveMessage(payload,
-                        "Khong the trich xuat vector khuon mat tu anh dang ky"));
+                        "Không thể trích xuất vector khuôn mặt từ ảnh đăng ký"));
             }
             return mapExtraction(payload);
         } catch (RestClientResponseException exception) {
             throw new AppException(ErrorCode.INVALID_ACTION, resolveErrorMessage(
                     exception.getResponseBodyAsString(),
-                    "Anh dang ky khong hop le hoac AI service khong the xu ly"));
+                    "Ảnh đăng ký không hợp lệ hoặc AI service không thể xử lý"));
         } catch (RestClientException exception) {
             throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    "Khong the ket noi AI service de trich xuat vector khuon mat");
+                    "Không thể kết nối AI service để trích xuất vector khuôn mặt");
         }
     }
 
     private JsonNode readAiPayload(String responseBody) {
         if (responseBody == null || responseBody.isBlank()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "AI service khong tra ve du lieu");
+            throw new AppException(ErrorCode.INVALID_ACTION, "AI service không trả về dữ liệu");
         }
         try {
             return objectMapper.readTree(responseBody);
         } catch (Exception exception) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "AI service tra ve du lieu khong hop le");
+            throw new AppException(ErrorCode.INVALID_ACTION, "AI service trả về dữ liệu không hợp lệ");
         }
     }
 
@@ -81,27 +81,27 @@ public class AiFaceEmbeddingClient {
                     byte[].class);
             byte[] body = response.getBody();
             if (body == null || body.length == 0) {
-                throw new AppException(ErrorCode.INVALID_ACTION, "Khong tai duoc anh tu Cloudinary");
+                throw new AppException(ErrorCode.INVALID_ACTION, "Không tải được ảnh từ Cloudinary");
             }
             MediaType contentType = response.getHeaders().getContentType();
             if (contentType != null && !MediaType.IMAGE_JPEG.includes(contentType)
                     && !MediaType.IMAGE_PNG.includes(contentType)
                     && !MediaType.IMAGE_GIF.includes(contentType)
                     && !MediaType.APPLICATION_OCTET_STREAM.includes(contentType)) {
-                throw new AppException(ErrorCode.INVALID_ACTION, "URL Cloudinary khong phai la anh hop le");
+                throw new AppException(ErrorCode.INVALID_ACTION, "URL Cloudinary không phải là ảnh hợp lệ");
             }
             return body;
         } catch (RestClientResponseException exception) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khong tai duoc anh tu Cloudinary");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không tải được ảnh từ Cloudinary");
         } catch (RestClientException exception) {
-            throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE, "Khong the tai anh tu Cloudinary");
+            throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE, "Không thể tải ảnh từ Cloudinary");
         }
     }
 
     private FaceEmbeddingExtractionResult mapExtraction(JsonNode payload) {
         JsonNode vector = payload.get("vector");
         if (vector == null || !vector.isArray() || vector.isEmpty()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "AI service khong tra ve vector khuon mat");
+            throw new AppException(ErrorCode.INVALID_ACTION, "AI service không trả về vector khuôn mặt");
         }
         try {
             return FaceEmbeddingExtractionResult.builder()
@@ -116,7 +116,7 @@ public class AiFaceEmbeddingClient {
                     .faceConfidence(decimal(payload.path("face").path("confidence")))
                     .build();
         } catch (Exception exception) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khong the doc ket qua vector tu AI service");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không thể đọc kết quả vector từ AI service");
         }
     }
 
