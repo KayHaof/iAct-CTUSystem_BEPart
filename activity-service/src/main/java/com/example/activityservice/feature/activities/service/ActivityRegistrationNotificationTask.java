@@ -48,4 +48,9 @@ public class ActivityRegistrationNotificationTask {
             log.info("Activity-start reminder scan completed. activities={}", upcomingActivities.size());
         }
     }
+
+    @Scheduled(fixedDelayString = "${app.notifications.session-action-reminder-scan-ms:60000}")
+    public void notifyExpiringSessionActions() {
+        notificationService.publishExpiringSessionActionReminders();
+    }
 }

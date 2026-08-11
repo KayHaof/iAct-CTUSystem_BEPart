@@ -45,7 +45,7 @@ public class AiFaceVerificationClient {
             Integer attempt,
             Integer maxAttempts) {
         if (liveImageBytes == null || liveImageBytes.length == 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Thieu anh khuon mat de xac thuc");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Thiếu ảnh khuôn mặt để xác thực");
         }
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -70,21 +70,21 @@ public class AiFaceVerificationClient {
         } catch (RestClientResponseException exception) {
             throw new AppException(ErrorCode.INVALID_ACTION, resolveErrorMessage(
                     exception.getResponseBodyAsString(),
-                    "Khong the xac thuc khuon mat voi AI service"));
+                    "Không thể xác thực khuôn mặt với AI service"));
         } catch (RestClientException exception) {
             throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    "Khong the ket noi AI service de xac thuc khuon mat");
+                    "Không thể kết nối AI service để xác thực khuôn mặt");
         }
     }
 
     private JsonNode readAiPayload(String responseBody) {
         if (responseBody == null || responseBody.isBlank()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "AI service khong tra ve ket qua xac thuc");
+            throw new AppException(ErrorCode.INVALID_ACTION, "AI service không trả về kết quả xác thực");
         }
         try {
             return objectMapper.readTree(responseBody);
         } catch (Exception exception) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "AI service tra ve du lieu xac thuc khong hop le");
+            throw new AppException(ErrorCode.INVALID_ACTION, "AI service trả về dữ liệu xác thực không hợp lệ");
         }
     }
 

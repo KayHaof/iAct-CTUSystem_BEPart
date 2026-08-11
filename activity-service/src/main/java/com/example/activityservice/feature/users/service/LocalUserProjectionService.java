@@ -27,6 +27,10 @@ public class LocalUserProjectionService {
         setIfPresent(snapshot.getFullName(), user::setFullName);
         setIfPresent(snapshot.getStudentCode(), user::setStudentCode);
         setIfPresent(snapshot.getAvatarUrl(), user::setAvatarUrl);
+        user.setClassId(snapshot.getClassId());
+        user.setClassCode(snapshot.getClassCode());
+        user.setClassName(snapshot.getClassName());
+        user.setAcademicYear(snapshot.getAcademicYear());
         user.setDepartmentId(snapshot.getDepartmentId());
         if (snapshot.getRoleType() != null) {
             user.setRoleType(snapshot.getRoleType());

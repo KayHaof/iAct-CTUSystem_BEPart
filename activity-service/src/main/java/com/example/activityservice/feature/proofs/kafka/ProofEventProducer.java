@@ -5,6 +5,7 @@ import com.example.activityservice.feature.kafka.KafkaEnvelopePublisher;
 import com.example.activityservice.feature.proofs.model.Proofs;
 import com.example.event.kafka.KafkaEventTypes;
 import com.example.event.kafka.KafkaTopics;
+import com.example.util.UtcDateTime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -45,7 +46,7 @@ public class ProofEventProducer extends KafkaEnvelopePublisher {
         payload.put("status", proof.getStatus());
         payload.put("reason", proof.getRejectionReason());
         payload.put("verifiedBy", proof.getVerifiedBy());
-        payload.put("verifiedTime", proof.getVerifiedTime() != null ? proof.getVerifiedTime().toString() : null);
+        payload.put("verifiedTime", UtcDateTime.format(proof.getVerifiedTime()));
         return payload;
     }
 }

@@ -32,6 +32,32 @@ public class RegistrationKafkaProducer {
         }
     }
 
+    public void sendAbsenceViolationProcessed(
+            Long userId,
+            Long registrationId,
+            Long activityId,
+            String activityTitle,
+            String referenceType,
+            String title,
+            String message,
+            java.time.LocalDateTime processedAt) {
+        try {
+            registrationEventProducer.publishAbsenceViolationProcessed(
+                    userId,
+                    registrationId,
+                    activityId,
+                    activityTitle,
+                    referenceType,
+                    title,
+                    message,
+                    processedAt);
+            log.info("Kafka: Absence violation notification requested for userId={}, registrationId={}",
+                    userId, registrationId);
+        } catch (Exception e) {
+            log.error("Kafka: Failed to send absence violation notification: {}", e.getMessage(), e);
+        }
+    }
+
     @Async
     public void sendCheckInSuccess(Long userId, Long activityId, String activityTitle, String sessionTitle) {
         try {
@@ -42,4 +68,3 @@ public class RegistrationKafkaProducer {
         }
     }
 }
-

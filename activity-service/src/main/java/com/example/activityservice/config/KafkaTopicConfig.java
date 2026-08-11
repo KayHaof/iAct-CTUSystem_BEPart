@@ -140,6 +140,16 @@ public class KafkaTopicConfig {
     }
 
     @Bean
+    public NewTopic notificationActivitySessionActionReminderRequestedTopic() {
+        return topic(KafkaTopics.NOTIFICATION_ACTIVITY_SESSION_ACTION_REMINDER_REQUESTED);
+    }
+
+    @Bean
+    public NewTopic notificationAbsenceViolationProcessedRequestedTopic() {
+        return topic(KafkaTopics.NOTIFICATION_ABSENCE_VIOLATION_PROCESSED_REQUESTED);
+    }
+
+    @Bean
     public NewTopic standardUserSnapshotTopic() {
         return topic(KafkaTopics.USER_SNAPSHOT);
     }

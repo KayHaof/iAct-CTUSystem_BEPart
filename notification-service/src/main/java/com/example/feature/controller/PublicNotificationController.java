@@ -27,7 +27,7 @@ public class PublicNotificationController {
     private final NotificationUserResolver userResolver;
 
     /**
-     * UC11: Lay danh sach thong bao cua nguoi dung
+     * UC11: Lấy danh sách thông báo của người dùng
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -41,18 +41,19 @@ public class PublicNotificationController {
         PageRequest pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         
         Page<Notifications> notifications = notificationService.getNotifications(userId, isRead, pageable);
-        PageDTO<NotificationResponse> result = PageDTO.<NotificationResponse>builder()
-                .pageNumber(page)
-                .totalPage(notifications.getTotalPages())
-                .totalRows(notifications.getTotalElements())
-                .data(notifications.getContent().stream().map(this::toResponse).toList())
-                .build();
+        PageDTO<NotificationResponse> result = new PageDTO<>();
+        result.setPageNumber(page);
+        result.setPageSize(size);
+        result.setTotalPage(notifications.getTotalPages());
+        result.setTotalRows(notifications.getTotalElements());
+        result.setData(notifications.getContent().stream().map(this::toResponse).toList());
+        result.setLast(notifications.isLast());
         
         return ApiResponse.success(result);
     }
 
     /**
-     * UC11: Lay so luong thong bao chua doc
+     * UC11: Lấy số lượng thông báo chưa đọc
      */
     @GetMapping("/count-unread")
     @PreAuthorize("isAuthenticated()")
@@ -62,25 +63,25 @@ public class PublicNotificationController {
     }
 
     /**
-     * UC11: Danh dau mot thong bao da doc
+     * UC11: Đánh dấu một thông báo đã đọc
      */
     @PutMapping("/{id}/read")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> markAsRead(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
         Long userId = userResolver.resolveCurrentUserId(jwt);
         notificationService.markAsRead(id, userId);
-        return ApiResponse.of(200, "Da danh dau da doc", null);
+        return ApiResponse.of(200, "Đã đánh dấu đã đọc", null);
     }
 
     /**
-     * UC11: Danh dau tat ca thong bao da doc
+     * UC11: Đánh dấu tất cả thông báo đã đọc
      */
     @PutMapping("/read-all")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<Void> markAllAsRead(@AuthenticationPrincipal Jwt jwt) {
         Long userId = userResolver.resolveCurrentUserId(jwt);
         notificationService.markAllAsRead(userId);
-        return ApiResponse.of(200, "Da danh dau tat ca da doc", null);
+        return ApiResponse.of(200, "Đã đánh dấu tất cả đã đọc", null);
     }
 
     @DeleteMapping("/{id}")
@@ -88,11 +89,11 @@ public class PublicNotificationController {
     public ApiResponse<Void> deleteNotification(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
         Long userId = userResolver.resolveCurrentUserId(jwt);
         notificationService.deleteNotification(id, userId);
-        return ApiResponse.of(200, "Da xoa thong bao", null);
+        return ApiResponse.of(200, "Đã xóa thông báo", null);
     }
 
     /**
-     * UC19: Gui thong bao khan cap den sinh vien
+     * UC19: Gửi thông báo khẩn cấp đến sinh viên
      */
     @PostMapping("/urgent")
     @PreAuthorize("hasRole('ADMIN')")
@@ -100,11 +101,11 @@ public class PublicNotificationController {
             @RequestBody UrgentNotificationRequest request) {
 
         int count = dispatchService.sendUrgentNotification(request);
-        return ApiResponse.of(200, "Da gui thong bao den " + count + " sinh vien thanh cong", count);
+        return ApiResponse.of(200, "Đã gửi thông báo đến " + count + " sinh viên thành công", count);
     }
 
     /**
-     * UC11: Lay chi tiet mot thong bao
+     * UC11: Lấy chi tiết một thông báo
      */
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")

@@ -49,6 +49,10 @@ public final class KafkaTopics {
     public static final String NOTIFICATION_DELETED = "iact.notification.notification.deleted";
     public static final String NOTIFICATION_CLEANUP_REQUESTED = "iact.notification.notification.cleanup-requested";
     public static final String NOTIFICATION_BROADCAST_REQUESTED = "iact.notification.notification.broadcast-requested";
+    public static final String NOTIFICATION_ACTIVITY_SESSION_ACTION_REMINDER_REQUESTED =
+            "iact.notification.notification.activity-session-action-reminder-requested";
+    public static final String NOTIFICATION_ABSENCE_VIOLATION_PROCESSED_REQUESTED =
+            "iact.notification.notification.absence-violation-processed-requested";
     public static final String NOTIFICATION_URGENT_REQUESTED = "iact.notification.notification.urgent-requested";
     public static final String NOTIFICATION_DELIVERY_FAILED = "iact.notification.delivery.failed";
     public static final String SYSTEM_DEAD_LETTER = "iact.system.dead-letter";

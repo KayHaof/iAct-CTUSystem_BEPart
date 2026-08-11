@@ -29,4 +29,13 @@ public class NotificationCommandProducer extends KafkaEnvelopePublisher {
         publish(KafkaTopics.NOTIFICATION_BROADCAST_REQUESTED, KafkaEventTypes.NOTIFICATION_BROADCAST_REQUESTED,
                 "notification", aggregateId, payload);
     }
+
+    public void publishActivitySessionActionReminder(String aggregateId, Map<String, Object> payload) {
+        publish(
+                KafkaTopics.NOTIFICATION_ACTIVITY_SESSION_ACTION_REMINDER_REQUESTED,
+                KafkaEventTypes.NOTIFICATION_ACTIVITY_SESSION_ACTION_REMINDER_REQUESTED,
+                "notification",
+                aggregateId,
+                payload);
+    }
 }

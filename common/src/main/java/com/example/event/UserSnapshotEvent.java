@@ -18,6 +18,10 @@ public class UserSnapshotEvent {
     private String fullName;
     private String studentCode;
     private String avatarUrl;
+    private Long classId;
+    private String classCode;
+    private String className;
+    private String academicYear;
     private Long departmentId;
     private Integer roleType;
     private String occurredAt;

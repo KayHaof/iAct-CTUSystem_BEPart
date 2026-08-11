@@ -7,6 +7,7 @@ import com.example.activityservice.feature.users.repository.UserRepository;
 import com.example.event.StudentFaceEmbeddingEvent;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
+import com.example.util.UtcDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,14 +61,14 @@ public class StudentFaceEmbeddingProjectionService {
     public StudentFaceEmbeddingProjection getActive(Long userId) {
         return embeddingRepository.findActiveByUserId(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION,
-                        "Sinh vien chua co vector khuon mat dang hoat dong"));
+                        "Sinh viên chưa có vector khuôn mặt đang hoạt động"));
     }
 
     @Transactional(readOnly = true)
     public void ensureActiveForRegistration(Long userId) {
         if (embeddingRepository.findActiveByUserId(userId).isEmpty()) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Ban can nop anh khuon mat truoc khi dang ky hoat dong");
+                    "Bạn cần nộp ảnh khuôn mặt trước khi đăng ký hoạt động");
         }
     }
 
@@ -106,7 +107,7 @@ public class StudentFaceEmbeddingProjectionService {
     }
 
     private LocalDateTime parseDateTime(String value) {
-        return value == null || value.isBlank() ? null : LocalDateTime.parse(value);
+        return value == null || value.isBlank() ? null : UtcDateTime.parse(value);
     }
 
     private boolean isBlank(String value) {

@@ -4,6 +4,7 @@ import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.kafka.KafkaEnvelopePublisher;
 import com.example.event.kafka.KafkaEventTypes;
 import com.example.event.kafka.KafkaTopics;
+import com.example.util.UtcDateTime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -54,8 +55,12 @@ public class ActivityEventProducer extends KafkaEnvelopePublisher {
     }
 
     public void publishCancelled(Activities activity) {
+        publishCancelled(activity, List.of());
+    }
+
+    public void publishCancelled(Activities activity, List<Long> recipientIds) {
         publish(KafkaTopics.ACTIVITY_CANCELLED, KafkaEventTypes.ACTIVITY_CANCELLED, "activity",
-                String.valueOf(activity.getId()), activityPayload(activity));
+                String.valueOf(activity.getId()), activityPayload(activity, recipientIds));
     }
 
     public void publishDraftExpired(Long activityId) {
@@ -75,8 +80,8 @@ public class ActivityEventProducer extends KafkaEnvelopePublisher {
         payload.put("departmentId", activity.getDepartmentId());
         payload.put("isFaculty", activity.getIsFaculty());
         payload.put("isExternal", activity.getIsExternal());
-        payload.put("registrationStart", activity.getRegistrationStart() != null ? activity.getRegistrationStart().toString() : null);
-        payload.put("registrationEnd", activity.getRegistrationEnd() != null ? activity.getRegistrationEnd().toString() : null);
+        payload.put("registrationStart", UtcDateTime.format(activity.getRegistrationStart()));
+        payload.put("registrationEnd", UtcDateTime.format(activity.getRegistrationEnd()));
         payload.put("reason", activity.getReason());
         payload.put("ownerUserId", activity.getCreatedBy() != null ? activity.getCreatedBy().getId() : null);
         if (recipientIds != null && !recipientIds.isEmpty()) {
