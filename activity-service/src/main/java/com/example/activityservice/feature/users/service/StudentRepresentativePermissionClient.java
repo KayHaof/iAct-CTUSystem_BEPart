@@ -43,20 +43,20 @@ public class StudentRepresentativePermissionClient {
             ApiResponse<RepresentativeActivityPermissionResponse> body = response.getBody();
             if (body == null || body.getData() == null) {
                 throw new AppException(ErrorCode.FORBIDDEN,
-                        "Khong xac dinh duoc quyen dai dien lop cua sinh vien.");
+                        "Không xác định được quyền đại diện lớp của sinh viên.");
             }
             return body.getData();
         } catch (HttpClientErrorException.Forbidden exception) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen dai dien lop de tao hoat dong.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền đại diện lớp để tạo hoạt động.");
         } catch (HttpClientErrorException.Unauthorized exception) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         } catch (ResourceAccessException exception) {
-            throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE, "User Service hien khong kha dung.");
+            throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE, "User Service hiện không khả dụng.");
         } catch (AppException exception) {
             throw exception;
         } catch (RestClientException exception) {
             throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    "Khong the kiem tra quyen dai dien lop tu User Service.");
+                    "Không thể kiểm tra quyền đại diện lớp từ User Service.");
         }
     }
 

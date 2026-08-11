@@ -22,7 +22,8 @@ public interface LocationService {
             LocalDateTime endTime,
             Integer minCapacity,
             String type,
-            String keyword);
+            String keyword,
+            Long activityId);
     LocationResponse getLocationById(Long id);
     LocationResponse updateLocation(Long id, LocationRequest request);
     LocationResponse updateAvailability(Long id, LocationAvailabilityRequest request);

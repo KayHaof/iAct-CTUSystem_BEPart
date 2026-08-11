@@ -67,7 +67,7 @@ public class SecurityConfig {
                             response.setContentType("application/json");
                             ApiResponse<Object> apiResponse = new ApiResponse<>();
                             apiResponse.setCode(ErrorCode.UNAUTHENTICATED.getCode());
-                            apiResponse.setMessage("User Service: Token khong hop le hoac het han");
+                            apiResponse.setMessage("User Service: Token không hợp lệ hoặc hết hạn");
                             response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
                         }));
 
@@ -108,7 +108,7 @@ public class SecurityConfig {
             response.setContentType("application/json");
             ApiResponse<Object> apiResponse = new ApiResponse<>();
             apiResponse.setCode(ErrorCode.FORBIDDEN.getCode());
-            apiResponse.setMessage("User Service: Ban khong co quyen truy cap tai nguyen nay");
+                            apiResponse.setMessage("User Service: Bạn không có quyền truy cập tài nguyên này");
             response.getWriter().write(new ObjectMapper().writeValueAsString(apiResponse));
         };
     }

@@ -27,7 +27,7 @@ public class UserProfileController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> createProfile(@RequestBody CreateProfileDto dto) {
         profileService.createProfile(dto);
-        return ApiResponse.of(201, "Tao profile thanh cong", null);
+        return ApiResponse.of(201, "Tạo hồ sơ thành công", null);
     }
 
     @GetMapping("/{userId}")
@@ -59,7 +59,7 @@ public class UserProfileController {
             @PathVariable Long userId,
             @RequestBody UserUpdateRequest request) {
         profileService.updateUserProfile(userId, request);
-        return ApiResponse.of(200, "Cap nhat thanh cong", null);
+        return ApiResponse.of(200, "Cập nhật thành công", null);
     }
 
     @PostMapping("/batch-create")

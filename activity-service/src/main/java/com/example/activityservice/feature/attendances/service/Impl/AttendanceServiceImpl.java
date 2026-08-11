@@ -3,6 +3,7 @@ package com.example.activityservice.feature.attendances.service.Impl;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.service.impl.ActivityAccessSupport;
+import com.example.activityservice.feature.activitySchedule.model.ActivitySchedule;
 import com.example.activityservice.feature.attendances.dto.AttendanceResponse;
 import com.example.activityservice.feature.attendances.dto.AttendanceStatisticsResponse;
 import com.example.activityservice.feature.attendances.dto.CheckInRequest;
@@ -30,6 +31,7 @@ import com.example.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,9 +40,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -73,39 +78,49 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Transactional
     public AttendanceResponse checkIn(CheckInRequest request) {
         Registrations registration = resolveCurrentStudentRegistration(request.getActivityId());
-        validateActivityQrToken(registration.getActivity(), request.getVerifyCode());
+        ActivitySchedule schedule = resolveRegisteredSchedule(registration, request.getScheduleId());
+        validateAttendanceQrToken(registration.getActivity(), schedule, request.getVerifyCode());
+        validateCheckInWindow(schedule);
 
-        Optional<Attendances> existing = attendanceRepository.findByRegistrationId(registration.getId());
+        Optional<Attendances> existing = findAttendance(registration, schedule);
         if (existing.isPresent() && existing.get().getCheckinTime() != null) {
-            return attendanceMapper.toResponse(existing.get(), "Ban da check-in hoat dong nay truoc do.");
+            return attendanceMapper.toResponse(existing.get(), "Bạn đã check-in buổi này trước đó.");
+        }
+        if (existing.isPresent() && Integer.valueOf(Attendances.STATUS_ABSENT).equals(existing.get().getStatus())) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Buổi này đã kết thúc và được ghi nhận vắng mặt.");
         }
 
         Attendances attendance = existing.orElseGet(Attendances::new);
         attendance.setRegistration(registration);
+        attendance.setSchedule(schedule);
         attendance.setCheckinTime(LocalDateTime.now());
         attendance.setMethod(request.getMethod() != null ? request.getMethod() : 1);
         attendance.setLatitude(request.getLatitude());
         attendance.setLongitude(request.getLongitude());
+        attendance.setStatus(Attendances.STATUS_CHECKED_IN);
         attendance = attendanceRepository.save(attendance);
 
-        return attendanceMapper.toResponse(attendance, "Check-in thanh cong. Vui long check-out sau khi hoan thanh hoat dong.");
+        return attendanceMapper.toResponse(attendance,
+                "Check-in thành công. Vui lòng check-out sau khi hoàn thành buổi này.");
     }
 
     @Override
     @Transactional
     public AttendanceResponse checkOut(CheckInRequest request) {
         Registrations registration = resolveCurrentStudentRegistration(request.getActivityId());
-        validateActivityQrToken(registration.getActivity(), request.getVerifyCode());
+        ActivitySchedule schedule = resolveRegisteredSchedule(registration, request.getScheduleId());
+        validateAttendanceQrToken(registration.getActivity(), schedule, request.getVerifyCode());
 
-        Attendances attendance = attendanceRepository.findByRegistrationId(registration.getId())
-                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION, "Ban phai check-in truoc khi check-out."));
+        Attendances attendance = findAttendance(registration, schedule)
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION,
+                        "Bạn phải check-in buổi này trước khi check-out."));
 
         if (attendance.getCheckinTime() == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ban phai check-in truoc khi check-out.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Bạn phải check-in buổi này trước khi check-out.");
         }
 
         if (attendance.getCheckoutTime() != null) {
-            return attendanceMapper.toResponse(attendance, "Ban da check-out hoat dong nay truoc do.");
+            return attendanceMapper.toResponse(attendance, "Bạn đã check-out buổi này trước đó.");
         }
 
         attendance.setCheckoutTime(LocalDateTime.now());
@@ -115,24 +130,27 @@ public class AttendanceServiceImpl implements AttendanceService {
         if (request.getLongitude() != null) {
             attendance.setLongitude(request.getLongitude());
         }
+        attendance.setStatus(Attendances.STATUS_CHECKED_OUT);
         attendance = attendanceRepository.save(attendance);
 
-        return attendanceMapper.toResponse(attendance, "Check-out thanh cong. Ban co the xac minh khuon mat de mo nop minh chung.");
+        return attendanceMapper.toResponse(attendance,
+                "Check-out thành công. Bạn có thể xác minh khuôn mặt để mở nộp minh chứng.");
     }
 
     @Override
     @Transactional
     public FaceCheckInResponse faceCheckIn(FaceCheckInRequest request, MultipartFile liveImage) {
         Registrations registration = resolveCurrentStudentRegistration(request.getActivityId());
-        Attendances attendance = resolveAttendanceReadyForFaceVerification(registration);
-        if (Integer.valueOf(1).equals(registration.getStatus())) {
+        ActivitySchedule schedule = resolveRegisteredSchedule(registration, request.getScheduleId());
+        Attendances attendance = resolveAttendanceReadyForFaceVerification(registration, schedule);
+        if (Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(attendance.getStatus())) {
             return alreadyCheckedInResponse(attendance);
         }
 
         Long studentId = registration.getStudent() != null ? registration.getStudent().getId() : null;
         StudentFaceEmbeddingProjection reference = faceEmbeddingProjectionService.getActive(studentId);
 
-        long existingAttempts = faceCheckInAttemptRepository.countByRegistrationId(registration.getId());
+        long existingAttempts = countFaceAttempts(registration, schedule);
         if (existingAttempts >= FACE_CHECK_IN_MAX_ATTEMPTS) {
             return maxAttemptsExceededResponse((int) existingAttempts);
         }
@@ -140,25 +158,30 @@ public class AttendanceServiceImpl implements AttendanceService {
         int attemptNo = (int) existingAttempts + 1;
         FaceVerificationResult verification = verifyFace(reference, liveImage, attemptNo);
         verification = normalizeVerification(verification, attemptNo);
-        saveFaceCheckInAttempt(registration, reference, verification);
+        saveFaceCheckInAttempt(registration, schedule, reference, verification);
 
         if (!Boolean.TRUE.equals(verification.getVerified())) {
             return toFaceCheckInResponse(verification, null);
         }
 
         faceEmbeddingProjectionService.markVerified(studentId, LocalDateTime.now());
-        registration.setStatus(1);
-        registrationRepository.save(registration);
-        registrationKafkaProducer.sendCheckInSuccess(
-                registration.getStudent().getId(),
-                registration.getActivity().getId(),
-                registration.getActivity().getTitle(),
-                "Xac thuc khuon mat"
-        );
+        attendance.setStatus(Attendances.STATUS_FACE_VERIFIED);
+        attendance = attendanceRepository.save(attendance);
+        if (hasVerifiedAllRegisteredSessions(registration)) {
+            registration.setStatus(1);
+            registrationRepository.save(registration);
+            registrationKafkaProducer.sendCheckInSuccess(
+                    registration.getStudent().getId(),
+                    registration.getActivity().getId(),
+                    registration.getActivity().getTitle(),
+                    "Xác thực khuôn mặt");
+        }
 
         AttendanceResponse attendanceResponse = attendanceMapper.toResponse(
                 attendance,
-                "Xac thuc khuon mat thanh cong. Ban co the nop minh chung tham gia.");
+                hasVerifiedAllRegisteredSessions(registration)
+                        ? "Xác thực khuôn mặt thành công. Bạn có thể nộp minh chứng tham gia."
+                        : "Xác thực khuôn mặt thành công cho buổi này. Vui lòng hoàn tất các buổi còn lại.");
         return toFaceCheckInResponse(verification, attendanceResponse);
     }
 
@@ -179,20 +202,20 @@ public class AttendanceServiceImpl implements AttendanceService {
         try {
             return liveImage.getBytes();
         } catch (IOException exception) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khong doc duoc anh khuon mat de xac thuc");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không đọc được ảnh khuôn mặt để xác thực");
         }
     }
 
     private void validateLiveImage(MultipartFile liveImage) {
         if (liveImage == null || liveImage.isEmpty()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Thieu anh khuon mat de xac thuc");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Thiếu ảnh khuôn mặt để xác thực");
         }
         if (liveImage.getSize() > MAX_LIVE_IMAGE_BYTES) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Anh xac thuc khong duoc vuot qua 8MB");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Ảnh xác thực không được vượt quá 8MB");
         }
         String contentType = liveImage.getContentType();
         if (contentType != null && !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "File xac thuc phai la anh");
+            throw new AppException(ErrorCode.INVALID_ACTION, "File xác thực phải là ảnh");
         }
     }
 
@@ -228,22 +251,24 @@ public class AttendanceServiceImpl implements AttendanceService {
         if (verified) {
             return raw.getMessage() != null
                     ? raw.getMessage()
-                    : "Xac thuc khuon mat thanh cong. Ban co the nop minh chung tham gia.";
+                : "Xác thực khuôn mặt thành công. Bạn có thể nộp minh chứng tham gia.";
         }
         if (attemptNo >= FACE_CHECK_IN_MAX_ATTEMPTS) {
-            return "Xac thuc khuon mat khong thanh cong. Ban da het so lan thu, vui long gui khieu nai neu can ho tro.";
+            return "Xác thực khuôn mặt không thành công. Bạn đã hết số lần thử, vui lòng gửi khiếu nại nếu cần hỗ trợ.";
         }
         return raw.getMessage() != null
                 ? raw.getMessage()
-                : "Xac thuc khuon mat khong thanh cong. Vui long chup lai anh.";
+                : "Xác thực khuôn mặt không thành công. Vui lòng chụp lại ảnh.";
     }
 
     private void saveFaceCheckInAttempt(
             Registrations registration,
+            ActivitySchedule schedule,
             StudentFaceEmbeddingProjection reference,
             FaceVerificationResult verification) {
         FaceCheckInAttempt attempt = new FaceCheckInAttempt();
         attempt.setRegistration(registration);
+        attempt.setSchedule(schedule);
         attempt.setAttemptNo(verification.getAttempt());
         attempt.setMaxAttempts(verification.getMaxAttempts());
         attempt.setVerified(Boolean.TRUE.equals(verification.getVerified()));
@@ -262,7 +287,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     private FaceCheckInResponse alreadyCheckedInResponse(Attendances attendance) {
         AttendanceResponse attendanceResponse = attendanceMapper.toResponse(
                 attendance,
-                "Ban da xac minh khuon mat thanh cong truoc do!");
+                "Bạn đã xác minh khuôn mặt thành công trước đó!");
         return toFaceCheckInResponse(FaceVerificationResult.builder()
                 .verified(true)
                 .decision("already_face_verified")
@@ -270,7 +295,7 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .attempt(0)
                 .maxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS)
                 .remainingAttempts(0)
-                .message("Ban da xac minh khuon mat thanh cong truoc do!")
+                .message("Bạn đã xác minh khuôn mặt thành công trước đó!")
                 .build(), attendanceResponse);
     }
 
@@ -283,48 +308,153 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .maxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS)
                 .remainingAttempts(0)
                 .reasonCode("MAX_ATTEMPTS_EXCEEDED")
-                .message("Ban da het 5 lan xac thuc khuon mat. Vui long gui khieu nai neu can ho tro quyen loi.")
+                .message("Bạn đã hết 5 lần xác thực khuôn mặt. Vui lòng gửi khiếu nại nếu cần hỗ trợ quyền lợi.")
                 .build(), null);
     }
 
-    private Attendances resolveAttendanceReadyForFaceVerification(Registrations registration) {
-        Attendances attendance = attendanceRepository.findByRegistrationId(registration.getId())
+    private Attendances resolveAttendanceReadyForFaceVerification(Registrations registration,
+            ActivitySchedule schedule) {
+        Attendances attendance = findAttendance(registration, schedule)
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION,
-                        "Ban phai check-in va check-out truoc khi xac minh khuon mat."));
+                        "Bạn phải check-in và check-out buổi này trước khi xác minh khuôn mặt."));
 
         if (attendance.getCheckinTime() == null) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Ban phai check-in truoc khi xac minh khuon mat.");
+                    "Bạn phải check-in buổi này trước khi xác minh khuôn mặt.");
         }
 
         if (attendance.getCheckoutTime() == null) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Ban phai check-out truoc khi xac minh khuon mat.");
+                    "Bạn phải check-out buổi này trước khi xác minh khuôn mặt.");
         }
 
         return attendance;
     }
 
+    private ActivitySchedule resolveRegisteredSchedule(Registrations registration, Long scheduleId) {
+        List<ActivitySchedule> registeredSchedules = registration.getRegisteredSchedules() != null
+                ? registration.getRegisteredSchedules()
+                : List.of();
+
+        if (registeredSchedules.isEmpty()) {
+            if (scheduleId != null) {
+                throw new AppException(ErrorCode.INVALID_ACTION, "Bạn chưa đăng ký buổi này.");
+            }
+            return null;
+        }
+
+        if (scheduleId == null) {
+            if (registeredSchedules.size() == 1) {
+                return registeredSchedules.get(0);
+            }
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn buổi cần điểm danh.");
+        }
+
+        return registeredSchedules.stream()
+                .filter(schedule -> schedule != null && Objects.equals(schedule.getId(), scheduleId))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION, "Bạn chưa đăng ký buổi này."));
+    }
+
+    private Optional<Attendances> findAttendance(Registrations registration, ActivitySchedule schedule) {
+        if (schedule == null) {
+            return attendanceRepository.findFirstByRegistrationIdAndScheduleIsNullOrderByIdAsc(
+                    registration.getId());
+        }
+        return attendanceRepository.findFirstByRegistrationIdAndScheduleIdOrderByIdAsc(
+                registration.getId(), schedule.getId());
+    }
+
+    private void validateCheckInWindow(ActivitySchedule schedule) {
+        if (schedule == null) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (schedule.getStartTime() != null && now.isBefore(schedule.getStartTime())) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Buổi này chưa đến thời gian check-in.");
+        }
+        if (schedule.getEndTime() != null && now.isAfter(schedule.getEndTime())) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Buổi này đã kết thúc, không thể check-in.");
+        }
+    }
+
+    private long countFaceAttempts(Registrations registration, ActivitySchedule schedule) {
+        if (schedule == null) {
+            return faceCheckInAttemptRepository.countByRegistrationIdAndScheduleIsNull(registration.getId());
+        }
+        return faceCheckInAttemptRepository.countByRegistrationIdAndScheduleId(registration.getId(), schedule.getId());
+    }
+
+    private boolean hasVerifiedAllRegisteredSessions(Registrations registration) {
+        List<ActivitySchedule> registeredSchedules = registration.getRegisteredSchedules() != null
+                ? registration.getRegisteredSchedules()
+                : List.of();
+        List<Attendances> attendances = attendanceRepository.findAllByRegistrationId(registration.getId());
+
+        if (registeredSchedules.isEmpty()) {
+            return attendances.stream()
+                    .anyMatch(attendance -> attendance.getSchedule() == null
+                            && Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(attendance.getStatus())
+                            && attendance.getCheckinTime() != null
+                            && attendance.getCheckoutTime() != null);
+        }
+
+        Set<Long> verifiedScheduleIds = attendances.stream()
+                .filter(attendance -> Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(attendance.getStatus()))
+                .filter(attendance -> attendance.getCheckinTime() != null && attendance.getCheckoutTime() != null)
+                .map(attendance -> attendance.getSchedule())
+                .filter(Objects::nonNull)
+                .map(schedule -> schedule.getId())
+                .collect(Collectors.toSet());
+
+        return registeredSchedules.stream()
+                .filter(Objects::nonNull)
+                .map(schedule -> schedule.getId())
+                .allMatch(verifiedScheduleIds::contains);
+    }
+
     private Registrations resolveCurrentStudentRegistration(Long activityId) {
         Users student = getCurrentStudent();
         Registrations registration = registrationRepository.findByStudentIdAndActivityId(student.getId(), activityId)
-                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION, "Ban chua dang ky hoat dong nay nen khong the diem danh!"));
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_ACTION,
+                        "Bạn chưa đăng ký hoạt động này nên không thể điểm danh!"));
 
         if (registration.getStatus() == 2) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ban da huy dang ky hoat dong nay roi!");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Bạn đã hủy đăng ký hoạt động này rồi!");
+        }
+        if (Integer.valueOf(Registrations.STATUS_ABSENT).equals(registration.getStatus())) {
+            throw new AppException(ErrorCode.INVALID_ACTION, "Đăng ký này đã được ghi nhận vắng mặt.");
         }
 
         return registration;
     }
 
-    private void validateActivityQrToken(Activities activity, String inputCode) {
-        String dbQrToken = activity != null ? activity.getQrCodeToken() : null;
+    private void validateAttendanceQrToken(Activities activity, ActivitySchedule schedule, String inputCode) {
+        if (schedule != null) {
+            validateScheduleQrToken(schedule, inputCode);
+            return;
+        }
+        validateActivityQrToken(activity, inputCode);
+    }
+
+    private void validateScheduleQrToken(ActivitySchedule schedule, String inputCode) {
+        String dbQrToken = schedule != null ? schedule.getQrCodeToken() : null;
         if (dbQrToken == null || inputCode == null || !dbQrToken.equals(inputCode.trim())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Ma QR diem danh khong hop le hoac khong thuoc hoat dong nay.");
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Mã QR điểm danh không hợp lệ hoặc không thuộc buổi hoạt động này.");
         }
     }
 
-    private FaceCheckInResponse toFaceCheckInResponse(FaceVerificationResult verification, AttendanceResponse attendance) {
+    private void validateActivityQrToken(Activities activity, String inputCode) {
+        String dbQrToken = activity != null ? activity.getQrCodeToken() : null;
+        if (dbQrToken == null || inputCode == null || !dbQrToken.equals(inputCode.trim())) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Mã QR điểm danh không hợp lệ hoặc không thuộc hoạt động này.");
+        }
+    }
+
+    private FaceCheckInResponse toFaceCheckInResponse(FaceVerificationResult verification,
+            AttendanceResponse attendance) {
         return FaceCheckInResponse.builder()
                 .verified(verification.getVerified())
                 .decision(verification.getDecision())
@@ -343,13 +473,15 @@ public class AttendanceServiceImpl implements AttendanceService {
     // ============ NEW METHODS FOR UC FEATURES ============
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public PageDTO<AttendanceResponse> getAttendancesBySession(Long activityId, Long sessionId, Pageable pageable) {
         ensureCanManageActivity(activityId);
-        List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId);
-        
-        // Filter registrations that attended this session
-        List<Attendances> attendances = attendanceRepository.findByRegistrationIn(registrations);
+        recordExpiredAbsences();
+        List<Registrations> registrations = findRegistrationsForAttendanceScope(activityId, sessionId);
+
+        List<Attendances> attendances = sessionId != null
+                ? attendanceRepository.findByRegistrationInAndScheduleId(registrations, sessionId)
+                : attendanceRepository.findByRegistrationIn(registrations);
 
         List<AttendanceResponse> responses = attendances.stream()
                 .map(a -> attendanceMapper.toResponse(a, null))
@@ -358,25 +490,32 @@ public class AttendanceServiceImpl implements AttendanceService {
         // Simple pagination simulation
         int start = (int) pageable.getOffset();
         int end = Math.min(start + pageable.getPageSize(), responses.size());
-        List<AttendanceResponse> pageContent = start >= responses.size() 
-                ? List.of() 
+        List<AttendanceResponse> pageContent = start >= responses.size()
+                ? List.of()
                 : responses.subList(start, end);
 
-        return PageDTO.<AttendanceResponse>builder()
-                .pageNumber(pageable.getPageNumber() + 1)
-                .totalPage((int) Math.ceil((double) responses.size() / pageable.getPageSize()))
-                .totalRows(responses.size())
-                .data(pageContent)
-                .build();
+        int totalPages = (int) Math.ceil((double) responses.size() / pageable.getPageSize());
+        PageDTO<AttendanceResponse> result = new PageDTO<>();
+        result.setPageNumber(pageable.getPageNumber() + 1);
+        result.setPageSize(pageable.getPageSize());
+        result.setTotalPage(totalPages);
+        result.setTotalRows(responses.size());
+        result.setData(pageContent);
+        result.setLast(pageable.getPageNumber() + 1 >= totalPages);
+        return result;
     }
 
     @Override
+    @Transactional
     public void exportAttendanceToExcel(Long activityId, Long sessionId, OutputStream outputStream) throws Exception {
         ensureCanManageActivity(activityId);
-        List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId);
-        List<Attendances> attendances = attendanceRepository.findByRegistrationIn(registrations);
+        recordExpiredAbsences();
+        List<Registrations> registrations = findRegistrationsForAttendanceScope(activityId, sessionId);
+        List<Attendances> attendances = sessionId != null
+                ? attendanceRepository.findByRegistrationInAndScheduleId(registrations, sessionId)
+                : attendanceRepository.findByRegistrationIn(registrations);
 
-        String[] headers = {"STT", "MSSV", "Ho Ten", "Lop", "Gio Diem Danh", "Trang Thai"};
+        String[] headers = { "STT", "MSSV", "Họ tên", "Lớp", "Buổi", "Giờ Check-in", "Giờ Check-out", "Trạng thái" };
         java.util.concurrent.atomic.AtomicInteger stt = new java.util.concurrent.atomic.AtomicInteger(1);
 
         excelExportService.export(
@@ -386,34 +525,40 @@ public class AttendanceServiceImpl implements AttendanceService {
                 (attendance) -> {
                     Registrations reg = attendance.getRegistration();
                     Users student = reg.getStudent();
-                    
-                    return new Object[]{
+
+                    return new Object[] {
                             stt.getAndIncrement(),
                             student.getStudentCode() != null ? student.getStudentCode() : "",
                             student.getFullName() != null ? student.getFullName() : student.getUsername(),
                             "", // Lop - can join with profile
-                            attendance.getCheckinTime() != null ? attendance.getCheckinTime().toString() : "",
-                            attendance.getCheckinTime() != null ? "Da check-in" : "Chua check-in"
+                            attendance.getSchedule() != null ? attendance.getSchedule().getTitle() : "",
+                            attendance.getCheckinTime(),
+                            attendance.getCheckoutTime(),
+                            attendanceMapper.toResponse(attendance, null).getAttendanceStatus()
                     };
                 },
-                outputStream
-        );
+                outputStream);
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AttendanceStatisticsResponse getStatistics(Long activityId, Long sessionId) {
         ensureCanManageActivity(activityId);
-        List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId);
-        List<Attendances> attendances = attendanceRepository.findByRegistrationIn(registrations);
+        recordExpiredAbsences();
+        List<Registrations> registrations = findRegistrationsForAttendanceScope(activityId, sessionId);
+        List<Attendances> attendances = sessionId != null
+                ? attendanceRepository.findByRegistrationInAndScheduleId(registrations, sessionId)
+                : attendanceRepository.findByRegistrationIn(registrations);
 
-        int totalRegistrations = registrations.size();
+        int totalRegistrations = expectedAttendanceSlots(registrations, sessionId);
         int totalAttendances = (int) attendances.stream()
-                .filter(a -> a.getCheckinTime() != null)
+                .filter(a -> Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(a.getStatus()))
                 .count();
-        int totalAbsences = totalRegistrations - totalAttendances;
-        double attendanceRate = totalRegistrations > 0 
-                ? (totalAttendances * 100.0) / totalRegistrations 
+        int totalAbsences = (int) attendances.stream()
+                .filter(a -> Integer.valueOf(Attendances.STATUS_ABSENT).equals(a.getStatus()))
+                .count();
+        double attendanceRate = totalRegistrations > 0
+                ? (totalAttendances * 100.0) / totalRegistrations
                 : 0;
 
         return AttendanceStatisticsResponse.builder()
@@ -423,19 +568,129 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .totalAttendances(totalAttendances)
                 .totalAbsences(totalAbsences)
                 .attendanceRate(Math.round(attendanceRate * 10.0) / 10.0)
-                .presentMale(0)  // Placeholder
+                .presentMale(0) // Placeholder
                 .presentFemale(0)
                 .absentMale(0)
                 .absentFemale(0)
                 .build();
     }
 
+    private List<Registrations> findRegistrationsForAttendanceScope(Long activityId, Long sessionId) {
+        List<Registrations> registrations = registrationRepository.findAllByActivityId(activityId).stream()
+                .filter(registration -> registration.getStatus() == null || registration.getStatus() != 2)
+                .collect(Collectors.toList());
+        if (sessionId == null) {
+            return registrations;
+        }
+        return registrations.stream()
+                .filter(registration -> registration.getRegisteredSchedules() != null
+                        && registration.getRegisteredSchedules().stream()
+                                .anyMatch(schedule -> schedule != null && Objects.equals(schedule.getId(), sessionId)))
+                .collect(Collectors.toList());
+    }
+
+    private int expectedAttendanceSlots(List<Registrations> registrations, Long sessionId) {
+        if (sessionId != null) {
+            return registrations.size();
+        }
+        return registrations.stream()
+                .mapToInt(registration -> {
+                    int sessionCount = registration.getRegisteredSchedules() != null
+                            ? registration.getRegisteredSchedules().size()
+                            : 0;
+                    return sessionCount > 0 ? sessionCount : 1;
+                })
+                .sum();
+    }
+
+    @Scheduled(fixedDelayString = "${app.attendance.absence-scan-ms:60000}")
+    @Transactional
+    public void recordExpiredAbsences() {
+        LocalDateTime now = LocalDateTime.now();
+        attendanceRepository.markPendingAttendancesAbsent(
+                now,
+                Attendances.STATUS_PENDING,
+                Attendances.STATUS_ABSENT);
+
+        List<Object[]> missingRows = attendanceRepository.findMissingAttendanceRowsForEndedSchedules(now);
+        List<Attendances> absences = new ArrayList<>();
+        for (Object[] row : missingRows) {
+            if (row.length < 2 || !(row[0] instanceof Registrations registration)
+                    || !(row[1] instanceof ActivitySchedule schedule)) {
+                continue;
+            }
+            Attendances absence = new Attendances();
+            absence.setRegistration(registration);
+            absence.setSchedule(schedule);
+            absence.setStatus(Attendances.STATUS_ABSENT);
+            absences.add(absence);
+        }
+        if (!absences.isEmpty()) {
+            attendanceRepository.saveAll(absences);
+        }
+
+        markRegistrationsAbsent(now);
+    }
+
+    private void markRegistrationsAbsent(LocalDateTime now) {
+        List<Registrations> candidates = registrationRepository.findRegistrationsForAbsenceScan();
+        List<Registrations> absentRegistrations = new ArrayList<>();
+
+        for (Registrations registration : candidates) {
+            if (!isRegistrationFinished(registration, now) || hasVerifiedAllRegisteredSessions(registration)) {
+                continue;
+            }
+
+            registration.setStatus(Registrations.STATUS_ABSENT);
+            if (registration.getAbsenceReason() == null || registration.getAbsenceReason().isBlank()) {
+                registration.setAbsenceReason(
+                        "Sinh viên đã đăng ký nhưng không hoàn tất điểm danh trước khi hoạt động kết thúc.");
+            }
+            registration.setAbsenceReviewed(false);
+            registration.setAbsenceReviewedBy(null);
+            registration.setAbsenceReviewedAt(null);
+            registration.setAbsenceReviewNote(null);
+            absentRegistrations.add(registration);
+
+            if (registration.getRegisteredSchedules() == null || registration.getRegisteredSchedules().isEmpty()) {
+                attendanceRepository.findFirstByRegistrationIdAndScheduleIsNullOrderByIdAsc(registration.getId())
+                        .orElseGet(() -> {
+                            Attendances absence = new Attendances();
+                            absence.setRegistration(registration);
+                            absence.setStatus(Attendances.STATUS_ABSENT);
+                            return attendanceRepository.save(absence);
+                        });
+            }
+        }
+
+        if (!absentRegistrations.isEmpty()) {
+            registrationRepository.saveAll(absentRegistrations);
+        }
+    }
+
+    private boolean isRegistrationFinished(Registrations registration, LocalDateTime now) {
+        List<ActivitySchedule> schedules = registration.getRegisteredSchedules() != null
+                ? registration.getRegisteredSchedules()
+                : List.of();
+
+        if (!schedules.isEmpty()) {
+            return schedules.stream()
+                    .allMatch(schedule -> schedule != null
+                            && schedule.getEndTime() != null
+                            && now.isAfter(schedule.getEndTime()));
+        }
+
+        return registration.getActivity() != null
+                && registration.getActivity().getEndDate() != null
+                && now.isAfter(registration.getActivity().getEndDate());
+    }
+
     private void ensureCanManageActivity(Long activityId) {
         if (activityId == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Thieu ma hoat dong.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Thiếu mã hoạt động.");
         }
         Activities activity = activityRepository.findById(activityId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong!"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
         if (accessSupport.isCurrentAdmin()) {
             return;
         }
@@ -443,6 +698,6 @@ public class AttendanceServiceImpl implements AttendanceService {
             accessSupport.ensureCurrentDepartmentCanManageActivity(activity);
             return;
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem diem danh cua hoat dong nay.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem điểm danh của hoạt động này.");
     }
 }

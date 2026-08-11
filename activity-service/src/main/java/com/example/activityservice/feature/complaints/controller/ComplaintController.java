@@ -54,7 +54,7 @@ public class ComplaintController {
     @PostMapping
     @PreAuthorize("hasRole('STUDENT')")
     public ApiResponse<ComplaintResponse> submitComplaint(@RequestBody @Valid ComplaintRequest request) {
-        return ApiResponse.success(complaintService.submitComplaint(request), "Gui khieu nai thanh cong");
+        return ApiResponse.success(complaintService.submitComplaint(request), "Gửi khiếu nại thành công");
     }
 
     @PutMapping("/{id}/approve")
@@ -62,7 +62,7 @@ public class ComplaintController {
     public ApiResponse<ComplaintResponse> approveComplaint(
             @PathVariable Long id,
             @RequestBody @Valid ResolveComplaintRequest request) {
-        return ApiResponse.success(complaintService.approveComplaint(id, request), "Duyet khieu nai thanh cong");
+        return ApiResponse.success(complaintService.approveComplaint(id, request), "Duyệt khiếu nại thành công");
     }
 
     @PutMapping("/{id}/reject")
@@ -70,6 +70,6 @@ public class ComplaintController {
     public ApiResponse<ComplaintResponse> rejectComplaint(
             @PathVariable Long id,
             @RequestBody @Valid ResolveComplaintRequest request) {
-        return ApiResponse.success(complaintService.rejectComplaint(id, request), "Tu choi khieu nai thanh cong");
+        return ApiResponse.success(complaintService.rejectComplaint(id, request), "Từ chối khiếu nại thành công");
     }
 }

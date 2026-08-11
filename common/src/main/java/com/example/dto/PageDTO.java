@@ -1,7 +1,6 @@
 package com.example.dto;
 
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -11,7 +10,6 @@ import java.util.Collection;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
 public class PageDTO<T> {
     private int totalPage;
     private long totalRows;

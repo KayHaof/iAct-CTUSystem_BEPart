@@ -1,5 +1,6 @@
 package com.example.activityservice.feature.dashboard.service.impl;
 
+import com.example.util.UtcDateTime;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.service.impl.ActivityAccessSupport;
@@ -39,7 +40,7 @@ public class DashboardServiceImpl implements DashboardService {
         if (!accessSupport.isCurrentAdmin()) {
             throw new com.example.exception.AppException(
                     com.example.exception.ErrorCode.FORBIDDEN,
-                    "Ban khong co quyen xem dashboard quan tri.");
+                    "Bạn không có quyền xem dashboard quản trị.");
         }
         return getSystemDashboardStats();
     }
@@ -103,7 +104,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         String startDateStr = null;
         if (activity.getStartDate() != null) {
-            startDateStr = activity.getStartDate().toString();
+            startDateStr = UtcDateTime.format(activity.getStartDate());
         }
 
         return RecentActivityDto.builder()

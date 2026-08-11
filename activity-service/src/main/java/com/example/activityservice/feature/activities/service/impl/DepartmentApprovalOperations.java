@@ -112,7 +112,7 @@ public class DepartmentApprovalOperations {
                 || !Integer.valueOf(ROLE_DEPARTMENT).equals(reviewer.getRoleType())
                 || reviewer.getDepartmentId() == null) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Don vi chua duoc gan khoa/vien de duyet hoat dong dai dien lop.");
+                    "Đơn vị chưa được gắn khoa/viện để duyệt hoạt động đại diện lớp.");
         }
         return reviewer;
     }
@@ -138,6 +138,6 @@ public class DepartmentApprovalOperations {
         if ("ALL".equalsIgnoreCase(status)) {
             return List.of(STATUS_PENDING, STATUS_APPROVED, STATUS_REJECTED);
         }
-        throw new AppException(ErrorCode.INVALID_ACTION, "Trang thai loc hoat dong khong hop le.");
+        throw new AppException(ErrorCode.INVALID_ACTION, "Trạng thái lọc hoạt động không hợp lệ.");
     }
 }

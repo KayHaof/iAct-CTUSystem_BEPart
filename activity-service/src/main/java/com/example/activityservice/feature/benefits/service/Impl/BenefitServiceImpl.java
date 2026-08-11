@@ -107,7 +107,7 @@ public class BenefitServiceImpl implements BenefitService {
     @Transactional
     public void deleteBenefit(Long id) {
         Benefits benefit = benefitRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay quyen loi de xoa!"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy quyền lợi để xóa!"));
         log.info("Đang xóa quyền lợi ID: {}", id);
         if (!benefitRepository.existsById(id)) {
             throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy quyền lợi để xóa!");

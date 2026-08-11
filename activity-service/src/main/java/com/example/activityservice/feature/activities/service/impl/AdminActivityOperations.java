@@ -11,6 +11,7 @@ import com.example.activityservice.feature.activities.specification.ActivitySpec
 import com.example.activityservice.feature.activities.service.ActivityCacheService;
 import com.example.activityservice.feature.activities.service.ActivityRegistrationNotificationService;
 import com.example.activityservice.feature.locations.service.ActivityLocationBookingService;
+import com.example.activityservice.feature.registration.repository.RegistrationRepository;
 import com.example.activityservice.feature.semesters.model.Semesters;
 import com.example.activityservice.feature.semesters.repository.SemesterRepository;
 import com.example.activityservice.feature.users.model.Users;
@@ -40,11 +41,11 @@ public class AdminActivityOperations {
     private static final int STATUS_PENDING = 0;
     private static final int STATUS_APPROVED = 1;
     private static final int STATUS_REJECTED = 2;
+    private static final int STATUS_CANCELLED = 4;
     private static final List<Integer> MODERATION_STATUSES = List.of(
             STATUS_PENDING,
             STATUS_APPROVED,
-            STATUS_REJECTED
-    );
+            STATUS_REJECTED);
 
     private final ActivityRepository activityRepository;
     private final SemesterRepository semesterRepository;
@@ -53,6 +54,7 @@ public class AdminActivityOperations {
     private final ActivityEventProducer activityEventProducer;
     private final ActivityCacheService activityCacheService;
     private final ActivityLocationBookingService locationBookingService;
+    private final RegistrationRepository registrationRepository;
     private final ActivityRegistrationNotificationService registrationNotificationService;
     private final ActivityAccessSupport accessSupport;
 
@@ -60,7 +62,7 @@ public class AdminActivityOperations {
     public void approveActivity(Long id) {
         Activities activity = getActivityForAction(id);
         if (activity.getStatus() != 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Chi duyet duoc hoat dong Cho duyet.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ duyệt được hoạt động Chờ duyệt.");
         }
         Users reviewer = getCurrentReviewer();
         validateApprovalPermission(activity, reviewer);
@@ -80,10 +82,10 @@ public class AdminActivityOperations {
     public void rejectActivity(Long id, String reason) {
         Activities activity = getActivityForAction(id);
         if (activity.getStatus() != 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Chi tu choi duoc hoat dong Cho duyet.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Chỉ từ chối được hoạt động Chờ duyệt.");
         }
         if (reason == null || reason.isBlank()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long nhap ly do tu choi cu the.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng nhập lý do từ chối cụ thể.");
         }
         Users reviewer = getCurrentReviewer();
         validateApprovalPermission(activity, reviewer);
@@ -104,30 +106,59 @@ public class AdminActivityOperations {
     public void cancelActivity(Long id, String reason) {
         Activities activity = getActivityForAction(id);
         if (activity.getStatus() != 0 && activity.getStatus() != 1) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Loi trang thai");
-        }
-        if (!isDepartmentSubmittedActivity(activity) || !Boolean.TRUE.equals(activity.getRequiresAdminApproval())) {
-            throw new AppException(ErrorCode.FORBIDDEN,
-                    "Admin chi huy hoat dong do Khoa/Don vi gui len.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Lỗi trạng thái");
         }
 
-        activity.setStatus(4);
-        activity.setReason(reason != null && !reason.isBlank() ? reason : "Su co ngoai y muon");
         Users reviewer = getCurrentReviewer();
+        boolean departmentCancellation = hasCurrentRole("ROLE_DEPARTMENT");
+        if (departmentCancellation) {
+            if (!canDepartmentCancelActivity(activity, reviewer)) {
+                throw new AppException(ErrorCode.FORBIDDEN,
+                        "Đơn vị chỉ có thể hủy hoạt động trực tiếp của mình khi chưa tới thời gian tổ chức.");
+            }
+            if (reason == null || reason.isBlank()) {
+                throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng nhập lý do hủy hoạt động.");
+            }
+        } else if (!hasCurrentRole("ROLE_ADMIN")
+                || !isDepartmentSubmittedActivity(activity)
+                || !Boolean.TRUE.equals(activity.getRequiresAdminApproval())) {
+            throw new AppException(ErrorCode.FORBIDDEN,
+                    "Admin chỉ hủy hoạt động do Khoa/Đơn vị gửi lên.");
+        }
+
+        List<Long> registeredStudentIds = registrationRepository.findRegisteredStudentIdsByActivityId(activity.getId());
+        String cancellationReason = reason != null && !reason.isBlank()
+                ? reason.trim()
+                : "Sự cố ngoài ý muốn";
+        activity.setStatus(STATUS_CANCELLED);
+        activity.setReason(cancellationReason);
         activity.setHandledBy(reviewer);
         activity.setHandledAt(LocalDateTime.now());
         Activities savedActivity = activityRepository.save(activity);
         locationBookingService.cancelBookingsForActivity(savedActivity.getId(), reviewer, activity.getReason());
 
-        activityEventProducer.publishCancelled(savedActivity);
+        activityEventProducer.publishCancelled(savedActivity, registeredStudentIds);
         activityCacheService.evictActivityListCaches();
+    }
+
+    private boolean canDepartmentCancelActivity(Activities activity, Users reviewer) {
+        return reviewer != null
+                && accessSupport.canCurrentDepartmentManageActivity(activity)
+                && isDepartmentSubmittedActivity(activity)
+                && activity.getStatus() == STATUS_APPROVED
+                && !Boolean.TRUE.equals(activity.getRequiresAdminApproval())
+                && activity.getStartDate() != null
+                && activity.getStartDate().isAfter(LocalDateTime.now());
     }
 
     public ActivityStatsResponse getActivityStats() {
         var baseSpec = moderationScope();
-        long pending = activityRepository.count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_PENDING))));
-        long approved = activityRepository.count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_APPROVED))));
-        long rejected = activityRepository.count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_REJECTED))));
+        long pending = activityRepository
+                .count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_PENDING))));
+        long approved = activityRepository
+                .count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_APPROVED))));
+        long rejected = activityRepository
+                .count(baseSpec.and(ActivitySpecification.hasStatusIn(List.of(STATUS_REJECTED))));
 
         return ActivityStatsResponse.builder()
                 .pendingReview(pending)
@@ -182,7 +213,7 @@ public class AdminActivityOperations {
         if (accessSupport.isCurrentAdmin()) {
             return requestedDepartmentId;
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem thong ke don vi.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem thống kê đơn vị.");
     }
 
     @Transactional(readOnly = true)
@@ -216,10 +247,10 @@ public class AdminActivityOperations {
 
     private Activities getActivityForAction(Long id) {
         Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay!"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy!"));
         int currentStatus = activity.getStatus();
         if (currentStatus == 2 || currentStatus == 4) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Da bi Tu choi hoac Huy!");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Đã bị từ chối hoặc hủy!");
         }
         return activity;
     }
@@ -237,7 +268,7 @@ public class AdminActivityOperations {
         if (hasCurrentRole("ROLE_ADMIN")) {
             if (!isDepartmentSubmittedActivity(activity) || !Boolean.TRUE.equals(activity.getRequiresAdminApproval())) {
                 throw new AppException(ErrorCode.FORBIDDEN,
-                        "Admin chi duyet hoat dong do Khoa/Don vi gui len.");
+                        "Admin chỉ duyệt hoạt động do Khoa/Đơn vị gửi lên.");
             }
             return;
         }
@@ -247,20 +278,19 @@ public class AdminActivityOperations {
                     || !Objects.equals(reviewer.getDepartmentId(), activity.getDepartmentId())
                     || !isStudentRepresentativeActivity(activity)) {
                 throw new AppException(ErrorCode.FORBIDDEN,
-                        "Don vi chi duyet hoat dong do dai dien lop/chi doan thuoc khoa/vien cua minh gui len.");
+                        "Đơn vị chỉ duyệt hoạt động do đại diện lớp/chi đoàn thuộc khoa/viện của mình gửi lên.");
             }
             return;
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen duyet hoat dong nay.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền duyệt hoạt động này.");
     }
 
     private List<DepartmentActivityStatsResponse> buildDepartmentActivityStats() {
-        List<ActivityRepository.DepartmentStatusCountProjection> rows =
-                activityRepository.countByCreatorRoleTypeAndRequiresAdminApprovalAndStatusesGroupedByDepartment(
+        List<ActivityRepository.DepartmentStatusCountProjection> rows = activityRepository
+                .countByCreatorRoleTypeAndRequiresAdminApprovalAndStatusesGroupedByDepartment(
                         ROLE_DEPARTMENT,
                         true,
-                        MODERATION_STATUSES
-                );
+                        MODERATION_STATUSES);
 
         if (rows.isEmpty()) {
             return List.of();
@@ -274,8 +304,7 @@ public class AdminActivityOperations {
                     key -> DepartmentActivityStatsResponse.builder()
                             .departmentId(key)
                             .departmentName(key == null ? "Cấp Trường" : null)
-                            .build()
-            );
+                            .build());
 
             long count = row.getTotal() == null ? 0L : row.getTotal();
             int status = row.getStatus() == null ? STATUS_PENDING : row.getStatus();
@@ -298,14 +327,13 @@ public class AdminActivityOperations {
                 item.setDepartmentName("Cấp Trường");
             } else {
                 item.setDepartmentName(
-                        departmentNames.getOrDefault(item.getDepartmentId(), "Đơn vị #" + item.getDepartmentId())
-                );
+                        departmentNames.getOrDefault(item.getDepartmentId(), "Đơn vị #" + item.getDepartmentId()));
             }
             item.setTotal(item.getPendingReview() + item.getApprovedThisTerm() + item.getRejected());
         });
 
         return grouped.values().stream()
-                .sorted(Comparator.comparingLong(DepartmentActivityStatsResponse::getTotal).reversed()
+                .sorted(Comparator.<DepartmentActivityStatsResponse>comparingLong(item -> item.getTotal()).reversed()
                         .thenComparing(item -> item.getDepartmentName() == null ? "" : item.getDepartmentName()))
                 .toList();
     }
@@ -333,7 +361,7 @@ public class AdminActivityOperations {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null
                 && authentication.getAuthorities().stream()
-                .anyMatch(authority -> Objects.equals(authority.getAuthority(), role));
+                        .anyMatch(authority -> Objects.equals(authority.getAuthority(), role));
     }
 
 }

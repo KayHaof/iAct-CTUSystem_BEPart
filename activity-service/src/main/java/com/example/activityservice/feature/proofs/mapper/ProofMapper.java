@@ -21,6 +21,7 @@ public interface ProofMapper {
     @Mapping(target = "studentName", source = "registration.student.fullName")
     @Mapping(target = "studentAvatarUrl", source = "registration.student.avatarUrl")
     @Mapping(target = "submittedAt", source = "createdAt")
+    @Mapping(target = "updatedAt", source = "updatedAt")
     ProofResponse toResponse(Proofs entity);
 
     // 2. Map từ Request + Long studentId + Activity => Proofs MỚI

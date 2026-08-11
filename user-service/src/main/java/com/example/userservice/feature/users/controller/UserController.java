@@ -53,21 +53,21 @@ public class UserController {
             @PathVariable Long id,
             @RequestBody UserUpdateRequest request) {
         userService.updateUserProfile(id, request);
-        return ApiResponse.of(200, "Cap nhat thanh cong", null);
+        return ApiResponse.of(200, "Cập nhật thành công", null);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<String> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
-        return ApiResponse.success("Xoa hoac vo hieu nguoi dung thanh cong");
+        return ApiResponse.success("Xóa hoặc vô hiệu người dùng thành công");
     }
 
     @PutMapping("/{id}/active")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<String> activeUser(@PathVariable long id) {
         userService.activateUser(id);
-        return ApiResponse.success("Kich hoat tai khoan thanh cong");
+        return ApiResponse.success("Kích hoạt tài khoản thành công");
     }
 
     @GetMapping("/my-info")
@@ -80,19 +80,19 @@ public class UserController {
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody ChangePasswordRequest request) {
         userService.changePasswordViaKeycloak(bearerToken, request);
-        return ApiResponse.of(200, "Doi mat khau thanh cong!", null);
+        return ApiResponse.of(200, "Đổi mật khẩu thành công!", null);
     }
 
     @PostMapping("/sync")
     public ApiResponse<String> syncUser(@AuthenticationPrincipal Jwt jwt) {
         userService.syncUserFromKeycloak(jwt);
-        return ApiResponse.success("Dong bo nguoi dung thanh cong!");
+        return ApiResponse.success("Đồng bộ người dùng thành công!");
     }
 
     @GetMapping("/search")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<UserResponse> getUserByEmail(@RequestParam("email") String email) {
-        return ApiResponse.success(userService.getUserByEmail(email), "Tim thay nguoi dung thanh cong");
+        return ApiResponse.success(userService.getUserByEmail(email), "Tìm thấy người dùng thành công");
     }
 
     @GetMapping("/counts")
@@ -105,7 +105,7 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<String> resetPassword(@PathVariable Long id) {
         userService.sendResetPasswordEmail(id);
-        return ApiResponse.success("Da gui email yeu cau dat lai mat khau thanh cong");
+        return ApiResponse.success("Đã gửi email yêu cầu đặt lại mật khẩu thành công");
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

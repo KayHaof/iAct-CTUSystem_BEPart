@@ -15,6 +15,7 @@ import com.example.activityservice.feature.users.model.Users;
 import com.example.activityservice.feature.users.repository.UserRepository;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
+import com.example.util.UtcDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,12 +40,12 @@ public class PointServiceImpl implements PointService {
     @Transactional(readOnly = true)
     public PointSummaryResponse getStudentPointSummary(Long studentId, Long semesterId) {
         Users student = userRepository.findById(studentId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Khong tim thay sinh vien"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy sinh viên"));
 
         Semesters semester = resolveSemester(semesterId);
         if (semester == null) {
             semester = semesterRepository.findByIsActiveTrue()
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong co hoc ky nao"));
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không có học kỳ nào"));
         }
 
         Optional<PointSummaryResponse> cached = pointCacheService.getSummary(studentId, semester.getId());
@@ -152,16 +153,16 @@ public class PointServiceImpl implements PointService {
         return userRepository.findByUsername(username)
                 .map(user -> user.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, 
-                        "Khong tim thay sinh vien voi username: " + username));
+                        "Không tìm thấy sinh viên với username: " + username));
     }
 
     private Semesters resolveSemester(Long semesterId) {
         if (semesterId != null) {
             return semesterRepository.findById(semesterId)
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoc ky"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy học kỳ"));
         }
         return semesterRepository.findByIsActiveTrue()
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong co hoc ky hien tai"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không có học kỳ hiện tại"));
     }
 
     private List<CategoryPointItem> buildCategoryBreakdown(
@@ -240,9 +241,7 @@ public class PointServiceImpl implements PointService {
                             .categoryId(category != null ? category.getId() : null)
                             .categoryName(category != null ? category.getName() : null)
                             .earnedPoint(benefit.getPoint() != null ? benefit.getPoint() : 0)
-                            .attendedAt(activity != null && activity.getEndDate() != null
-                                    ? activity.getEndDate().toString()
-                                    : null)
+                            .attendedAt(activity != null ? UtcDateTime.format(activity.getEndDate()) : null)
                             .proofStatus(1)
                             .build();
                 })
@@ -259,7 +258,7 @@ public class PointServiceImpl implements PointService {
                                 ? certificate.getApprovedCategory().getName()
                                 : null)
                         .earnedPoint(certificate.getApprovedPoint() != null ? certificate.getApprovedPoint() : 0)
-                        .attendedAt(certificate.getReviewedAt() != null ? certificate.getReviewedAt().toString() : null)
+                        .attendedAt(UtcDateTime.format(certificate.getReviewedAt()))
                         .proofStatus(1)
                         .build())
                 .forEach(details::add);
@@ -299,15 +298,15 @@ public class PointServiceImpl implements PointService {
 
         double overallPercentage = (totalPoint * 100.0) / maxPoint;
         if (overallPercentage < 50) {
-            warnings.add("Ban dang thieu " + (maxPoint - totalPoint) + " diem de dat muc tot (>50%)");
+            warnings.add("Bạn đang thiếu " + (maxPoint - totalPoint) + " điểm để đạt mức tốt (>50%)");
         }
 
         for (CategoryPointItem item : breakdown) {
             if (item.getMaxPoint() > 0) {
                 double catPercentage = (item.getEarnedPoint() * 100.0) / item.getMaxPoint();
                 if (catPercentage < 30) {
-                    warnings.add("Ban dang thieu " + (item.getMaxPoint() - item.getEarnedPoint()) 
-                            + " diem o " + item.getCategoryCode() + " - " + item.getCategoryName());
+                    warnings.add("Bạn đang thiếu " + (item.getMaxPoint() - item.getEarnedPoint())
+                            + " điểm ở " + item.getCategoryCode() + " - " + item.getCategoryName());
                 }
             }
         }

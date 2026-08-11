@@ -7,6 +7,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ResolveComplaintRequest {
-    @NotBlank(message = "Noi dung phan hoi khong duoc de trong")
+    @NotBlank(message = "Nội dung phản hồi không được để trống")
     private String response;
 }

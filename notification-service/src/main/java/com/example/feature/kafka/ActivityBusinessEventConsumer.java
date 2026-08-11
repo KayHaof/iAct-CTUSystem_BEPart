@@ -55,6 +55,10 @@ public class ActivityBusinessEventConsumer {
                 handleActivitySubmitted(root, topic);
                 return;
             }
+            if (KafkaEventTypes.ACTIVITY_CANCELLED.equals(text(root, "eventType"))) {
+                handleActivityCancelled(root, topic);
+                return;
+            }
             NotificationRequest request = toNotificationRequest(root, topic);
             if (request == null) {
                 log.info("Business event does not require notification. topic={}", topic);
@@ -98,6 +102,38 @@ public class ActivityBusinessEventConsumer {
         }
 
         log.info("Activity submitted notification handled. topic={}, eventId={}, recipients={}",
+                topic, text(root, "eventId"), recipientIds.size());
+    }
+
+    private void handleActivityCancelled(JsonNode root, String topic) {
+        JsonNode payload = payload(root);
+        List<Long> recipientIds = extractRecipientIds(payload);
+        Long activityId = optionalLong(payload, "activityId");
+        String activityTitle = title(payload);
+        String reason = defaultText(payload, "reason", "Sự cố ngoài ý muốn");
+        String message = "Hoạt động '" + activityTitle + "' đã bị hủy. Lý do: " + reason;
+        String baseEventId = text(root, "eventId");
+
+        for (Long userId : recipientIds) {
+            NotificationRequest request = new NotificationRequest();
+            request.setUserId(userId);
+            request.setActivityId(activityId);
+            request.setTitle("Hoạt động đã bị hủy");
+            request.setMessage(message);
+            request.setContent(message);
+            request.setType(3);
+            request.setReferenceType("activity-cancelled");
+            request.setSourceTopic(topic);
+            request.setSourceEventId(baseEventId == null ? null : baseEventId + ":user:" + userId);
+            notificationDispatchService.createAndDispatch(request);
+        }
+
+        NotificationRequest ownerNotification = toNotificationRequest(root, topic);
+        if (ownerNotification != null && ownerNotification.getUserId() != null) {
+            notificationDispatchService.createAndDispatch(ownerNotification);
+        }
+
+        log.info("Activity cancellation notification handled. topic={}, eventId={}, recipients={}",
                 topic, text(root, "eventId"), recipientIds.size());
     }
 

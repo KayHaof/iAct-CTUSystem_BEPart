@@ -2,6 +2,7 @@ package com.example.activityservice.feature.activities.service.impl;
 
 import com.example.activityservice.feature.activities.dto.ActivityRequest;
 import com.example.activityservice.feature.activities.dto.ActivityResponse;
+import com.example.activityservice.feature.activities.dto.ActivityScheduleQrCodeResponse;
 import com.example.activityservice.feature.activities.dto.ActivityStatsResponse;
 import com.example.activityservice.feature.activities.dto.ActivityTimeLocationResponse;
 import com.example.activityservice.feature.activities.dto.DepartmentStatsResponse;
@@ -107,6 +108,16 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     public String getQrCodeForActivity(Long activityId) {
         return commandOperations.getQrCodeForActivity(activityId);
+    }
+
+    @Override
+    public ActivityScheduleQrCodeResponse getQrCodeForSchedule(Long activityId, Long scheduleId) {
+        return commandOperations.getQrCodeForSchedule(activityId, scheduleId);
+    }
+
+    @Override
+    public List<ActivityScheduleQrCodeResponse> getQrCodesForActivity(Long activityId) {
+        return commandOperations.getQrCodesForActivity(activityId);
     }
 
     @Override

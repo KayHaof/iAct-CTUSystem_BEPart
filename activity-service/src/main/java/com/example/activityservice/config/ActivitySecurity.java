@@ -101,26 +101,6 @@ public class ActivitySecurity {
                 && Objects.equals(currentUser.getDepartmentId(), activity.getDepartmentId());
     }
 
-    private boolean canDepartmentEditSubmittedRepresentativeActivity(
-            Authentication authentication,
-            Activities activity) {
-        if (!hasAuthority(authentication, "ROLE_DEPARTMENT")
-                || authentication == null
-                || authentication.getName() == null
-                || activity == null
-                || !Integer.valueOf(0).equals(activity.getStatus())
-                || activity.getDepartmentId() == null
-                || activity.getCreatedBy() == null
-                || !Integer.valueOf(1).equals(activity.getCreatedBy().getRoleType())) {
-            return false;
-        }
-
-        Users currentUser = userRepository.findByUsername(authentication.getName()).orElse(null);
-        return currentUser != null
-                && currentUser.getDepartmentId() != null
-                && Objects.equals(currentUser.getDepartmentId(), activity.getDepartmentId());
-    }
-
     private boolean hasAuthority(Authentication authentication, String authority) {
         return authentication != null
                 && authentication.getAuthorities() != null

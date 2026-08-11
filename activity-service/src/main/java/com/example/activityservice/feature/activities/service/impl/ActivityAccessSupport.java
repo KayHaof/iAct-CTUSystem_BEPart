@@ -31,18 +31,18 @@ public class ActivityAccessSupport {
     public Users requireCurrentUser() {
         Users currentUser = getCurrentUserOrNull();
         if (currentUser == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Khong xac dinh duoc tai khoan hien tai.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Không xác định được tài khoản hiện tại.");
         }
         return currentUser;
     }
 
     public Users requireCurrentDepartmentUser() {
         if (!isCurrentDepartment()) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Chi tai khoan Khoa/Don vi moi duoc truy cap du lieu nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Chỉ tài khoản Khoa/Đơn vị mới được truy cập dữ liệu này.");
         }
         Users currentUser = requireCurrentUser();
         if (currentUser.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan Khoa/Don vi chua duoc gan don vi.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản Khoa/Đơn vị chưa được gắn đơn vị.");
         }
         return currentUser;
     }
@@ -108,7 +108,7 @@ public class ActivityAccessSupport {
         if (canCurrentDepartmentManageActivity(activity)) {
             return;
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen truy cap hoat dong ngoai don vi cua minh.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền truy cập hoạt động ngoài đơn vị của mình.");
     }
 
     public void ensureCurrentDepartmentCanRead(Activities activity) {
@@ -126,7 +126,7 @@ public class ActivityAccessSupport {
         if (isCreatedBy(activity, currentUser) || canCurrentDepartmentManageActivity(activity)) {
             return;
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen thao tac tren hoat dong nay.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền thao tác trên hoạt động này.");
     }
 
     private boolean hasCurrentAuthority(String authority) {

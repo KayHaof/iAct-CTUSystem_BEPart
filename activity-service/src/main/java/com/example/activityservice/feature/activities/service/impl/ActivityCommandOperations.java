@@ -2,6 +2,7 @@ package com.example.activityservice.feature.activities.service.impl;
 
 import com.example.activityservice.feature.activities.dto.ActivityRequest;
 import com.example.activityservice.feature.activities.dto.ActivityResponse;
+import com.example.activityservice.feature.activities.dto.ActivityScheduleQrCodeResponse;
 import com.example.activityservice.feature.activities.kafka.ActivityEventProducer;
 import com.example.activityservice.feature.activities.mapper.ActivityMapper;
 import com.example.activityservice.feature.activities.model.Activities;
@@ -11,6 +12,7 @@ import com.example.activityservice.feature.activities.service.ActivityRegistrati
 import com.example.activityservice.feature.notification.kafka.NotificationCommandProducer;
 import com.example.activityservice.feature.activitySchedule.mapper.ActivityScheduleMapper;
 import com.example.activityservice.feature.activitySchedule.model.ActivitySchedule;
+import com.example.activityservice.feature.activitySchedule.repository.ActivityScheduleRepository;
 import com.example.activityservice.feature.benefits.dto.BenefitResponse;
 import com.example.activityservice.feature.benefits.mapper.BenefitMapper;
 import com.example.activityservice.feature.benefits.model.Benefits;
@@ -32,6 +34,8 @@ import com.example.activityservice.feature.users.service.StudentRepresentativePe
 import com.example.activityservice.feature.users.dto.RepresentativeActivityPermissionResponse;
 import com.example.activityservice.service.CloudinaryService;
 import com.example.activityservice.service.QRCodeService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.event.ActivityDeletedEvent;
 import com.example.event.kafka.KafkaTopics;
 import com.example.exception.AppException;
@@ -47,6 +51,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -61,7 +67,6 @@ public class ActivityCommandOperations {
     private static final int ROLE_ADMIN = 3;
     private static final int STATUS_PENDING = 0;
     private static final int STATUS_APPROVED = 1;
-    private static final int STATUS_REJECTED = 2;
     private static final int STATUS_DRAFT = 3;
 
     private final ActivityRepository activityRepository;
@@ -75,6 +80,8 @@ public class ActivityCommandOperations {
     private final BenefitValidationService benefitValidationService;
     private final CloudinaryService cloudinaryService;
     private final QRCodeService qrCodeService;
+    private final ActivityScheduleRepository scheduleRepository;
+    private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ActivityEventProducer activityEventProducer;
     private final NotificationCommandProducer notificationCommandProducer;
@@ -122,11 +129,11 @@ public class ActivityCommandOperations {
                 savedActivity.getStatus());
 
         if (savedActivity.getStatus() == STATUS_APPROVED) {
-            log.info("Hoat dong da duoc tao va phe duyet tu dong!");
+            log.info("Hoạt động đã được tạo và phê duyệt tự động!");
         } else if (savedActivity.getStatus() == STATUS_DRAFT) {
-            log.info("Ban nhap hoat dong da duoc luu thanh cong!");
+            log.info("Bản nháp hoạt động đã được lưu thành công!");
         } else {
-            log.info("Hoat dong da duoc tao va gui duyet thanh cong!");
+            log.info("Hoạt động đã được tạo và gửi duyệt thành công!");
         }
 
         ActivityResponse response = responseAssembler.toResponse(savedActivity);
@@ -148,7 +155,7 @@ public class ActivityCommandOperations {
     @Transactional
     public ActivityResponse updateActivity(Long id, ActivityRequest request) {
         Activities existingActivity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong!"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
         Users currentUser = resolveCurrentCreator();
         accessSupport.ensureCurrentUserCanManageActivity(existingActivity);
         RepresentativeActivityPermissionResponse representativePermission = null;
@@ -160,13 +167,21 @@ public class ActivityCommandOperations {
             }
         }
 
-        if (existingActivity.getStatus() != STATUS_PENDING && existingActivity.getStatus() != STATUS_DRAFT) {
+        boolean canEditApprovedDepartmentActivity = canEditApprovedDepartmentActivity(existingActivity, currentUser);
+        boolean editablePendingOrDraft = existingActivity.getStatus() == STATUS_PENDING
+                || existingActivity.getStatus() == STATUS_DRAFT;
+        if (!editablePendingOrDraft && !canEditApprovedDepartmentActivity) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Chi co the chinh sua hoat dong dang cho duyet hoac ban nhap.");
+                    "Chỉ có thể chỉnh sửa hoạt động đang chờ duyệt, bản nháp hoặc hoạt động trực tiếp của Đơn vị khi chưa tới thời gian tổ chức.");
         }
         if (isDepartment(currentUser) && isPendingAdminApproval(existingActivity)) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Hoat dong dang cho admin duyet khong the chinh sua. Vui long lien he admin de ho tro.");
+                    "Hoạt động đang chờ admin duyệt không thể chỉnh sửa. Vui lòng liên hệ admin để hỗ trợ.");
+        }
+        if (canEditApprovedDepartmentActivity
+                && (request.getStartDate() == null || !request.getStartDate().isAfter(LocalDateTime.now()))) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Thời gian tổ chức mới phải sau thời gian hiện tại.");
         }
 
         Integer previousStatus = existingActivity.getStatus();
@@ -195,7 +210,7 @@ public class ActivityCommandOperations {
             LocalDate activityDate = request.getStartDate().toLocalDate();
             Semesters newSemester = semesterRepository.findSemesterByDate(activityDate)
                     .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                            "Ngay to chuc khong thuoc hoc ky nao!"));
+                            "Ngày tổ chức không thuộc học kỳ nào!"));
             existingActivity.setSemester(newSemester);
         }
 
@@ -244,18 +259,18 @@ public class ActivityCommandOperations {
     @Transactional
     public void deleteActivity(Long id) {
         Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Activity not found !"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
         Users currentUser = resolveCurrentCreator();
         accessSupport.ensureCurrentUserCanManageActivity(activity);
 
         if (isDepartment(currentUser) && isPendingAdminApproval(activity)) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Hoat dong dang cho admin duyet khong the xoa. Hay gui yeu cau ho tro len admin.");
+                    "Hoạt động đang chờ admin duyệt không thể xóa. Hãy gửi yêu cầu hỗ trợ lên admin.");
         }
 
         Integer currentStatus = activity.getStatus();
         if (currentStatus != null && (currentStatus == 1 || currentStatus == 4)) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khong the xoa hoat dong da duyet hoac huy.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không thể xóa hoạt động đã duyệt hoặc hủy.");
         }
 
         deleteOldImage(activity.getCoverImage());
@@ -265,18 +280,91 @@ public class ActivityCommandOperations {
         kafkaTemplate.send("iact.activity.deleted", new ActivityDeletedEvent(id));
         activityEventProducer.publishDeleted(id);
         activityCacheService.evictActivityListCaches();
-        log.info("Da gui event Kafka yeu cau xoa thong bao cho Activity ID: {}", id);
+        log.info("Đã gửi sự kiện Kafka yêu cầu xóa thông báo cho hoạt động ID: {}", id);
     }
 
+    @Transactional
     public String getQrCodeForActivity(Long activityId) {
-        Activities activity = activityRepository.findById(activityId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong!"));
-        accessSupport.ensureCurrentUserCanManageActivity(activity);
-        if (activity.getQrCodeToken() == null || activity.getQrCodeToken().isBlank()) {
-            activity.setQrCodeToken(java.util.UUID.randomUUID().toString());
-            activity = activityRepository.save(activity);
+        Activities activity = resolveManageableActivity(activityId);
+        List<ActivitySchedule> schedules = scheduleRepository.findByActivityId(activityId);
+        if (schedules.isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Hoạt động chưa có buổi chi tiết để tạo mã QR điểm danh.");
         }
-        return qrCodeService.generateQRCodeBase64(activity.getQrCodeToken(), 300, 300);
+        if (schedules.size() > 1) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Hoạt động có nhiều buổi. Vui lòng chọn buổi cụ thể để lấy mã QR.");
+        }
+        return buildScheduleQrResponse(activity, schedules.get(0)).getQrCodeImage();
+    }
+
+    @Transactional
+    public ActivityScheduleQrCodeResponse getQrCodeForSchedule(Long activityId, Long scheduleId) {
+        Activities activity = resolveManageableActivity(activityId);
+        ActivitySchedule schedule = scheduleRepository.findByIdAndActivityId(scheduleId, activityId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
+                        "Không tìm thấy buổi của hoạt động này."));
+        return buildScheduleQrResponse(activity, schedule);
+    }
+
+    @Transactional
+    public List<ActivityScheduleQrCodeResponse> getQrCodesForActivity(Long activityId) {
+        Activities activity = resolveManageableActivity(activityId);
+        List<ActivitySchedule> schedules = scheduleRepository.findByActivityId(activityId);
+        if (schedules.isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Hoạt động chưa có buổi chi tiết để tạo mã QR điểm danh.");
+        }
+        schedules.sort(Comparator.comparing(
+                (ActivitySchedule schedule) -> schedule.getStartTime(),
+                Comparator.nullsLast(Comparator.naturalOrder())));
+        return schedules.stream()
+                .map(schedule -> buildScheduleQrResponse(activity, schedule))
+                .toList();
+    }
+
+    private Activities resolveManageableActivity(Long activityId) {
+        Activities activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
+        accessSupport.ensureCurrentUserCanManageActivity(activity);
+        return activity;
+    }
+
+    private ActivityScheduleQrCodeResponse buildScheduleQrResponse(Activities activity, ActivitySchedule schedule) {
+        schedule = ensureScheduleQrToken(schedule);
+        String payload = buildScheduleQrPayload(activity, schedule);
+        return ActivityScheduleQrCodeResponse.builder()
+                .activityId(activity.getId())
+                .activityTitle(activity.getTitle())
+                .scheduleId(schedule.getId())
+                .scheduleTitle(schedule.getTitle())
+                .scheduleStartTime(schedule.getStartTime())
+                .scheduleEndTime(schedule.getEndTime())
+                .location(schedule.getLocation())
+                .qrCodeImage(qrCodeService.generateQRCodeBase64(payload, 300, 300))
+                .build();
+    }
+
+    private ActivitySchedule ensureScheduleQrToken(ActivitySchedule schedule) {
+        if (schedule.getQrCodeToken() == null || schedule.getQrCodeToken().isBlank()) {
+            schedule.setQrCodeToken(java.util.UUID.randomUUID().toString());
+            return scheduleRepository.save(schedule);
+        }
+        return schedule;
+    }
+
+    private String buildScheduleQrPayload(Activities activity, ActivitySchedule schedule) {
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "ACTIVITY_SCHEDULE_ATTENDANCE");
+        payload.put("version", 1);
+        payload.put("activityId", activity.getId());
+        payload.put("scheduleId", schedule.getId());
+        payload.put("verifyCode", schedule.getQrCodeToken());
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, "Không thể tạo dữ liệu mã QR.");
+        }
     }
 
     public void deleteOldImage(String oldImg) {
@@ -286,28 +374,28 @@ public class ActivityCommandOperations {
     @Transactional
     public void requestAdminSupport(Long id, String reason) {
         Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong!"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động!"));
         Users currentUser = resolveCurrentCreator();
         if (!isDepartment(currentUser) || currentUser.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Chi don vi moi duoc gui yeu cau ho tro len admin.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Chỉ Đơn vị mới được gửi yêu cầu hỗ trợ lên admin.");
         }
         if (!Objects.equals(currentUser.getDepartmentId(), activity.getDepartmentId())
                 || !isPendingAdminApproval(activity)) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Chi co hoat dong dang cho admin duyet cua don vi moi duoc gui ho tro.");
+                    "Chỉ có hoạt động đang chờ admin duyệt của Đơn vị mới được gửi yêu cầu hỗ trợ.");
         }
 
         List<Long> adminIds = userRepository.findActiveAdminUserIds();
         if (adminIds.isEmpty()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khong tim thay tai khoan admin hoat dong.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không tìm thấy tài khoản admin đang hoạt động.");
         }
 
         String supportReason = isBlank(reason)
-                ? "De nghi admin ho tro xu ly hoat dong dang cho duyet."
+                ? "Đề nghị admin hỗ trợ xử lý hoạt động đang chờ duyệt."
                 : reason.trim();
-        String title = "Yeu cau ho tro huy hoat dong";
-        String message = "Don vi cua ban can admin ho tro huy hoat dong '" + activity.getTitle()
-                + "'. Ly do: " + supportReason;
+        String title = "Yêu cầu hỗ trợ hủy hoạt động";
+        String message = "Đơn vị của bạn cần admin hỗ trợ hủy hoạt động '" + activity.getTitle()
+                + "'. Lý do: " + supportReason;
 
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("userIds", adminIds);
@@ -330,11 +418,11 @@ public class ActivityCommandOperations {
             return isDraft
                     ? matchedSemester.orElse(null)
                     : matchedSemester.orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                            "Ngay bat dau to chuc (" + activityDate
-                                    + ") khong thuoc bat ky hoc ky nao dang duoc cau hinh!"));
+                            "Ngày bắt đầu tổ chức (" + activityDate
+                                    + ") không thuộc bất kỳ học kỳ nào đang được cấu hình!"));
         }
         if (!isDraft) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long chon ngay bat dau to chuc!");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn ngày bắt đầu tổ chức!");
         }
         return null;
     }
@@ -373,13 +461,13 @@ public class ActivityCommandOperations {
     }
 
     private RepresentativeActivityPermissionResponse validateStudentRepresentativePermission(Users currentUser) {
-        RepresentativeActivityPermissionResponse permission =
-                representativePermissionClient.getCurrentStudentActivityPermission();
+        RepresentativeActivityPermissionResponse permission = representativePermissionClient
+                .getCurrentStudentActivityPermission();
         if (permission == null
                 || !permission.isCanCreateActivity()
                 || !Objects.equals(permission.getStudentId(), currentUser.getId())) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Chi sinh vien dai dien lop/chi doan moi duoc dang ky to chuc hoat dong.");
+                    "Chỉ sinh viên đại diện lớp/chi đoàn mới được đăng ký tổ chức hoạt động.");
         }
         return permission;
     }
@@ -395,20 +483,20 @@ public class ActivityCommandOperations {
                 || request.getMaxParticipants() == null
                 || request.getMaxParticipants() <= 0) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Ban nhap can co ten, mo ta, noi dung, thoi gian dang ky, thoi gian to chuc va suc chua.");
+                    "Bản nháp cần có tên, mô tả, nội dung, thời gian đăng ký, thời gian tổ chức và sức chứa.");
         }
 
         if (!request.getRegistrationEnd().isAfter(request.getRegistrationStart())) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Thoi gian dong dang ky phai sau thoi gian mo dang ky.");
+                    "Thời gian đóng đăng ký phải sau thời gian mở đăng ký.");
         }
         if (!request.getStartDate().isAfter(request.getRegistrationEnd())) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Thoi gian to chuc phai sau khi dong dang ky.");
+                    "Thời gian tổ chức phải sau khi đóng đăng ký.");
         }
         if (!request.getEndDate().isAfter(request.getStartDate())) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Thoi gian ket thuc phai sau thoi gian bat dau.");
+                    "Thời gian kết thúc phải sau thời gian bắt đầu.");
         }
     }
 
@@ -454,12 +542,24 @@ public class ActivityCommandOperations {
         }
     }
 
-    private boolean isFacultyInternalActivity(Activities activity) {
-        return Boolean.TRUE.equals(activity.getIsFaculty()) && !Boolean.TRUE.equals(activity.getIsExternal());
-    }
-
     private boolean isDepartment(Users user) {
         return user != null && Integer.valueOf(ROLE_DEPARTMENT).equals(user.getRoleType());
+    }
+
+    private boolean canEditApprovedDepartmentActivity(Activities activity, Users currentUser) {
+        return isDepartment(currentUser)
+                && activity != null
+                && Integer.valueOf(STATUS_APPROVED).equals(activity.getStatus())
+                && isDepartmentCreatedActivity(activity)
+                && !Boolean.TRUE.equals(activity.getRequiresAdminApproval())
+                && activity.getStartDate() != null
+                && activity.getStartDate().isAfter(LocalDateTime.now());
+    }
+
+    private boolean isDepartmentCreatedActivity(Activities activity) {
+        return activity != null
+                && activity.getCreatedBy() != null
+                && Integer.valueOf(ROLE_DEPARTMENT).equals(activity.getCreatedBy().getRoleType());
     }
 
     private boolean isStudentRepresentativeActivity(Activities activity) {
@@ -528,7 +628,7 @@ public class ActivityCommandOperations {
             }
             Location location = locationRepository.findById(locationId)
                     .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                            "Khong tim thay dia diem cua buoi hoat dong."));
+                            "Không tìm thấy địa điểm của buổi hoạt động."));
             schedule.setLocationRef(location);
             schedule.setLocation(location.getName());
         }
@@ -539,7 +639,7 @@ public class ActivityCommandOperations {
             Activities activity,
             List<BenefitResponse> requestedBenefits) {
         if (activity.getId() == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khong the luu quyen loi khi hoat dong chua ton tai!");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không thể lưu quyền lợi khi hoạt động chưa tồn tại!");
         }
 
         benefitRepository.deleteByActivityId(activity.getId());
@@ -587,7 +687,7 @@ public class ActivityCommandOperations {
                 || organizerUser.getDepartmentId() == null
                 || !Objects.equals(currentUser.getDepartmentId(), organizerUser.getDepartmentId())) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Don vi chi duoc chon nguoi to chuc thuoc dung don vi cua minh.");
+                    "Đơn vị chỉ được chọn người tổ chức thuộc đúng đơn vị của mình.");
         }
     }
 }

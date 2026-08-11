@@ -53,7 +53,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
             Users requestedBy,
             Integer initialStatus) {
         if (activity == null || activity.getId() == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khong the dat dia diem khi hoat dong chua ton tai.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Không thể đặt địa điểm khi hoạt động chưa tồn tại.");
         }
 
         bookingRepository.deleteByActivityId(activity.getId());
@@ -91,10 +91,10 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
             String view,
             List<Integer> statuses) {
         if (locationId == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long chon dia diem.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn địa điểm.");
         }
         Location location = locationRepository.findById(locationId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dia diem."));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy địa điểm."));
         validateCanViewLocationSchedule(location);
         TimeRange timeRange = resolveScheduleRange(date, view);
         List<Integer> statusFilter = statuses == null || statuses.isEmpty() ? null : statuses;
@@ -141,7 +141,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
             Integer status) {
         validateRequest(request);
         Location location = locationRepository.findByIdForUpdate(request.getLocationId())
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dia diem."));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy địa điểm."));
         ActivitySchedule schedule = resolveSchedule(activity, request);
         validateLocationBookable(location);
         validateCapacity(activity, location);
@@ -223,11 +223,11 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
 
     private void validateRequest(LocationBookingRequest request) {
         if (request == null || request.getLocationId() == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long chon dia diem.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn địa điểm.");
         }
         if (request.getStartTime() == null || request.getEndTime() == null
                 || !request.getStartTime().isBefore(request.getEndTime())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khung thoi gian dat dia diem khong hop le.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Khung thời gian đặt địa điểm không hợp lệ.");
         }
     }
 
@@ -245,7 +245,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
                         && current.getStartTime().isBefore(other.getEndTime())
                         && current.getEndTime().isAfter(other.getStartTime())) {
                     throw new AppException(ErrorCode.INVALID_ACTION,
-                            "Cac khung gio dat cung mot dia diem trong hoat dong dang bi trung nhau.");
+                            "Các khung giờ đặt cùng một địa điểm trong hoạt động đang bị trùng nhau.");
                 }
             }
         }
@@ -256,7 +256,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
                 || !Boolean.TRUE.equals(location.getIsBookable())
                 || !"AVAILABLE".equalsIgnoreCase(location.getAvailabilityStatus())) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Dia diem dang khong san sang cho muon: " + location.getName());
+                    "Địa điểm đang không sẵn sàng cho mượn: " + location.getName());
         }
     }
 
@@ -270,17 +270,17 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
                 return;
             }
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem lich su dung dia diem nay.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem lịch sử dụng địa điểm này.");
     }
 
     private Long requireCurrentDepartmentId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản chưa được gắn đơn vị quản lý địa điểm.");
         }
         Users currentUser = localUserResolver.resolveByUsername(authentication.getName());
         if (currentUser.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản chưa được gắn đơn vị quản lý địa điểm.");
         }
         return currentUser.getDepartmentId();
     }
@@ -297,7 +297,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
                 && location.getCapacity() != null
                 && activity.getMaxParticipants() > location.getCapacity()) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Suc chua dia diem khong du cho so luong toi da cua hoat dong: " + location.getName());
+                    "Sức chứa địa điểm không đủ cho số lượng tối đa của hoạt động: " + location.getName());
         }
     }
 
@@ -314,7 +314,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
                 activityId);
         if (!conflicts.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Dia diem da co lich dang giu cho hoac da duyet trong khung thoi gian nay.");
+                    "Địa điểm đã có lịch đang giữ chỗ hoặc đã duyệt trong khung thời gian này.");
         }
     }
 
@@ -336,7 +336,7 @@ public class ActivityLocationBookingServiceImpl implements ActivityLocationBooki
                 yield new TimeRange(startOfMonth.atStartOfDay(), startOfMonth.plusMonths(1).atStartOfDay());
             }
             default -> throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Kieu lich khong hop le. Chi ho tro day, week hoac month.");
+                    "Kiểu lịch không hợp lệ. Chỉ hỗ trợ day, week hoặc month.");
         };
     }
 

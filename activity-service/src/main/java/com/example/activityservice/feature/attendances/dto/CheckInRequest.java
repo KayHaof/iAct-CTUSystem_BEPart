@@ -7,8 +7,10 @@ import java.math.BigDecimal;
 
 @Data
 public class CheckInRequest {
-    @NotNull(message = "Thieu ma hoat dong")
+    @NotNull(message = "Thiếu mã hoạt động")
     private Long activityId;
+
+    private Long scheduleId;
 
     private BigDecimal latitude;
     private BigDecimal longitude;

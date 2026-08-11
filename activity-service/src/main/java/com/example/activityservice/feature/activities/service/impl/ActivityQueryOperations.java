@@ -43,7 +43,7 @@ public class ActivityQueryOperations {
     @Transactional(readOnly = true)
     public ActivityResponse getActivityById(Long id) {
         Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động"));
 
         ensureCurrentAdminCanRead(activity);
         accessSupport.ensureCurrentDepartmentCanRead(activity);
@@ -55,11 +55,11 @@ public class ActivityQueryOperations {
     @Transactional(readOnly = true)
     public ActivityResponse getMyCreatedActivity(Long id) {
         Activities activity = activityRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay hoat dong"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy hoạt động"));
 
         Users currentUser = accessSupport.getCurrentUserOrNull();
         if (!accessSupport.isCreatedBy(activity, currentUser)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem de xuat hoat dong nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem đề xuất hoạt động này.");
         }
 
         return buildDetailResponse(activity);
@@ -77,7 +77,7 @@ public class ActivityQueryOperations {
     public ActivityTimeLocationResponse getActivityTimesAndLocation(Long id) {
         Activities activity = activityRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                        "Khong tim thay hoat dong voi ID: " + id));
+                        "Không tìm thấy hoạt động với ID: " + id));
         ensureCurrentAdminCanRead(activity);
         accessSupport.ensureCurrentDepartmentCanRead(activity);
         ensureCurrentStudentCanRead(activity);
@@ -92,7 +92,7 @@ public class ActivityQueryOperations {
 
         boolean isApproved = Integer.valueOf(STATUS_APPROVED).equals(activity.getStatus());
         if (!isApproved || !accessSupport.isVisibleToStudent(activity, currentUser)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem hoat dong nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem hoạt động này.");
         }
     }
 
@@ -111,7 +111,7 @@ public class ActivityQueryOperations {
         }
 
         if (activity.getCreatedBy() == null || !Integer.valueOf(2).equals(activity.getCreatedBy().getRoleType())) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Admin chi xem hoat dong do Khoa/Don vi gui len.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Admin chỉ xem hoạt động do Khoa/Đơn vị gửi lên.");
         }
     }
 
@@ -184,7 +184,7 @@ public class ActivityQueryOperations {
     public PageDTO<ActivityResponse> getMyCreatedActivities(Pageable pageable) {
         Users currentUser = accessSupport.getCurrentUserOrNull();
         if (currentUser == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Vui long dang nhap de xem hoat dong da gui.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Vui lòng đăng nhập để xem hoạt động đã gửi.");
         }
 
         Page<Activities> pageActivities = activityRepository.findByCreatedById(currentUser.getId(), pageable);

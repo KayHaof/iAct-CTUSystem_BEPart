@@ -21,9 +21,9 @@ public abstract class ComplaintMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "registration", source = "registration")
-    @Mapping(target = "detail", expression = "java(request.getDetail() != null ? request.getDetail().trim() : null)")
-    @Mapping(target = "reason", expression = "java(truncateDetail(request.getDetail(), LEGACY_TEXT_MAX_LENGTH))")
-    @Mapping(target = "evidenceUrl", expression = "java(request.getEvidenceUrl() == null || request.getEvidenceUrl().isBlank() ? null : request.getEvidenceUrl().trim())")
+    @Mapping(target = "detail", expression = "java(trimDetail(request))")
+    @Mapping(target = "reason", expression = "java(truncateDetail(requestDetail(request), LEGACY_TEXT_MAX_LENGTH))")
+    @Mapping(target = "evidenceUrl", expression = "java(trimEvidenceUrl(request))")
     @Mapping(target = "detailResponse", expression = "java(DEFAULT_DETAIL_RESPONSE)")
     @Mapping(target = "status", expression = "java(0)")
     @Mapping(target = "activity", ignore = true)
@@ -38,9 +38,9 @@ public abstract class ComplaintMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "registration", ignore = true)
-    @Mapping(target = "detail", expression = "java(request.getDetail() != null ? request.getDetail().trim() : null)")
-    @Mapping(target = "reason", expression = "java(truncateDetail(request.getDetail(), LEGACY_TEXT_MAX_LENGTH))")
-    @Mapping(target = "evidenceUrl", expression = "java(request.getEvidenceUrl() == null || request.getEvidenceUrl().isBlank() ? null : request.getEvidenceUrl().trim())")
+    @Mapping(target = "detail", expression = "java(trimDetail(request))")
+    @Mapping(target = "reason", expression = "java(truncateDetail(requestDetail(request), LEGACY_TEXT_MAX_LENGTH))")
+    @Mapping(target = "evidenceUrl", expression = "java(trimEvidenceUrl(request))")
     @Mapping(target = "detailResponse", ignore = true)
     @Mapping(target = "status", expression = "java(0)")
     @Mapping(target = "activity", ignore = true)
@@ -144,6 +144,22 @@ public abstract class ComplaintMapper {
             return trimmedValue;
         }
         return trimmedValue.substring(0, maxLength);
+    }
+
+    protected String trimDetail(ComplaintRequest request) {
+        String detail = requestDetail(request);
+        return detail != null ? detail.trim() : null;
+    }
+
+    protected String trimEvidenceUrl(ComplaintRequest request) {
+        if (request == null || request.getEvidenceUrl() == null || request.getEvidenceUrl().isBlank()) {
+            return null;
+        }
+        return request.getEvidenceUrl().trim();
+    }
+
+    protected String requestDetail(ComplaintRequest request) {
+        return request != null ? request.getDetail() : null;
     }
 
     protected String resolveStatusLabel(Integer status) {

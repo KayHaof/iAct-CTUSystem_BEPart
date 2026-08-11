@@ -9,10 +9,25 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.Collection;
+import java.util.Set;
 
 public interface ProofRepository extends JpaRepository<Proofs, Long> {
     @EntityGraph(attributePaths = {"registration", "registration.student", "registration.activity"})
     Optional<Proofs> findByRegistrationId(Long registrationId);
+
+    @EntityGraph(attributePaths = {"registration", "registration.student", "registration.activity"})
+    Optional<Proofs> findFirstByRegistrationIdOrderByCreatedAtDescIdDesc(Long registrationId);
+
+    long countByRegistration_Activity_Id(Long activityId);
+
+    long countByRegistration_Activity_IdAndStatus(Long activityId, Integer status);
+
+    @Query("SELECT COUNT(DISTINCT proof.registration.student.id) FROM Proofs proof WHERE proof.registration.activity.id = :activityId")
+    long countDistinctStudentsByActivityId(@Param("activityId") Long activityId);
+
+    @Query("SELECT DISTINCT proof.registration.id FROM Proofs proof WHERE proof.registration.id IN :registrationIds")
+    Set<Long> findRegistrationIdsWithProofs(@Param("registrationIds") Collection<Long> registrationIds);
 
     @EntityGraph(attributePaths = {"registration", "registration.student", "registration.activity"})
     Page<Proofs> findByStatus(Integer status, Pageable pageable);

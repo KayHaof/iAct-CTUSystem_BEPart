@@ -44,10 +44,12 @@ public class AttendanceController {
     public ApiResponse<FaceCheckInResponse> faceCheckIn(
             @RequestParam Long activityId,
             @RequestPart("liveImage") MultipartFile liveImage,
+            @RequestParam(required = false) Long scheduleId,
             @RequestParam(required = false) BigDecimal latitude,
             @RequestParam(required = false) BigDecimal longitude) {
         FaceCheckInRequest request = new FaceCheckInRequest();
         request.setActivityId(activityId);
+        request.setScheduleId(scheduleId);
         request.setLatitude(latitude);
         request.setLongitude(longitude);
         return ApiResponse.success(attendanceService.faceCheckIn(request, liveImage));
@@ -80,7 +82,7 @@ public class AttendanceController {
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ApiResponse<AttendanceStatisticsResponse> getAttendanceStatistics(
             @PathVariable Long activityId,
-            @PathVariable(required = false) Long sessionId) {
+            @RequestParam(required = false) Long sessionId) {
         return ApiResponse.success(attendanceService.getStatistics(activityId, sessionId));
     }
 }

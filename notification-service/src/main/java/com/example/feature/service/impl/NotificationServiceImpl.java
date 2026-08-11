@@ -1,5 +1,6 @@
 package com.example.feature.service.impl;
 
+import com.example.util.UtcDateTime;
 import com.example.feature.kafka.NotificationLifecycleProducer;
 import com.example.feature.model.Notifications;
 import com.example.feature.repository.NotificationRepository;
@@ -51,7 +52,7 @@ public class NotificationServiceImpl implements NotificationService {
             notification.setReadAt(LocalDateTime.now());
             notificationRepository.save(notification);
             lifecycleProducer.publishRead(notification.getId(), notification.getUserId(),
-                    notification.getReadAt().toString());
+                    UtcDateTime.format(notification.getReadAt()));
         }
     }
 
@@ -60,7 +61,7 @@ public class NotificationServiceImpl implements NotificationService {
     public void markAllAsRead(Long userId) {
         List<Notifications> unreadNotifications = notificationRepository.findByUserIdAndIsReadFalse(userId);
         notificationRepository.markAllAsRead(userId);
-        String readAt = LocalDateTime.now().toString();
+        String readAt = UtcDateTime.format(LocalDateTime.now());
         unreadNotifications.forEach(notification ->
                 lifecycleProducer.publishRead(notification.getId(), notification.getUserId(), readAt));
     }

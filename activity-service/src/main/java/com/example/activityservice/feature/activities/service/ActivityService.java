@@ -41,6 +41,10 @@ public interface ActivityService {
 
     String getQrCodeForActivity(Long activityId);
 
+    ActivityScheduleQrCodeResponse getQrCodeForSchedule(Long activityId, Long scheduleId);
+
+    List<ActivityScheduleQrCodeResponse> getQrCodesForActivity(Long activityId);
+
     ActivityStatsResponse getActivityStats();
 
     PageDTO<ActivityResponse> searchActivities(

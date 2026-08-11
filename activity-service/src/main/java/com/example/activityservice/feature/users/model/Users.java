@@ -28,6 +28,18 @@ public class Users {
     @Column(name = "full_name")
     private String fullName;
 
+    @Column(name = "class_id")
+    private Long classId;
+
+    @Column(name = "class_code")
+    private String classCode;
+
+    @Column(name = "class_name")
+    private String className;
+
+    @Column(name = "academic_year")
+    private String academicYear;
+
     @Column(name = "department_id")
     private Long departmentId;
 

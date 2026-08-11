@@ -41,6 +41,7 @@ public interface ActivityRepository extends JpaRepository<Activities, Long>, Jpa
 
     @Query("""
             SELECT a FROM Activities a
+            LEFT JOIN FETCH a.createdBy
             WHERE a.status = 1
               AND a.registrationStart IS NOT NULL
               AND a.registrationEnd IS NOT NULL

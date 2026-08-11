@@ -57,7 +57,7 @@ public class LocationServiceImpl implements LocationService {
             String availabilityStatus,
             String keyword,
             Boolean adminManaged) {
-        LocationAccessScope scope = resolveLocationAccessScope("Ban khong co quyen xem danh sach dia diem.");
+        LocationAccessScope scope = resolveLocationAccessScope("Bạn không có quyền xem danh sách địa điểm.");
         Long scopedManagerDepartmentId = scope.isAdmin() ? managerDepartmentId : scope.departmentId();
         return locationRepository.findAll().stream()
                 .filter(location -> active == null || active.equals(location.getIsActive()))
@@ -82,7 +82,8 @@ public class LocationServiceImpl implements LocationService {
             LocalDateTime endTime,
             Integer minCapacity,
             String type,
-            String keyword) {
+            String keyword,
+            Long activityId) {
         validateTimeRange(startTime, endTime);
         return locationRepository.findByIsActiveTrueAndIsBookableTrueAndAvailabilityStatus(AVAILABLE).stream()
                 .filter(location -> type == null || type.isBlank() || type.equalsIgnoreCase(location.getType()))
@@ -94,7 +95,8 @@ public class LocationServiceImpl implements LocationService {
                         location.getId(),
                         startTime,
                         endTime,
-                        BLOCKING_STATUSES) == 0)
+                        BLOCKING_STATUSES,
+                        activityId) == 0)
                 .map(locationMapper::toResponse)
                 .toList();
     }
@@ -126,7 +128,7 @@ public class LocationServiceImpl implements LocationService {
         Location location = findLocationOrThrow(id);
         validateManagePermission(location);
         if (request == null) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long cung cap trang thai kha dung.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng cung cấp trạng thái khả dụng.");
         }
         if (request.getIsBookable() != null) {
             location.setIsBookable(request.getIsBookable());
@@ -187,13 +189,13 @@ public class LocationServiceImpl implements LocationService {
 
     private void validateRequired(LocationRequest request) {
         if (request == null || request.getName() == null || request.getName().isBlank()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long nhap ten dia diem.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng nhập tên địa điểm.");
         }
         if (request.getType() == null || request.getType().isBlank()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Vui long chon loai dia diem.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn loại địa điểm.");
         }
         if (request.getCapacity() != null && request.getCapacity() < 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Suc chua dia diem khong hop le.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Sức chứa địa điểm không hợp lệ.");
         }
     }
 
@@ -206,7 +208,7 @@ public class LocationServiceImpl implements LocationService {
         }
         if (request.getManagerDepartmentId() == null) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Vui long chon khoa/truong quan ly dia diem hoac danh dau dia diem do admin quan ly.");
+                    "Vui lòng chọn khoa/trường quản lý địa điểm hoặc đánh dấu địa điểm do admin quản lý.");
         }
     }
 
@@ -219,19 +221,20 @@ public class LocationServiceImpl implements LocationService {
                 ? locationRepository.existsByCode(code)
                 : locationRepository.existsByCodeAndIdNot(code, currentId);
         if (existed) {
-            throw new AppException(ErrorCode.INVALID_KEY, "Ma dia diem da ton tai.");
+            throw new AppException(ErrorCode.INVALID_KEY, "Mã địa điểm đã tồn tại.");
         }
     }
 
     private void validateTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
         if (startTime == null || endTime == null || !startTime.isBefore(endTime)) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khung thoi gian dia diem khong hop le.");
+            throw new AppException(ErrorCode.INVALID_ACTION,
+                    "Thời gian kết thúc địa điểm phải sau thời gian bắt đầu.");
         }
     }
 
     private Location findLocationOrThrow(Long id) {
         return locationRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay dia diem."));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy địa điểm."));
     }
 
     private boolean matchesKeyword(Location location, String keyword) {
@@ -255,7 +258,7 @@ public class LocationServiceImpl implements LocationService {
         if (authentication == null
                 || !authentication.isAuthenticated()
                 || authentication instanceof AnonymousAuthenticationToken) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen cap nhat dia diem nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền cập nhật địa điểm này.");
         }
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(authority -> Objects.equals(authority.getAuthority(), "ROLE_ADMIN"));
@@ -265,14 +268,14 @@ public class LocationServiceImpl implements LocationService {
         boolean isDepartment = authentication.getAuthorities().stream()
                 .anyMatch(authority -> Objects.equals(authority.getAuthority(), "ROLE_DEPARTMENT"));
         if (!isDepartment) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen cap nhat dia diem nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền cập nhật địa điểm này.");
         }
         Users currentUser = localUserResolver.resolveByUsername(authentication.getName());
         if (currentUser == null
                 || currentUser.getDepartmentId() == null
                 || !Objects.equals(currentUser.getDepartmentId(), location.getManagerDepartmentId())) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Don vi chi duoc cap nhat dia diem do khoa/truong cua minh quan ly.");
+                    "Đơn vị chỉ được cập nhật địa điểm do khoa/trường của mình quản lý.");
         }
     }
 
@@ -286,12 +289,12 @@ public class LocationServiceImpl implements LocationService {
                 return;
             }
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem dia diem nay.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem địa điểm này.");
     }
 
     private void validateAdminPermission() {
         if (!hasCurrentRole("ROLE_ADMIN")) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Chi admin moi duoc thuc hien thao tac nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Chỉ admin mới được thực hiện thao tác này.");
         }
     }
 
@@ -315,11 +318,11 @@ public class LocationServiceImpl implements LocationService {
     private Long requireCurrentDepartmentId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản chưa được gắn đơn vị quản lý địa điểm.");
         }
         Users currentUser = localUserResolver.resolveByUsername(authentication.getName());
         if (currentUser.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi quan ly dia diem.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản chưa được gắn đơn vị quản lý địa điểm.");
         }
         return currentUser.getDepartmentId();
     }
@@ -328,7 +331,7 @@ public class LocationServiceImpl implements LocationService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null
                 && authentication.getAuthorities().stream()
-                .anyMatch(authority -> Objects.equals(authority.getAuthority(), role));
+                        .anyMatch(authority -> Objects.equals(authority.getAuthority(), role));
     }
 
     private String normalizeCode(String code) {

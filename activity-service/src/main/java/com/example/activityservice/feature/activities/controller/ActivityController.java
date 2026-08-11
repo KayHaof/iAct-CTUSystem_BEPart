@@ -44,15 +44,12 @@ public class ActivityController {
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "size", required = false, defaultValue = "5") int size,
             @RequestParam(value = "departmentId", required = false, defaultValue = "") Long departmentId,
-            @RequestParam(value = "adminApprovalOnly", required = false, defaultValue = "false")
-            boolean adminApprovalOnly
-    ) {
+            @RequestParam(value = "adminApprovalOnly", required = false, defaultValue = "false") boolean adminApprovalOnly) {
         int pageNumber = page > 0 ? page - 1 : 0;
         Pageable customPageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "id"));
         return ResponseEntity.ok(
                 ApiResponse.success(activityService.getAllActivities(
-                        keyword, level, status, departmentId, adminApprovalOnly, customPageable))
-        );
+                        keyword, level, status, departmentId, adminApprovalOnly, customPageable)));
     }
 
     @GetMapping("/department-approvals")
@@ -64,8 +61,7 @@ public class ActivityController {
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "size", required = false, defaultValue = "10") int size,
             @RequestParam(value = "sortBy", required = false, defaultValue = "updatedAt") String sortBy,
-            @RequestParam(value = "sortDirection", required = false, defaultValue = "DESC") String sortDirection
-    ) {
+            @RequestParam(value = "sortDirection", required = false, defaultValue = "DESC") String sortDirection) {
         int pageNumber = page > 0 ? page - 1 : 0;
         Sort.Direction direction = "ASC".equalsIgnoreCase(sortDirection) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(
@@ -74,27 +70,23 @@ public class ActivityController {
                 Sort.by(direction, normalizeApprovalSortBy(sortBy)));
 
         return ResponseEntity.ok(ApiResponse.success(
-                activityService.getDepartmentApprovalActivities(keyword, status, classId, pageable)
-        ));
+                activityService.getDepartmentApprovalActivities(keyword, status, classId, pageable)));
     }
 
     @GetMapping("/department-approvals/stats")
     @PreAuthorize("hasRole('DEPARTMENT')")
     public ResponseEntity<ApiResponse<ActivityStatsResponse>> getDepartmentApprovalStats(
             @RequestParam(value = "keyword", required = false, defaultValue = "") String keyword,
-            @RequestParam(value = "classId", required = false) Long classId
-    ) {
+            @RequestParam(value = "classId", required = false) Long classId) {
         return ResponseEntity.ok(ApiResponse.success(
-                activityService.getDepartmentApprovalStats(keyword, classId)
-        ));
+                activityService.getDepartmentApprovalStats(keyword, classId)));
     }
 
     @GetMapping("/my-created")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<ApiResponse<PageDTO<ActivityResponse>>> getMyCreatedActivities(
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
-            @RequestParam(value = "size", required = false, defaultValue = "10") int size
-    ) {
+            @RequestParam(value = "size", required = false, defaultValue = "10") int size) {
         int pageNumber = page > 0 ? page - 1 : 0;
         Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         return ResponseEntity.ok(ApiResponse.success(activityService.getMyCreatedActivities(pageable)));
@@ -111,14 +103,14 @@ public class ActivityController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<ActivityResponse>> getActivityById(@PathVariable Long id) {
         return ResponseEntity.ok(
-                ApiResponse.success(activityService.getActivityById(id))
-        );
+                ApiResponse.success(activityService.getActivityById(id)));
     }
 
     // --- GET TIMES AND LOCATION BY ID ---
     @GetMapping("/{id}/times-location")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<ActivityTimeLocationResponse>> getActivityTimesAndLocation(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<ActivityTimeLocationResponse>> getActivityTimesAndLocation(
+            @PathVariable Long id) {
         ActivityTimeLocationResponse timeResponse = activityService.getActivityTimesAndLocation(id);
         return ResponseEntity.ok(ApiResponse.success(timeResponse, "Lấy thời gian hoạt động thành công"));
     }
@@ -160,7 +152,7 @@ public class ActivityController {
 
     // --- CANCEL ---
     @PutMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<String>> cancelActivity(
             @PathVariable Long id,
             @RequestBody ActivityReasonRequest request) {
@@ -181,6 +173,21 @@ public class ActivityController {
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
     public ResponseEntity<ApiResponse<String>> getActivityQrCode(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(activityService.getQrCodeForActivity(id)));
+    }
+
+    @GetMapping("/{id}/schedules/{scheduleId}/qr-code")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
+    public ResponseEntity<ApiResponse<ActivityScheduleQrCodeResponse>> getActivityScheduleQrCode(
+            @PathVariable Long id,
+            @PathVariable Long scheduleId) {
+        return ResponseEntity.ok(ApiResponse.success(activityService.getQrCodeForSchedule(id, scheduleId)));
+    }
+
+    @GetMapping("/{id}/schedules/qr-codes")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT')")
+    public ResponseEntity<ApiResponse<List<ActivityScheduleQrCodeResponse>>> getActivityScheduleQrCodes(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(activityService.getQrCodesForActivity(id)));
     }
 
     // --- GET COUNT ACT BY STATUS ---
@@ -205,13 +212,13 @@ public class ActivityController {
             @RequestParam(required = false, defaultValue = "ALL") String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "12") int size) {
-        
+
         int pageNumber = page > 0 ? page - 1 : 0;
         Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.DESC, "startDate"));
-        
+
         return ResponseEntity.ok(ApiResponse.success(
-                activityService.searchActivities(keyword, departmentId, startDate, endDate, categoryIds, category, status, pageable)
-        ));
+                activityService.searchActivities(keyword, departmentId, startDate, endDate, categoryIds, category,
+                        status, pageable)));
     }
 
     // UC09: Get AI recommendations for student
@@ -221,10 +228,9 @@ public class ActivityController {
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) Long studentId,
             @RequestParam(defaultValue = "10") int limit) {
-        
+
         return ResponseEntity.ok(ApiResponse.success(
-                activityService.getRecommendations(studentId, limit, jwt)
-        ));
+                activityService.getRecommendations(studentId, limit, jwt)));
     }
 
     // UC03: Get activities open for registration (APPROVED + registration open)
@@ -233,13 +239,12 @@ public class ActivityController {
             @RequestParam(required = false) Long semesterId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "12") int size) {
-        
+
         int pageNumber = page > 0 ? page - 1 : 0;
         Pageable pageable = PageRequest.of(pageNumber, size, Sort.by(Sort.Direction.ASC, "startDate"));
-        
+
         return ResponseEntity.ok(ApiResponse.success(
-                activityService.getActivitiesForRegistration(semesterId, pageable)
-        ));
+                activityService.getActivitiesForRegistration(semesterId, pageable)));
     }
 
     // UC12: Get department statistics
@@ -248,10 +253,9 @@ public class ActivityController {
     public ResponseEntity<ApiResponse<DepartmentStatsResponse>> getDepartmentStats(
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Long semesterId) {
-        
+
         return ResponseEntity.ok(ApiResponse.success(
-                activityService.getDepartmentStatistics(departmentId, semesterId)
-        ));
+                activityService.getDepartmentStatistics(departmentId, semesterId)));
     }
 
     // UC26: Get system-wide statistics (Admin only)
@@ -261,8 +265,7 @@ public class ActivityController {
             @RequestParam(required = false) Long semesterId) {
 
         return ResponseEntity.ok(ApiResponse.success(
-                activityService.getSystemStatistics(semesterId)
-        ));
+                activityService.getSystemStatistics(semesterId)));
     }
 
     // UC13/14: Generate activity content with AI

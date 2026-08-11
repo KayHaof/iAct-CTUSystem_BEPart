@@ -24,7 +24,7 @@ public class QRCodeService {
             String base64Image = Base64.getEncoder().encodeToString(pngOutputStream.toByteArray());
             return "data:image/png;base64," + base64Image;
         } catch (Exception exception) {
-            log.error("Loi khi tao ma QR Code", exception);
+            log.error("Lỗi khi tạo mã QR Code", exception);
             return null;
         }
     }

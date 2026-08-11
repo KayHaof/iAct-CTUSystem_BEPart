@@ -49,6 +49,8 @@ public class NotificationCommandRequestConsumer {
     @KafkaListener(
             topics = {
                     KafkaTopics.NOTIFICATION_BROADCAST_REQUESTED,
+                    KafkaTopics.NOTIFICATION_ACTIVITY_SESSION_ACTION_REMINDER_REQUESTED,
+                    KafkaTopics.NOTIFICATION_ABSENCE_VIOLATION_PROCESSED_REQUESTED,
                     KafkaTopics.NOTIFICATION_URGENT_REQUESTED
             },
             groupId = "notification-broadcast-command-v1")
@@ -78,7 +80,7 @@ public class NotificationCommandRequestConsumer {
     private NotificationRequest toRequest(JsonNode root, JsonNode payload, String topic, Long userId) {
         NotificationRequest request = new NotificationRequest();
         request.setUserId(userId);
-        request.setTitle(defaultText(payload, "title", "Thong bao he thong"));
+        request.setTitle(defaultText(payload, "title", "Thông báo hệ thống"));
         request.setMessage(defaultText(payload, "message", defaultText(payload, "content", "")));
         request.setContent(request.getMessage());
         request.setType(resolveType(payload, topic));

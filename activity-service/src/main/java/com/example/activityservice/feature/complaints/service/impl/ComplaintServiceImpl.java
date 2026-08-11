@@ -85,10 +85,10 @@ public class ComplaintServiceImpl implements ComplaintService {
     public ComplaintResponse submitComplaint(ComplaintRequest request) {
         Users student = getCurrentStudent();
         Registrations registration = registrationRepository.findById(request.getRegistrationId())
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Dang ky khong ton tai"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Đăng ký không tồn tại"));
 
         if (registration.getStudent() == null || !registration.getStudent().getId().equals(student.getId())) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen khieu nai dang ky nay");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền khiếu nại đăng ký này");
         }
 
         validateEligibleRegistration(registration);
@@ -98,7 +98,7 @@ public class ComplaintServiceImpl implements ComplaintService {
             complaint = complaintMapper.toNewEntity(request, registration);
         } else {
             if (complaint.getStatus() != null && complaint.getStatus() != 0) {
-                throw new AppException(ErrorCode.INVALID_ACTION, "Khieu nai da duoc xu ly, khong the cap nhat");
+                throw new AppException(ErrorCode.INVALID_ACTION, "Khiếu nại đã được xử lý, không thể cập nhật");
             }
             complaintMapper.syncRegistrationContext(complaint, registration);
             complaintMapper.updateEntityFromRequest(request, complaint);
@@ -119,7 +119,7 @@ public class ComplaintServiceImpl implements ComplaintService {
             Long departmentId = requireDepartmentId(reviewer);
             page = findComplaintsForDepartment(activityId, departmentId, status, pageable);
         } else {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem danh sach khieu nai");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem danh sách khiếu nại");
         }
 
         return new PageDTO<>(
@@ -219,7 +219,7 @@ public class ComplaintServiceImpl implements ComplaintService {
 
     private void validateEligibleRegistration(Registrations registration) {
         if (registration.getStatus() != null && registration.getStatus() == 2) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Dang ky da bi huy nen khong the khieu nai");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Đăng ký đã bị hủy nên không thể khiếu nại");
         }
 
         boolean attended = registration.getStatus() != null && registration.getStatus() == 1;
@@ -229,7 +229,7 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         if ((!attended || !checkedIn) && !faceAttemptExhausted) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Chi co the khieu nai hoat dong da check-in hoac da het 5 lan xac thuc khuon mat");
+                    "Chỉ có thể khiếu nại hoạt động đã check-in hoặc đã hết 5 lần xác thực khuôn mặt");
         }
     }
 
@@ -258,7 +258,7 @@ public class ComplaintServiceImpl implements ComplaintService {
 
     private Complaints resolveReviewableComplaint(Long id) {
         return complaintRepository.findDetailById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khieu nai khong ton tai"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khiếu nại không tồn tại"));
     }
 
     private void ensureCanReview(Complaints complaint) {
@@ -275,18 +275,18 @@ public class ComplaintServiceImpl implements ComplaintService {
             return;
         }
 
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xu ly khieu nai nay");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xử lý khiếu nại này");
     }
 
     private void ensurePending(Complaints complaint) {
         if (complaint.getStatus() != null && complaint.getStatus() != 0) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Khieu nai da duoc xu ly");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Khiếu nại đã được xử lý");
         }
     }
 
     private Long requireDepartmentId(Users user) {
         if (user == null || user.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan chua duoc gan don vi");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản chưa được gắn đơn vị");
         }
         return user.getDepartmentId();
     }
@@ -294,7 +294,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     private String normalizeResponse(ResolveComplaintRequest request) {
         String response = request != null ? request.getResponse() : null;
         if (response == null || response.isBlank()) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Noi dung phan hoi khong duoc de trong");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Nội dung phản hồi không được để trống");
         }
         return response.trim();
     }
@@ -342,7 +342,7 @@ public class ComplaintServiceImpl implements ComplaintService {
         try {
             notificationCommandProducer.publishCreated(notification);
         } catch (Exception exception) {
-            log.warn("Khong the gui thong bao xu ly khieu nai id={}: {}", complaint.getId(), exception.getMessage());
+            log.warn("Không thể gửi thông báo xử lý khiếu nại id={}: {}", complaint.getId(), exception.getMessage());
         }
     }
 }

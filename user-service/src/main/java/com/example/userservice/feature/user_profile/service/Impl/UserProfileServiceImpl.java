@@ -114,7 +114,7 @@ public class UserProfileServiceImpl implements UserProfileService {
         }
         return resultMap.entrySet().stream()
                 .filter(entry -> canViewProfile(entry.getKey(), entry.getValue()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .collect(Collectors.toMap(entry -> entry.getKey(), entry -> entry.getValue()));
     }
 
     @Override
@@ -187,12 +187,12 @@ public class UserProfileServiceImpl implements UserProfileService {
         if (hasCurrentRole("ROLE_DEPARTMENT")) {
             return requireCurrentDepartmentId();
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen tim kiem ho so nguoi dung.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền tìm kiếm hồ sơ người dùng.");
     }
 
     private void ensureCanViewProfile(Long userId, ProfileDto profile) {
         if (!canViewProfile(userId, profile)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem ho so ngoai don vi cua minh.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem hồ sơ ngoài đơn vị của mình.");
         }
     }
 
@@ -232,23 +232,23 @@ public class UserProfileServiceImpl implements UserProfileService {
 
         Users currentUser = requireCurrentUser();
         if (!Objects.equals(currentUser.getId(), userId)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen cap nhat ho so nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền cập nhật hồ sơ này.");
         }
         if (request != null && (request.getDepartmentId() != null || request.getClassId() != null)) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Khong duoc tu thay doi khoa/lop cua tai khoan. Vui long lien he quan tri vien.");
+                    "Không được tự thay đổi khoa/lớp của tài khoản. Vui lòng liên hệ quản trị viên.");
         }
     }
 
     private Long requireCurrentDepartmentId() {
         Users currentUser = requireCurrentUser();
         if (!Integer.valueOf(ROLE_DEPARTMENT).equals(currentUser.getRoleType())) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan hien tai khong phai Khoa/Don vi.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản hiện tại không phải Khoa/Đơn vị.");
         }
 
         ProfileDto profile = getProfileByUserId(currentUser.getId());
         if (profile == null || profile.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan Khoa/Don vi chua duoc gan don vi.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản Khoa/Đơn vị chưa được gắn đơn vị.");
         }
         return profile.getDepartmentId();
     }
@@ -256,7 +256,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     private Users requireCurrentUser() {
         Users currentUser = getCurrentUserOrNull();
         if (currentUser == null) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED, "Chua dang nhap");
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Chưa đăng nhập");
         }
         return currentUser;
     }

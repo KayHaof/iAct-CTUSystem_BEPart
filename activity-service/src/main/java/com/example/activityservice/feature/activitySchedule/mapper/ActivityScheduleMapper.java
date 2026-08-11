@@ -13,6 +13,7 @@ public interface ActivityScheduleMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "activity", ignore = true)
     @Mapping(target = "locationRef", ignore = true)
+    @Mapping(target = "qrCodeToken", ignore = true)
     ActivitySchedule toEntity(ActivityScheduleDto dto);
 
     List<ActivitySchedule> toEntityList(List<ActivityScheduleDto> dtos);

@@ -7,7 +7,9 @@ import com.example.activityservice.feature.locations.dto.LocationResponse;
 import com.example.activityservice.feature.locations.service.ActivityLocationBookingService;
 import com.example.activityservice.feature.locations.service.LocationService;
 import com.example.dto.ApiResponse;
+import com.example.util.UtcDateTime;
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +25,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -63,17 +64,19 @@ public class LocationController {
     @GetMapping("/available")
     @PreAuthorize("hasAnyRole('ADMIN', 'DEPARTMENT', 'STUDENT')")
     public ResponseEntity<ApiResponse<List<LocationResponse>>> getAvailableLocations(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam String startTime,
+            @RequestParam String endTime,
             @RequestParam(required = false) Integer minCapacity,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long activityId) {
         return ResponseEntity.ok(ApiResponse.success(locationService.getAvailableLocations(
-                startTime,
-                endTime,
+                UtcDateTime.parse(startTime),
+                UtcDateTime.parse(endTime),
                 minCapacity,
                 type,
-                keyword)));
+                keyword,
+                activityId)));
     }
 
     @GetMapping("/{id}")

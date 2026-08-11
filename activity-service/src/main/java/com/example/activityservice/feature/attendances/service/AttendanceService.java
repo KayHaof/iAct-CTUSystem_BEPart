@@ -24,4 +24,6 @@ public interface AttendanceService {
     void exportAttendanceToExcel(Long activityId, Long sessionId, OutputStream outputStream) throws Exception;
     
     AttendanceStatisticsResponse getStatistics(Long activityId, Long sessionId);
+
+    void recordExpiredAbsences();
 }

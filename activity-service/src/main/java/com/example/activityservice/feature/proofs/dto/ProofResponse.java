@@ -22,4 +22,5 @@ public class ProofResponse {
     private Long verifiedBy;
     private LocalDateTime verifiedTime;
     private LocalDateTime submittedAt;
+    private LocalDateTime updatedAt;
 }

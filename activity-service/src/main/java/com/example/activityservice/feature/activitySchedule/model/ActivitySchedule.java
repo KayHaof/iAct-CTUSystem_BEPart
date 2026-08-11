@@ -32,6 +32,9 @@ public class ActivitySchedule {
 
     private String location;
 
+    @Column(name = "qr_code_token", unique = true)
+    private String qrCodeToken;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "location_id")
     private Location locationRef;

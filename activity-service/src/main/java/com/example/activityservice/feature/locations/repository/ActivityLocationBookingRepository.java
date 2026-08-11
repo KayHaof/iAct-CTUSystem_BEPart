@@ -37,6 +37,7 @@ public interface ActivityLocationBookingRepository extends JpaRepository<Activit
             select count(b) from ActivityLocationBooking b
             where b.location.id = :locationId
               and b.status in :statuses
+              and (:excludedActivityId is null or b.activity.id <> :excludedActivityId)
               and :startTime < b.endTime
               and :endTime > b.startTime
             """)
@@ -44,7 +45,8 @@ public interface ActivityLocationBookingRepository extends JpaRepository<Activit
             @Param("locationId") Long locationId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
-            @Param("statuses") Collection<Integer> statuses);
+            @Param("statuses") Collection<Integer> statuses,
+            @Param("excludedActivityId") Long excludedActivityId);
 
     @Query("""
             select b from ActivityLocationBooking b

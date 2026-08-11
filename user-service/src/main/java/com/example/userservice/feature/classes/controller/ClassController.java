@@ -22,7 +22,7 @@ public class ClassController {
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<Long>> getClassIdsByDepartment(@PathVariable Long departmentId) {
         List<Long> classIds = classService.getClassIdsByDepartment(departmentId);
-        return ApiResponse.success(classIds, "Lay danh sach ID lop hoc thanh cong");
+        return ApiResponse.success(classIds, "Lấy danh sách ID lớp học thành công");
     }
 
     @GetMapping
@@ -57,34 +57,34 @@ public class ClassController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ClassResponse> createClass(@RequestBody @Valid ClassRequest request) {
         ClassResponse created = classService.createClass(request);
-        return ApiResponse.success(created, "Tao lop hoc thanh cong");
+        return ApiResponse.success(created, "Tạo lớp học thành công");
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ClassResponse> updateClass(@PathVariable Long id, @RequestBody @Valid ClassRequest request) {
         ClassResponse updated = classService.updateClass(id, request);
-        return ApiResponse.success(updated, "Cap nhat lop hoc thanh cong");
+        return ApiResponse.success(updated, "Cập nhật lớp học thành công");
     }
 
     @PatchMapping("/{id}/activate")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ClassResponse> activateClass(@PathVariable Long id) {
         ClassResponse activated = classService.activateClass(id);
-        return ApiResponse.success(activated, "Kich hoat lop hoc thanh cong");
+        return ApiResponse.success(activated, "Kích hoạt lớp học thành công");
     }
 
     @PatchMapping("/{id}/deactivate")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ClassResponse> deactivateClass(@PathVariable Long id) {
         ClassResponse deactivated = classService.deactivateClass(id);
-        return ApiResponse.success(deactivated, "Vo hieu hoa lop hoc thanh cong");
+        return ApiResponse.success(deactivated, "Vô hiệu hóa lớp học thành công");
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Void> deleteClass(@PathVariable Long id) {
         classService.deleteClass(id);
-        return ApiResponse.of(200, "Xoa lop hoc thanh cong", null);
+        return ApiResponse.of(200, "Xóa lớp học thành công", null);
     }
 }

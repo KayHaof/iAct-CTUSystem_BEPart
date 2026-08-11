@@ -6,12 +6,16 @@ import org.springframework.stereotype.Component;
 
 import java.io.OutputStream;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.function.Function;
 
 @Component
 public class ExcelExportService {
+
+    private static final ZoneId DISPLAY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     public <T> void export(String sheetName, String[] headers, List<T> data,
                            Function<T, Object[]> rowMapper, OutputStream os) throws Exception {
@@ -67,7 +71,10 @@ public class ExcelExportService {
                         case String s -> cell.setCellValue(s);
                         case Number number -> cell.setCellValue(number.doubleValue());
                         case Boolean b -> cell.setCellValue(b);
-                        case LocalDateTime localDateTime -> cell.setCellValue(localDateTime.format(dateFormatter));
+                        case LocalDateTime localDateTime -> cell.setCellValue(
+                                localDateTime.atOffset(ZoneOffset.UTC)
+                                        .atZoneSameInstant(DISPLAY_ZONE)
+                                        .format(dateFormatter));
                         default -> cell.setCellValue(value.toString());
                     }
                 }

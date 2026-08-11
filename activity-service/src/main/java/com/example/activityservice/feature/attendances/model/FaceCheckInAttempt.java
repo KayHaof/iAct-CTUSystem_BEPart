@@ -1,5 +1,6 @@
 package com.example.activityservice.feature.attendances.model;
 
+import com.example.activityservice.feature.activitySchedule.model.ActivitySchedule;
 import com.example.activityservice.feature.registration.model.Registrations;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -30,6 +31,10 @@ public class FaceCheckInAttempt {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "registration_id", nullable = false)
     private Registrations registration;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "schedule_id")
+    private ActivitySchedule schedule;
 
     @Column(name = "attempt_no", nullable = false)
     private Integer attemptNo;

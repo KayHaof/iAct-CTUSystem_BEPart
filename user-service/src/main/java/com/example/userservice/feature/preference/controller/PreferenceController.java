@@ -1,9 +1,13 @@
 package com.example.userservice.feature.preference.controller;
 
 import com.example.dto.ApiResponse;
+import com.example.exception.AppException;
+import com.example.exception.ErrorCode;
 import com.example.userservice.feature.preference.dto.PreferenceRequest;
 import com.example.userservice.feature.preference.dto.PreferenceResponse;
 import com.example.userservice.feature.preference.service.PreferenceService;
+import com.example.userservice.feature.users.model.Users;
+import com.example.userservice.feature.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class PreferenceController {
 
     private final PreferenceService preferenceService;
+    private final UserRepository userRepository;
 
     /**
      * UC10: Lay cau hinh uu tien goi y cua sinh vien
@@ -50,7 +55,17 @@ public class PreferenceController {
     }
 
     private Long extractUserId(Jwt jwt) {
+        if (jwt == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Chưa đăng nhập");
+        }
+
         String subject = jwt.getSubject();
-        return Long.parseLong(subject);
+        if (subject == null || subject.isBlank()) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Token không hợp lệ");
+        }
+
+        Users user = userRepository.findByKeycloakId(subject)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        return user.getId();
     }
 }

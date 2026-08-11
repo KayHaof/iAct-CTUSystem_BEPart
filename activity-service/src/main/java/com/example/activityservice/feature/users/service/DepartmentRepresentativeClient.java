@@ -64,16 +64,16 @@ public class DepartmentRepresentativeClient {
             return body != null && body.getData() != null ? body.getData() : List.of();
         } catch (HttpClientErrorException.Forbidden exception) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Ban khong co quyen xem dai dien lop/chi doan cua don vi nay.");
+                    "Bạn không có quyền xem đại diện lớp/chi đoàn của đơn vị này.");
         } catch (HttpClientErrorException.Unauthorized exception) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         } catch (ResourceAccessException exception) {
-            throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE, "User Service hien khong kha dung.");
+            throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE, "User Service hiện không khả dụng.");
         } catch (AppException exception) {
             throw exception;
         } catch (RestClientException exception) {
             throw new AppException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    "Khong the lay danh sach dai dien lop/chi doan tu User Service.");
+                    "Không thể lấy danh sách đại diện lớp/chi đoàn từ User Service.");
         }
     }
 

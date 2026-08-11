@@ -300,7 +300,7 @@ public class UserService {
         if (hasCurrentRole("ROLE_DEPARTMENT")) {
             return requireCurrentDepartmentId();
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem danh sach nguoi dung.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem danh sách người dùng.");
     }
 
     private void ensureCanViewUser(Users targetUser, ProfileDto targetProfile) {
@@ -322,7 +322,7 @@ public class UserService {
             }
         }
 
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen xem nguoi dung ngoai don vi cua minh.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem người dùng ngoài đơn vị của mình.");
     }
 
     private void ensureCanUpdateUser(Users targetUser, UserUpdateRequest request) {
@@ -332,24 +332,24 @@ public class UserService {
 
         Users currentUser = requireCurrentUser();
         if (!Objects.equals(currentUser.getId(), targetUser.getId())) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen cap nhat nguoi dung nay.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền cập nhật người dùng này.");
         }
 
         if (request != null && (request.getDepartmentId() != null || request.getClassId() != null)) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Khong duoc tu thay doi khoa/lop cua tai khoan. Vui long lien he quan tri vien.");
+                    "Không được tự thay đổi khoa/lớp của tài khoản. Vui lòng liên hệ quản trị viên.");
         }
     }
 
     private Long requireCurrentDepartmentId() {
         Users currentUser = requireCurrentUser();
         if (!Integer.valueOf(ROLE_DEPARTMENT).equals(currentUser.getRoleType())) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan hien tai khong phai Khoa/Don vi.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản hiện tại không phải Khoa/Đơn vị.");
         }
 
         ProfileDto profile = userProfileService.getProfileByUserId(currentUser.getId());
         if (profile == null || profile.getDepartmentId() == null) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Tai khoan Khoa/Don vi chua duoc gan don vi.");
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản Khoa/Đơn vị chưa được gắn đơn vị.");
         }
         return profile.getDepartmentId();
     }
@@ -357,7 +357,7 @@ public class UserService {
     private Users requireCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED, "Chua dang nhap");
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Chưa đăng nhập");
         }
 
         String keycloakId = jwt.getClaimAsString("sub");

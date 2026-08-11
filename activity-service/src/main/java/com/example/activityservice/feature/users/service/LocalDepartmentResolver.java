@@ -109,7 +109,7 @@ public class LocalDepartmentResolver {
             ApiResponse<List<DepartmentLookupResponse>> body = response.getBody();
             return body != null && body.getData() != null ? body.getData() : List.of();
         } catch (RestClientException exception) {
-            log.warn("Khong the lay department lookup tu user-service: {}", exception.getMessage());
+            log.warn("Không thể lấy department lookup từ user-service: {}", exception.getMessage());
             return Collections.emptyList();
         }
     }

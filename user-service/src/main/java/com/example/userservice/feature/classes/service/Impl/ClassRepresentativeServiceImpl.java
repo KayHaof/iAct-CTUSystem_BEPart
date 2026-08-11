@@ -84,21 +84,21 @@ public class ClassRepresentativeServiceImpl implements ClassRepresentativeServic
     public RepresentativeActivityPermissionResponse createRepresentative(ClassRepresentativeRequest request) {
         Users currentUser = getCurrentUser();
         Clazzes clazz = classRepository.findById(request.getClassId())
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay lop"));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy lớp"));
         validateClassManageable(currentUser, clazz);
 
         Users student = userRepository.findById(request.getStudentId())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Khong tim thay sinh vien"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy sinh viên"));
         if (!Integer.valueOf(STUDENT_ROLE_TYPE).equals(student.getRoleType())) {
-            throw new AppException(ErrorCode.INVALID_ACTION, "Nguoi duoc gan phai la sinh vien.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Người được gán phải là sinh viên.");
         }
 
         StudentProfile profile = studentProfileRepository.findById(student.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                        "Sinh vien chua co ho so lop."));
+                        "Sinh viên chưa có hồ sơ lớp."));
         if (profile.getClazz() == null || !Objects.equals(profile.getClazz().getId(), clazz.getId())) {
             throw new AppException(ErrorCode.INVALID_ACTION,
-                    "Sinh vien phai thuoc lop duoc gan dai dien.");
+                    "Sinh viên phải thuộc lớp được gán đại diện.");
         }
 
         ClassRepresentative representative = new ClassRepresentative();
@@ -122,7 +122,7 @@ public class ClassRepresentativeServiceImpl implements ClassRepresentativeServic
         Users currentUser = getCurrentUser();
         ClassRepresentative representative = representativeRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED,
-                        "Khong tim thay dai dien lop"));
+                        "Không tìm thấy đại diện lớp"));
         validateClassManageable(currentUser, representative.getClazz());
         representative.setIsActive(false);
         if (representative.getEndDate() == null || representative.getEndDate().isAfter(LocalDate.now())) {
@@ -137,7 +137,7 @@ public class ClassRepresentativeServiceImpl implements ClassRepresentativeServic
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         return userRepository.findByKeycloakId(authentication.getName())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Khong tim thay nguoi dung hien tai"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED, "Không tìm thấy người dùng hiện tại"));
     }
 
     private Optional<ClassRepresentative> findActiveRepresentative(Long studentId) {
@@ -150,12 +150,12 @@ public class ClassRepresentativeServiceImpl implements ClassRepresentativeServic
         if (Integer.valueOf(DEPARTMENT_ROLE_TYPE).equals(currentUser.getRoleType())) {
             return currentDepartmentId(currentUser);
         }
-        throw new AppException(ErrorCode.FORBIDDEN, "Ban khong co quyen quan ly dai dien lop.");
+        throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền quản lý đại diện lớp.");
     }
 
     private void validateClassManageable(Users currentUser, Clazzes clazz) {
         if (clazz == null) {
-            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong tim thay lop");
+            throw new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không tìm thấy lớp");
         }
         Departments department = clazz.getMajor() != null ? clazz.getMajor().getDepartment() : null;
         if (!Integer.valueOf(DEPARTMENT_ROLE_TYPE).equals(currentUser.getRoleType())
@@ -163,7 +163,7 @@ public class ClassRepresentativeServiceImpl implements ClassRepresentativeServic
                 || currentDepartmentId(currentUser) == null
                 || !Objects.equals(currentDepartmentId(currentUser), department.getId())) {
             throw new AppException(ErrorCode.FORBIDDEN,
-                    "Don vi chi quan ly dai dien cua lop thuoc khoa/vien minh.");
+                    "Đơn vị chỉ quản lý đại diện của lớp thuộc khoa/viện mình.");
         }
     }
 

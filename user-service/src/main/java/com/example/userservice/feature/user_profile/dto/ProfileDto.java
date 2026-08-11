@@ -26,6 +26,7 @@ public class ProfileDto {
     private Long classId;
     private String classCode;
     private String className;
+    private String academicYear;
 
     // Thông tin Khoa/Đơn vị
     private Long departmentId;

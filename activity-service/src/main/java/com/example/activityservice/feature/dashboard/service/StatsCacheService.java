@@ -43,11 +43,11 @@ public class StatsCacheService {
             cachedMajorCount.set(majorCount);
 
             lastUpdateTime = System.currentTimeMillis();
-            log.info("Dashboard stats da duoc cap nhat - Departments: {}, Majors: {}",
+            log.info("Dashboard stats đã được cập nhật - Departments: {}, Majors: {}",
                     cachedDepartmentCount.get(), cachedMajorCount.get());
 
         } catch (Exception e) {
-            log.error("Loi khi fetch dashboard stats: {}", e.getMessage());
+            log.error("Lỗi khi fetch dashboard stats: {}", e.getMessage());
         }
     }
 
@@ -62,7 +62,7 @@ public class StatsCacheService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Khong the lay so luong departments tu user-service: {}", e.getMessage());
+            log.warn("Không thể lấy số lượng departments từ user-service: {}", e.getMessage());
         }
         return cachedDepartmentCount.get();
     }
@@ -78,7 +78,7 @@ public class StatsCacheService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Khong the lay so luong majors tu user-service: {}", e.getMessage());
+            log.warn("Không thể lấy số lượng majors từ user-service: {}", e.getMessage());
         }
         return cachedMajorCount.get();
     }

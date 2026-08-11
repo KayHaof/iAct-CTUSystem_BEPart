@@ -15,6 +15,7 @@ public interface UserProfileMapper {
     @Mapping(target = "classId", source = "clazz.id")
     @Mapping(target = "classCode", source = "clazz.classCode")
     @Mapping(target = "className", source = "clazz.name")
+    @Mapping(target = "academicYear", source = "clazz.academicYear")
     @Mapping(target = "departmentId", expression = "java(studentProfile.getClazz() != null && studentProfile.getClazz().getMajor() != null && studentProfile.getClazz().getMajor().getDepartment() != null ? studentProfile.getClazz().getMajor().getDepartment().getId() : null)")
     @Mapping(target = "departmentName", expression = "java(studentProfile.getClazz() != null && studentProfile.getClazz().getMajor() != null && studentProfile.getClazz().getMajor().getDepartment() != null ? studentProfile.getClazz().getMajor().getDepartment().getName() : null)")
     ProfileDto toDto(StudentProfile studentProfile);

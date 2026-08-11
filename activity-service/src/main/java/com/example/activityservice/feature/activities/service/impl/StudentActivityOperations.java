@@ -16,6 +16,7 @@ import com.example.activityservice.feature.users.service.LocalDepartmentResolver
 import com.example.dto.PageDTO;
 import com.example.exception.AppException;
 import com.example.exception.ErrorCode;
+import com.example.util.UtcDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -121,7 +122,7 @@ public class StudentActivityOperations {
         if (semester == null) {
             return RecommendationResponse.builder()
                     .activities(List.of())
-                    .reasons(List.of("Khong co hoc ky hien tai"))
+                    .reasons(List.of("Không có học kỳ hiện tại"))
                     .totalFound(0)
                     .build();
         }
@@ -145,13 +146,13 @@ public class StudentActivityOperations {
                         .title(activity.getTitle())
                         .description(activity.getDescription())
                         .location(activity.getLocation())
-                        .startDate(activity.getStartDate() != null ? activity.getStartDate().toString() : null)
-                        .endDate(activity.getEndDate() != null ? activity.getEndDate().toString() : null)
+                        .startDate(UtcDateTime.format(activity.getStartDate()))
+                        .endDate(UtcDateTime.format(activity.getEndDate()))
                         .maxParticipants(activity.getMaxParticipants())
                         .registeredCount(
                                 (int) registrationRepository.countByActivityIdAndStatusNot(activity.getId(), 2))
                         .matchPercentage(85.0)
-                        .matchedReasons(List.of("Hoat dong phu hop voi yeu cau diem ren luyen"))
+                        .matchedReasons(List.of("Hoạt động phù hợp với yêu cầu điểm rèn luyện"))
                         .categoryName(responseAssembler.getBenefitCategoryNames(activity.getId()))
                         .departmentName(departmentNames.get(activity.getDepartmentId()))
                         .build())
@@ -159,7 +160,7 @@ public class StudentActivityOperations {
 
         RecommendationResponse response = RecommendationResponse.builder()
                 .activities(recommended)
-                .reasons(List.of("Cac hoat dong duoc goi y dua tren diem ren luyen con thieu"))
+                .reasons(List.of("Các hoạt động được gợi ý dựa trên điểm rèn luyện còn thiếu"))
                 .totalFound(recommended.size())
                 .build();
         activityCacheService.putRecommendations(studentId, semester.getId(), limit, response);
@@ -173,7 +174,7 @@ public class StudentActivityOperations {
             resolvedSemesterId = semesterId;
         } else {
             Semesters semester = semesterRepository.findSemesterByDate(LocalDate.now())
-                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Khong co hoc ky"));
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_EXISTED, "Không có học kỳ"));
             resolvedSemesterId = semester.getId();
         }
 
