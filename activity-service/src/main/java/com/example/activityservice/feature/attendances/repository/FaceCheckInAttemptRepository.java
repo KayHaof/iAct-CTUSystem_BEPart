@@ -12,4 +12,5 @@ public interface FaceCheckInAttemptRepository extends JpaRepository<FaceCheckInA
 
     Optional<FaceCheckInAttempt> findTopByRegistrationIdOrderByAttemptNoDesc(Long registrationId);
     Optional<FaceCheckInAttempt> findTopByRegistrationIdAndScheduleIdOrderByAttemptNoDesc(Long registrationId, Long scheduleId);
+    Optional<FaceCheckInAttempt> findTopByRegistrationIdAndScheduleIsNullOrderByAttemptNoDesc(Long registrationId);
 }

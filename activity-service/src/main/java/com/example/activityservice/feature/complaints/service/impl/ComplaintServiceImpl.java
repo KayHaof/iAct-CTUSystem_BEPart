@@ -2,6 +2,7 @@ package com.example.activityservice.feature.complaints.service.impl;
 
 import com.example.activityservice.common.dto.NotificationRequest;
 import com.example.activityservice.feature.activities.model.Activities;
+import com.example.activityservice.feature.attendances.model.FaceCheckInAttempt;
 import com.example.activityservice.feature.attendances.repository.FaceCheckInAttemptRepository;
 import com.example.activityservice.feature.complaints.dto.ComplaintEligibleActivityResponse;
 import com.example.activityservice.feature.complaints.dto.ComplaintRequest;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -224,8 +226,7 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         boolean attended = registration.getStatus() != null && registration.getStatus() == 1;
         boolean checkedIn = registration.getAttendance() != null && registration.getAttendance().getCheckinTime() != null;
-        boolean faceAttemptExhausted = faceCheckInAttemptRepository.countByRegistrationId(registration.getId())
-                >= FACE_CHECK_IN_MAX_ATTEMPTS;
+        boolean faceAttemptExhausted = isFaceAttemptExhausted(registration);
 
         if ((!attended || !checkedIn) && !faceAttemptExhausted) {
             throw new AppException(ErrorCode.INVALID_ACTION,
@@ -237,13 +238,35 @@ public class ComplaintServiceImpl implements ComplaintService {
             ComplaintEligibleActivityResponse response,
             Registrations registration) {
         long attemptCount = faceCheckInAttemptRepository.countByRegistrationId(registration.getId());
-        boolean exhausted = attemptCount >= FACE_CHECK_IN_MAX_ATTEMPTS;
+        boolean exhausted = isFaceAttemptExhausted(registration);
         response.setFaceAttemptCount((int) attemptCount);
         response.setFaceAttemptExhausted(exhausted);
         response.setEligibilityReason(exhausted && response.getCheckinTime() == null
                 ? "FACE_VERIFICATION_EXHAUSTED"
                 : "CHECKED_IN");
         return response;
+    }
+
+    private boolean isFaceAttemptExhausted(Registrations registration) {
+        long attemptCount = faceCheckInAttemptRepository.countByRegistrationId(registration.getId());
+        if (attemptCount < FACE_CHECK_IN_MAX_ATTEMPTS) {
+            return false;
+        }
+        return faceCheckInAttemptRepository.findTopByRegistrationIdOrderByAttemptNoDesc(registration.getId())
+                .map(attempt -> !Boolean.TRUE.equals(attempt.getAllowRetry()) && !isSuccessfulFaceAttempt(attempt))
+                .orElse(true);
+    }
+
+    private boolean isSuccessfulFaceAttempt(FaceCheckInAttempt attempt) {
+        if (attempt == null) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(attempt.getVerified())) {
+            return true;
+        }
+        BigDecimal distance = attempt.getDistance();
+        BigDecimal threshold = attempt.getThreshold();
+        return distance != null && threshold != null && distance.compareTo(threshold) <= 0;
     }
 
     private Users getCurrentStudent() {

@@ -58,7 +58,7 @@ public class RegistrationMapper {
         } else {
             res.setScheduleIds(new ArrayList<>());
         }
-        res.setAttendanceSessions(toAttendanceSessions(attendances));
+        res.setAttendanceSessions(toAttendanceSessions(entity, attendances));
         res.setRegisteredSessionCount(res.getScheduleIds() != null ? res.getScheduleIds().size() : 0);
         res.setFaceVerifiedSessionCount((int) attendances.stream()
                 .filter(attendance -> Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(attendance.getStatus()))
@@ -79,6 +79,19 @@ public class RegistrationMapper {
         }
         if (hasStatus(attendances, Attendances.STATUS_ABSENT)) {
             return "ABSENT";
+        }
+        Attendances nextSessionAttendance = resolveNextSessionAttendance(entity, attendances);
+        if (nextSessionAttendance == null && hasRegisteredSchedules(entity)) {
+            return "NOT_CHECKED_IN";
+        }
+        if (nextSessionAttendance != null) {
+            if (nextSessionAttendance.getCheckinTime() == null) {
+                return "NOT_CHECKED_IN";
+            }
+            if (nextSessionAttendance.getCheckoutTime() == null) {
+                return "CHECKED_IN";
+            }
+            return "CHECKED_OUT";
         }
         if (hasStatus(attendances, Attendances.STATUS_CHECKED_OUT)) {
             return "CHECKED_OUT";
@@ -122,7 +135,14 @@ public class RegistrationMapper {
             return "MISSED";
         }
 
-        Attendances representativeAttendance = resolveRepresentativeAttendance(entity, attendances);
+        Attendances nextSessionAttendance = resolveNextSessionAttendance(entity, attendances);
+        if (nextSessionAttendance == null && hasRegisteredSchedules(entity)) {
+            return "REGISTERED";
+        }
+
+        Attendances representativeAttendance = nextSessionAttendance != null
+                ? nextSessionAttendance
+                : resolveRepresentativeAttendance(entity, attendances);
         if (representativeAttendance == null || representativeAttendance.getCheckinTime() == null) {
             if (entity.getActivity() != null
                     && entity.getActivity().getEndDate() != null
@@ -173,6 +193,53 @@ public class RegistrationMapper {
                 .collect(Collectors.toList());
     }
 
+    private List<AttendanceResponse> toAttendanceSessions(Registrations entity, List<Attendances> attendances) {
+        List<ActivitySchedule> registeredSchedules = entity.getRegisteredSchedules() != null
+                ? entity.getRegisteredSchedules()
+                : List.of();
+        if (registeredSchedules.isEmpty()) {
+            return toAttendanceSessions(attendances);
+        }
+
+        List<AttendanceResponse> sessionResponses = registeredSchedules.stream()
+                .filter(Objects::nonNull)
+                .sorted((left, right) -> {
+                    if (left.getStartTime() == null && right.getStartTime() == null) {
+                        return Long.compare(
+                                left.getId() != null ? left.getId() : Long.MAX_VALUE,
+                                right.getId() != null ? right.getId() : Long.MAX_VALUE);
+                    }
+                    if (left.getStartTime() == null) {
+                        return 1;
+                    }
+                    if (right.getStartTime() == null) {
+                        return -1;
+                    }
+                    return left.getStartTime().compareTo(right.getStartTime());
+                })
+                .map(schedule -> {
+                    Attendances attendance = findAttendanceBySchedule(attendances, schedule);
+                    if (attendance != null) {
+                        return attendanceMapper.toResponse(attendance, null);
+                    }
+                    return AttendanceResponse.builder()
+                            .registrationId(entity.getId())
+                            .scheduleId(schedule.getId())
+                            .scheduleTitle(schedule.getTitle())
+                            .scheduleStartTime(schedule.getStartTime())
+                            .scheduleEndTime(schedule.getEndTime())
+                            .attendanceStatus("NOT_CHECKED_IN")
+                            .status(Attendances.STATUS_PENDING)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        if (sessionResponses.isEmpty()) {
+            return toAttendanceSessions(attendances);
+        }
+        return sessionResponses;
+    }
+
     private Attendances resolveRepresentativeAttendance(Registrations entity, List<Attendances> attendances) {
         if (attendances == null || attendances.isEmpty()) {
             return entity.getAttendance();
@@ -182,6 +249,58 @@ public class RegistrationMapper {
                 .filter(attendance -> attendance.getCheckinTime() != null || attendance.getCheckoutTime() != null)
                 .findFirst()
                 .orElse(attendances.get(0));
+    }
+
+    private Attendances resolveNextSessionAttendance(Registrations entity, List<Attendances> attendances) {
+        List<ActivitySchedule> registeredSchedules = entity.getRegisteredSchedules() != null
+                ? entity.getRegisteredSchedules()
+                : List.of();
+        if (registeredSchedules.isEmpty()) {
+            return null;
+        }
+
+        List<ActivitySchedule> sortedSchedules = registeredSchedules.stream()
+                .filter(Objects::nonNull)
+                .sorted((left, right) -> {
+                    if (left.getStartTime() == null && right.getStartTime() == null) {
+                        return Long.compare(
+                                left.getId() != null ? left.getId() : Long.MAX_VALUE,
+                                right.getId() != null ? right.getId() : Long.MAX_VALUE);
+                    }
+                    if (left.getStartTime() == null) {
+                        return 1;
+                    }
+                    if (right.getStartTime() == null) {
+                        return -1;
+                    }
+                    return left.getStartTime().compareTo(right.getStartTime());
+                })
+                .collect(Collectors.toList());
+
+        for (ActivitySchedule schedule : sortedSchedules) {
+            Attendances attendance = findAttendanceBySchedule(attendances, schedule);
+            if (attendance == null || !Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(attendance.getStatus())) {
+                return attendance;
+            }
+        }
+
+        return null;
+    }
+
+    private Attendances findAttendanceBySchedule(List<Attendances> attendances, ActivitySchedule schedule) {
+        if (attendances == null || schedule == null || schedule.getId() == null) {
+            return null;
+        }
+        return attendances.stream()
+                .filter(Objects::nonNull)
+                .filter(attendance -> attendance.getSchedule() != null)
+                .filter(attendance -> Objects.equals(attendance.getSchedule().getId(), schedule.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean hasRegisteredSchedules(Registrations entity) {
+        return entity.getRegisteredSchedules() != null && !entity.getRegisteredSchedules().isEmpty();
     }
 
     private boolean hasVerifiedAllRegisteredSessions(Registrations entity, List<Attendances> attendances) {

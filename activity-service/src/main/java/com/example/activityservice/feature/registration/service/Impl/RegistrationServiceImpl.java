@@ -4,6 +4,7 @@ import com.example.activityservice.feature.activities.model.Activities;
 import com.example.activityservice.feature.activities.repository.ActivityRepository;
 import com.example.activityservice.feature.activities.service.ActivityCacheService;
 import com.example.activityservice.feature.attendances.model.Attendances;
+import com.example.activityservice.feature.attendances.model.FaceCheckInAttempt;
 import com.example.activityservice.feature.attendances.repository.AttendanceRepository;
 import com.example.activityservice.feature.attendances.repository.FaceCheckInAttemptRepository;
 import com.example.activityservice.feature.attendances.service.AttendanceService;
@@ -42,6 +43,7 @@ import org.springframework.util.StringUtils;
 import jakarta.persistence.criteria.Predicate;
 
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -372,7 +374,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
         if (Integer.valueOf(Registrations.STATUS_ABSENT).equals(status)) {
             reg.setStatus(Registrations.STATUS_ABSENT);
-                reg.setAbsenceReason("Được ghi nhận vắng mặt bởi BTC.");
+            reg.setAbsenceReason("Được ghi nhận vắng mặt bởi BTC.");
             reg.setAbsenceReviewed(false);
             reg.setAbsenceReviewedBy(null);
             reg.setAbsenceReviewedAt(null);
@@ -655,14 +657,35 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
 
     private void enrichFaceVerificationState(RegistrationResponse response, Registrations registration) {
-        long rawAttemptCount = faceCheckInAttemptRepository.countByRegistrationId(registration.getId());
+        ActivitySchedule targetSchedule = resolveFaceVerificationTargetSchedule(response, registration);
+        boolean legacyWithoutSchedule = registration.getRegisteredSchedules() == null
+                || registration.getRegisteredSchedules().isEmpty();
+        boolean hasAttemptScope = targetSchedule != null || legacyWithoutSchedule;
+
+        long rawAttemptCount = hasAttemptScope
+                ? countFaceAttempts(registration, targetSchedule)
+                : 0;
         int attemptCount = rawAttemptCount > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) rawAttemptCount;
         int remainingAttempts = Math.max(FACE_CHECK_IN_MAX_ATTEMPTS - attemptCount, 0);
         boolean cancelled = registration.getStatus() != null && registration.getStatus() == 2;
-        boolean faceVerified = Integer.valueOf(1).equals(registration.getStatus());
+        boolean faceVerified = Integer.valueOf(1).equals(registration.getStatus())
+                || isFaceScheduleVerified(registration, targetSchedule);
         boolean checkedIn = registration.getAttendances() != null
                 && registration.getAttendances().stream().anyMatch(attendance -> attendance.getCheckinTime() != null);
-        boolean exhausted = !cancelled && !faceVerified && attemptCount >= FACE_CHECK_IN_MAX_ATTEMPTS;
+        Optional<FaceCheckInAttempt> latestAttempt = hasAttemptScope
+                ? findLatestFaceAttempt(registration, targetSchedule)
+                : Optional.empty();
+        boolean latestAttemptMatched = latestAttempt
+                .map(this::isSuccessfulFaceAttempt)
+                .orElse(false);
+        boolean latestAttemptAllowsRetry = latestAttempt
+                .map(attempt -> Boolean.TRUE.equals(attempt.getAllowRetry()))
+                .orElse(false);
+        boolean exhausted = !cancelled
+                && !faceVerified
+                && !latestAttemptMatched
+                && attemptCount >= FACE_CHECK_IN_MAX_ATTEMPTS
+                && !latestAttemptAllowsRetry;
 
         response.setFaceVerificationAttemptCount(attemptCount);
         response.setFaceVerificationMaxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS);
@@ -674,6 +697,116 @@ public class RegistrationServiceImpl implements RegistrationService {
             response.setParticipationStatus("FACE_VERIFICATION_EXHAUSTED");
             response.setNextAction("SUBMIT_COMPLAINT");
         }
+    }
+
+    private boolean hasFaceVerifiedAttendance(Registrations registration) {
+        return registration.getAttendances() != null
+                && registration.getAttendances().stream()
+                        .filter(Objects::nonNull)
+                        .anyMatch(attendance -> Integer.valueOf(Attendances.STATUS_FACE_VERIFIED)
+                                .equals(attendance.getStatus()));
+    }
+
+    private ActivitySchedule resolveFaceVerificationTargetSchedule(
+            RegistrationResponse response,
+            Registrations registration) {
+        List<ActivitySchedule> registeredSchedules = registration.getRegisteredSchedules() != null
+                ? registration.getRegisteredSchedules()
+                : List.of();
+        if (registeredSchedules.isEmpty()) {
+            return null;
+        }
+
+        List<Long> registeredScheduleIds = registeredSchedules.stream()
+                .filter(Objects::nonNull)
+                .map(schedule -> schedule.getId())
+                .filter(Objects::nonNull)
+                .toList();
+        List<Attendances> attendances = registration.getAttendances() != null
+                ? registration.getAttendances()
+                : List.of();
+
+        Optional<ActivitySchedule> checkedOutSchedule = attendances.stream()
+                .filter(Objects::nonNull)
+                .filter(attendance -> attendance.getSchedule() != null
+                        && registeredScheduleIds.contains(attendance.getSchedule().getId()))
+                .filter(this::isReadyForFaceVerification)
+                .map(attendance -> attendance.getSchedule())
+                .filter(Objects::nonNull)
+                .min(Comparator.comparing(
+                        (ActivitySchedule schedule) -> schedule.getStartTime(),
+                        Comparator.nullsLast(Comparator.naturalOrder())));
+        if (checkedOutSchedule.isPresent()) {
+            return checkedOutSchedule.get();
+        }
+
+        return registeredSchedules.stream()
+                .filter(Objects::nonNull)
+                .filter(schedule -> !isFaceScheduleVerified(registration, schedule))
+                .filter(schedule -> isFaceAttemptExhausted(registration, schedule))
+                .filter(Objects::nonNull)
+                .min(Comparator.comparing(
+                        (ActivitySchedule schedule) -> schedule.getStartTime(),
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    private boolean isReadyForFaceVerification(Attendances attendance) {
+        return attendance.getCheckinTime() != null
+                && attendance.getCheckoutTime() != null
+                && !Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(attendance.getStatus())
+                && !Integer.valueOf(Attendances.STATUS_ABSENT).equals(attendance.getStatus());
+    }
+
+    private boolean isFaceScheduleVerified(Registrations registration, ActivitySchedule schedule) {
+        if (schedule == null) {
+            return hasFaceVerifiedAttendance(registration);
+        }
+        return registration.getAttendances() != null
+                && registration.getAttendances().stream()
+                        .filter(Objects::nonNull)
+                        .anyMatch(attendance -> attendance.getSchedule() != null
+                                && Objects.equals(attendance.getSchedule().getId(), schedule.getId())
+                                && Integer.valueOf(Attendances.STATUS_FACE_VERIFIED).equals(attendance.getStatus()));
+    }
+
+    private long countFaceAttempts(Registrations registration, ActivitySchedule schedule) {
+        if (schedule == null) {
+            return faceCheckInAttemptRepository.countByRegistrationIdAndScheduleIsNull(registration.getId());
+        }
+        return faceCheckInAttemptRepository.countByRegistrationIdAndScheduleId(registration.getId(), schedule.getId());
+    }
+
+    private Optional<FaceCheckInAttempt> findLatestFaceAttempt(Registrations registration, ActivitySchedule schedule) {
+        if (schedule == null) {
+            return faceCheckInAttemptRepository.findTopByRegistrationIdAndScheduleIsNullOrderByAttemptNoDesc(
+                    registration.getId());
+        }
+        return faceCheckInAttemptRepository.findTopByRegistrationIdAndScheduleIdOrderByAttemptNoDesc(
+                registration.getId(),
+                schedule.getId());
+    }
+
+    private boolean isFaceAttemptExhausted(Registrations registration, ActivitySchedule schedule) {
+        long attemptCount = countFaceAttempts(registration, schedule);
+        if (attemptCount < FACE_CHECK_IN_MAX_ATTEMPTS) {
+            return false;
+        }
+        return findLatestFaceAttempt(registration, schedule)
+                .map(attempt -> !Boolean.TRUE.equals(attempt.getAllowRetry()) && !isSuccessfulFaceAttempt(attempt))
+                .orElse(true);
+    }
+
+    private boolean isSuccessfulFaceAttempt(FaceCheckInAttempt attempt) {
+        if (attempt == null) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(attempt.getVerified())) {
+            return true;
+        }
+        BigDecimal distance = attempt.getDistance();
+        BigDecimal threshold = attempt.getThreshold();
+        return distance != null && threshold != null && distance.compareTo(threshold) <= 0;
     }
 
     // ============ NEW METHODS FOR UC FEATURES ============
@@ -846,7 +979,7 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
 
         if (distinctScheduleIds.isEmpty()) {
-                throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn ít nhất một buổi tham gia.");
+            throw new AppException(ErrorCode.INVALID_ACTION, "Vui lòng chọn ít nhất một buổi tham gia.");
         }
 
         Map<Long, ActivitySchedule> schedulesById = activitySchedules.stream()

@@ -138,6 +138,19 @@ public interface RegistrationRepository extends JpaRepository<Registrations, Lon
                             FROM FaceCheckInAttempt faceAttempt
                             WHERE faceAttempt.registration.id = r.id
                         ) >= 5
+                        AND NOT EXISTS (
+                            SELECT successfulAttempt.id
+                            FROM FaceCheckInAttempt successfulAttempt
+                            WHERE successfulAttempt.registration.id = r.id
+                              AND (
+                                  successfulAttempt.verified = true
+                                  OR (
+                                      successfulAttempt.distance IS NOT NULL
+                                      AND successfulAttempt.threshold IS NOT NULL
+                                      AND successfulAttempt.distance <= successfulAttempt.threshold
+                                  )
+                              )
+                        )
                     )
               )
             ORDER BY r.registeredAt DESC

@@ -39,6 +39,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -152,7 +153,20 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         long existingAttempts = countFaceAttempts(registration, schedule);
         if (existingAttempts >= FACE_CHECK_IN_MAX_ATTEMPTS) {
-            return maxAttemptsExceededResponse((int) existingAttempts);
+            Optional<FaceCheckInAttempt> latestAttempt = findLatestFaceAttempt(registration, schedule);
+            if (latestAttempt.map(this::isSuccessfulFaceAttempt).orElse(false)) {
+                FaceVerificationResult verification = toSuccessfulVerification(latestAttempt.get(), existingAttempts);
+                AttendanceResponse attendanceResponse = completeFaceVerification(
+                        studentId,
+                        registration,
+                        attendance,
+                        request.getLatitude(),
+                        request.getLongitude());
+                return toFaceCheckInResponse(verification, attendanceResponse);
+            }
+            if (!latestAttempt.map(attempt -> Boolean.TRUE.equals(attempt.getAllowRetry())).orElse(false)) {
+                return maxAttemptsExceededResponse((int) existingAttempts);
+            }
         }
 
         int attemptNo = (int) existingAttempts + 1;
@@ -166,6 +180,12 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         faceEmbeddingProjectionService.markVerified(studentId, LocalDateTime.now());
         attendance.setStatus(Attendances.STATUS_FACE_VERIFIED);
+        if (request.getLatitude() != null) {
+            attendance.setLatitude(request.getLatitude());
+        }
+        if (request.getLongitude() != null) {
+            attendance.setLongitude(request.getLongitude());
+        }
         attendance = attendanceRepository.save(attendance);
         if (hasVerifiedAllRegisteredSessions(registration)) {
             registration.setStatus(1);
@@ -183,6 +203,38 @@ public class AttendanceServiceImpl implements AttendanceService {
                         ? "Xác thực khuôn mặt thành công. Bạn có thể nộp minh chứng tham gia."
                         : "Xác thực khuôn mặt thành công cho buổi này. Vui lòng hoàn tất các buổi còn lại.");
         return toFaceCheckInResponse(verification, attendanceResponse);
+    }
+
+    private AttendanceResponse completeFaceVerification(
+            Long studentId,
+            Registrations registration,
+            Attendances attendance,
+            BigDecimal latitude,
+            BigDecimal longitude) {
+        faceEmbeddingProjectionService.markVerified(studentId, LocalDateTime.now());
+        attendance.setStatus(Attendances.STATUS_FACE_VERIFIED);
+        if (latitude != null) {
+            attendance.setLatitude(latitude);
+        }
+        if (longitude != null) {
+            attendance.setLongitude(longitude);
+        }
+        attendance = attendanceRepository.save(attendance);
+        if (hasVerifiedAllRegisteredSessions(registration)) {
+            registration.setStatus(1);
+            registrationRepository.save(registration);
+            registrationKafkaProducer.sendCheckInSuccess(
+                    registration.getStudent().getId(),
+                    registration.getActivity().getId(),
+                    registration.getActivity().getTitle(),
+                    "Xác thực khuôn mặt");
+        }
+
+        return attendanceMapper.toResponse(
+                attendance,
+                hasVerifiedAllRegisteredSessions(registration)
+                        ? "Xác thực khuôn mặt thành công. Bạn có thể nộp minh chứng tham gia."
+                        : "Xác thực khuôn mặt thành công cho buổi này. Vui lòng hoàn tất các buổi còn lại.");
     }
 
     private FaceVerificationResult verifyFace(
@@ -225,26 +277,41 @@ public class AttendanceServiceImpl implements AttendanceService {
     }
 
     private FaceVerificationResult normalizeVerification(FaceVerificationResult raw, int attemptNo) {
-        boolean verified = Boolean.TRUE.equals(raw.getVerified());
+        boolean verified = Boolean.TRUE.equals(raw.getVerified()) || isDistanceWithinThreshold(raw);
+        boolean exhausted = !verified && attemptNo >= FACE_CHECK_IN_MAX_ATTEMPTS;
         boolean allowRetry = !verified
                 && attemptNo < FACE_CHECK_IN_MAX_ATTEMPTS
                 && Boolean.TRUE.equals(raw.getAllowRetry());
 
         return FaceVerificationResult.builder()
                 .verified(verified)
-                .decision(raw.getDecision() != null
-                        ? raw.getDecision()
-                        : (verified ? "matched" : "not_matched"))
+                .decision(resolveVerificationDecision(raw, verified, exhausted))
                 .allowRetry(allowRetry)
                 .attempt(attemptNo)
                 .maxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS)
                 .remainingAttempts(Math.max(FACE_CHECK_IN_MAX_ATTEMPTS - attemptNo, 0))
-                .reasonCode(raw.getReasonCode())
+                .reasonCode(verified ? null : (exhausted ? "MAX_ATTEMPTS_EXCEEDED" : raw.getReasonCode()))
                 .message(resolveVerificationMessage(raw, verified, attemptNo))
                 .threshold(raw.getThreshold())
                 .distance(raw.getDistance())
                 .similarity(raw.getSimilarity())
                 .build();
+    }
+
+    private String resolveVerificationDecision(FaceVerificationResult raw, boolean verified, boolean exhausted) {
+        if (verified) {
+            return "MATCH";
+        }
+        if (exhausted) {
+            return "max_attempts_exceeded";
+        }
+        return raw.getDecision() != null ? raw.getDecision() : "RETRY";
+    }
+
+    private boolean isDistanceWithinThreshold(FaceVerificationResult raw) {
+        BigDecimal distance = raw != null ? raw.getDistance() : null;
+        BigDecimal threshold = raw != null ? raw.getThreshold() : null;
+        return distance != null && threshold != null && distance.compareTo(threshold) <= 0;
     }
 
     private String resolveVerificationMessage(FaceVerificationResult raw, boolean verified, int attemptNo) {
@@ -383,6 +450,44 @@ public class AttendanceServiceImpl implements AttendanceService {
             return faceCheckInAttemptRepository.countByRegistrationIdAndScheduleIsNull(registration.getId());
         }
         return faceCheckInAttemptRepository.countByRegistrationIdAndScheduleId(registration.getId(), schedule.getId());
+    }
+
+    private Optional<FaceCheckInAttempt> findLatestFaceAttempt(Registrations registration, ActivitySchedule schedule) {
+        if (schedule == null) {
+            return faceCheckInAttemptRepository.findTopByRegistrationIdAndScheduleIsNullOrderByAttemptNoDesc(
+                    registration.getId());
+        }
+        return faceCheckInAttemptRepository.findTopByRegistrationIdAndScheduleIdOrderByAttemptNoDesc(
+                registration.getId(),
+                schedule.getId());
+    }
+
+    private boolean isSuccessfulFaceAttempt(FaceCheckInAttempt attempt) {
+        if (attempt == null) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(attempt.getVerified())) {
+            return true;
+        }
+        BigDecimal distance = attempt.getDistance();
+        BigDecimal threshold = attempt.getThreshold();
+        return distance != null && threshold != null && distance.compareTo(threshold) <= 0;
+    }
+
+    private FaceVerificationResult toSuccessfulVerification(FaceCheckInAttempt attempt, long existingAttempts) {
+        return FaceVerificationResult.builder()
+                .verified(true)
+                .decision("MATCH")
+                .allowRetry(false)
+                .attempt((int) Math.min(existingAttempts, FACE_CHECK_IN_MAX_ATTEMPTS))
+                .maxAttempts(FACE_CHECK_IN_MAX_ATTEMPTS)
+                .remainingAttempts(0)
+                .reasonCode(null)
+                .message("Xác thực khuôn mặt thành công. Bạn có thể nộp minh chứng tham gia.")
+                .threshold(attempt.getThreshold())
+                .distance(attempt.getDistance())
+                .similarity(attempt.getSimilarity())
+                .build();
     }
 
     private boolean hasVerifiedAllRegisteredSessions(Registrations registration) {
